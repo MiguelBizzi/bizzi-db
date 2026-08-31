@@ -727,17 +727,15 @@ export default function App() {
         return (
           <TableSchemaDesigner
             table={table}
-            onSaveSchema={(updated) => {
-              setDatabases(
-                databases.map((db) =>
-                  db.id === currentDbId
-                    ? {
-                        ...db,
-                        tables: db.tables.map((t) => (t.id === updated.id ? updated : t)),
-                      }
-                    : db
-                )
-              );
+            tables={currentDatabase.tables}
+            dialect={currentDatabase.dialect}
+            disabled={currentDatabase.status !== 'connected'}
+            onExecute={async (sql) => {
+              const res = await queryExecute({ connectionId: currentDatabase.id, sql });
+              if (res.error) return { error: res.error };
+              await loadSchema(currentDatabase.id);
+              await refreshHistory();
+              return {};
             }}
           />
         );

@@ -30,7 +30,11 @@ fn align(window: &WebviewWindow) {
     unsafe { position_traffic_lights(ptr, TRAFFIC_LIGHT_X, HEADER_HEIGHT) };
 }
 
-unsafe fn position_traffic_lights(ns_window_ptr: *mut std::ffi::c_void, x: f64, header_height: f64) {
+unsafe fn position_traffic_lights(
+    ns_window_ptr: *mut std::ffi::c_void,
+    x: f64,
+    header_height: f64,
+) {
     let ns_window = &*ns_window_ptr.cast::<NSWindow>();
     let Some(close) = ns_window.standardWindowButton(NSWindowButton::NSWindowCloseButton) else {
         return;

@@ -1,200 +1,85 @@
-import React, { useState } from 'react';
-import { TableSchema, ColumnDefinition, IndexDefinition } from '../../types';
-import {
-  Edit3,
-  Key,
-  Plus,
-  Trash2,
-  Code,
-  Check,
-  Zap,
-  Layers,
-  ShieldCheck,
-} from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { columnTypesFor } from '@db/database';
+import type { ColumnDefinition, DatabaseDialect, TableSchema } from '../../types';
+import { Edit3, Key, Pencil, Plus, Trash2 } from 'lucide-react';
 import { formatSizeMb } from '../../lib/format';
-import { Checkbox } from '../ui/Checkbox';
-import { Select } from '../ui/Select';
+import { buildTableDdlPreview } from '../../lib/schemaChange';
+import { AddColumnDrawer } from './AddColumnDrawer';
+import { EditColumnModal } from './EditColumnModal';
+import { DeleteColumnModal } from './DeleteColumnModal';
 
 interface TableSchemaDesignerProps {
   table: TableSchema;
-  onSaveSchema: (updatedTable: TableSchema) => void;
+  tables: TableSchema[];
+  dialect?: DatabaseDialect;
+  disabled?: boolean;
+  onExecute: (sql: string) => Promise<{ error?: string }>;
 }
 
 export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
   table,
-  onSaveSchema,
+  tables,
+  dialect = 'PostgreSQL',
+  disabled,
+  onExecute,
 }) => {
-  const [columns, setColumns] = useState<ColumnDefinition[]>([...table.columns]);
-  const [indexes, setIndexes] = useState<IndexDefinition[]>([...table.indexes]);
   const [activeTab, setActiveTab] = useState<'columns' | 'indexes' | 'ddl'>('columns');
+  const [addOpen, setAddOpen] = useState(false);
+  const [editColumn, setEditColumn] = useState<ColumnDefinition | null>(null);
+  const [deleteColumn, setDeleteColumn] = useState<ColumnDefinition | null>(null);
+  const types = useMemo(() => columnTypesFor(dialect) ?? [], [dialect]);
+  const readOnly = Boolean(table.isView) || disabled || types.length === 0;
+  const columns = table.columns;
+  const indexes = table.indexes;
 
-  const [newColName, setNewColName] = useState('');
-  const [newColType, setNewColType] = useState('varchar(255)');
-  const [newColNullable, setNewColNullable] = useState(true);
-
-  const handleAddColumn = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newColName.trim()) {
-      setColumns([
-        ...columns,
-        {
-          name: newColName.trim(),
-          type: newColType,
-          isNullable: newColNullable,
-        },
-      ]);
-      setNewColName('');
-    }
-  };
-
-  const handleRemoveColumn = (colName: string) => {
-    setColumns(columns.filter((c) => c.name !== colName));
-  };
-
-  const generateDdl = () => {
-    const colSql = columns
-      .map(
-        (c) =>
-          `  ${c.name} ${c.type}${c.isPrimary ? ' PRIMARY KEY' : ''}${
-            !c.isNullable ? ' NOT NULL' : ''
-          }${c.defaultValue ? ` DEFAULT ${c.defaultValue}` : ''}`
-      )
-      .join(',\n');
-
-    const idxSql = indexes
-      .map(
-        (idx) =>
-          `CREATE ${idx.isUnique ? 'UNIQUE ' : ''}INDEX ${idx.name} ON ${
-            table.name
-          } USING ${idx.type} (${idx.columns.join(', ')});`
-      )
-      .join('\n');
-
-    return `-- Table DDL Script for ${table.name}\nCREATE TABLE ${table.name} (\n${colSql}\n);\n\n${idxSql}`;
-  };
+  const tabClass = (id: typeof activeTab) =>
+    `flex-1 py-2.5 px-4 font-semibold border-b-2 transition-colors ${
+      activeTab === id
+        ? 'border-primary text-primary'
+        : 'border-transparent text-muted-foreground hover:text-foreground'
+    }`;
 
   return (
     <div className="flex-1 flex flex-col h-full bg-background overflow-hidden font-sans select-none text-foreground">
-      {/* Header */}
-      <div className="p-4 bg-card border-b border-border flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3 font-mono">
-          <Edit3 className="w-5 h-5 text-amber-400" />
-          <div>
-            <div className="text-sm font-bold text-foreground flex items-center gap-2">
-              <span>Schema Inspector & Designer — {table.name}</span>
+      <div className="p-4 bg-card border-b border-border flex items-center justify-between shrink-0 gap-3">
+        <div className="flex items-center gap-3 font-mono min-w-0">
+          <Edit3 className="w-5 h-5 text-amber-400 shrink-0" />
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-foreground truncate">
+              Schema — {table.schema}.{table.name}
             </div>
             <div className="text-xs text-muted-foreground">
-              {table.schema} schema • {table.rowCount.toLocaleString()} rows • {formatSizeMb(table.sizeMb)}
+              {table.isView ? 'View · read-only' : `${table.schema} schema`} •{' '}
+              {table.rowCount.toLocaleString()} rows • {formatSizeMb(table.sizeMb)}
             </div>
           </div>
         </div>
-
         <button
-          onClick={() =>
-            onSaveSchema({
-              ...table,
-              columns,
-              indexes,
-              updatedAt: new Date().toISOString(),
-            })
-          }
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary hover:opacity-90 text-primary-foreground font-bold text-xs shadow-md transition-colors"
+          type="button"
+          disabled={readOnly}
+          onClick={() => setAddOpen(true)}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary hover:opacity-90 text-primary-foreground font-bold text-xs shadow-md transition-colors disabled:opacity-50 shrink-0"
         >
-          <Check className="w-4 h-4" />
-          <span>Save Schema Changes</span>
+          <Plus className="w-4 h-4" />
+          <span>Add column</span>
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-border bg-background px-4 font-mono text-xs">
-        <button
-          onClick={() => setActiveTab('columns')}
-          className={`py-2.5 px-4 font-semibold border-b-2 transition-colors ${
-            activeTab === 'columns'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
+      <div className="flex w-full border-b border-border bg-background font-mono text-xs">
+        <button type="button" onClick={() => setActiveTab('columns')} className={tabClass('columns')}>
           Columns ({columns.length})
         </button>
-
-        <button
-          onClick={() => setActiveTab('indexes')}
-          className={`py-2.5 px-4 font-semibold border-b-2 transition-colors ${
-            activeTab === 'indexes'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
+        <button type="button" onClick={() => setActiveTab('indexes')} className={tabClass('indexes')}>
           Indexes ({indexes.length})
         </button>
-
-        <button
-          onClick={() => setActiveTab('ddl')}
-          className={`py-2.5 px-4 font-semibold border-b-2 transition-colors ${
-            activeTab === 'ddl'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
+        <button type="button" onClick={() => setActiveTab('ddl')} className={tabClass('ddl')}>
           DDL Preview
         </button>
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-auto p-4 scrollbar-thin scrollbar-thumb-muted">
         {activeTab === 'columns' && (
-          <div className="space-y-4 max-w-4xl font-mono text-xs">
-            {/* Add Column Form */}
-            <form
-              onSubmit={handleAddColumn}
-              className="p-3 bg-card border border-border rounded-xl flex flex-wrap items-center gap-3"
-            >
-              <input
-                type="text"
-                placeholder="New column name..."
-                value={newColName}
-                onChange={(e) => setNewColName(e.target.value)}
-                className="px-3 py-1.5 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary w-48"
-              />
-
-              <Select
-                size="sm"
-                className="w-44"
-                value={newColType}
-                onChange={setNewColType}
-                aria-label="Column type"
-                options={[
-                  { value: 'varchar(255)', label: 'varchar(255)' },
-                  { value: 'text', label: 'text' },
-                  { value: 'integer', label: 'integer' },
-                  { value: 'bigint', label: 'bigint' },
-                  { value: 'boolean', label: 'boolean' },
-                  { value: 'uuid', label: 'uuid' },
-                  { value: 'jsonb', label: 'jsonb' },
-                  { value: 'numeric(10,2)', label: 'numeric(10,2)' },
-                  { value: 'timestamptz', label: 'timestamptz' },
-                ]}
-              />
-
-              <label className="flex items-center gap-1.5 text-muted-foreground cursor-pointer">
-                <Checkbox
-                  checked={newColNullable}
-                  onCheckedChange={setNewColNullable}
-                />
-                <span>Nullable</span>
-              </label>
-
-              <button
-                type="submit"
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary hover:opacity-90 text-primary-foreground font-bold transition-colors ml-auto"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Column</span>
-              </button>
-            </form>
-
-            {/* Columns Table */}
+          <div className="font-mono text-xs">
             <div className="border border-border rounded-xl overflow-hidden bg-card">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-background border-b border-border">
@@ -207,42 +92,63 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {columns.map((c) => (
-                    <tr key={c.name} className="hover:bg-accent/60 transition-colors">
-                      <td className="p-3 font-bold text-foreground flex items-center gap-2">
-                        {c.isPrimary && <Key className="w-3.5 h-3.5 text-amber-400" />}
-                        <span>{c.name}</span>
+                  {columns.map((column) => (
+                    <tr key={column.name} className="hover:bg-accent/60 transition-colors">
+                      <td className="p-3 font-bold text-foreground">
+                        <span className="inline-flex items-center gap-2">
+                          {column.isPrimary && <Key className="w-3.5 h-3.5 text-amber-400" />}
+                          <span>{column.name}</span>
+                        </span>
                       </td>
-                      <td className="p-3 text-primary">{c.type}</td>
+                      <td className="p-3 text-primary">{column.type}</td>
                       <td className="p-3 space-x-1">
-                        {c.isPrimary && (
+                        {column.isPrimary && (
                           <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px]">
                             PK
                           </span>
                         )}
-                        {!c.isNullable && (
+                        {column.isNullable === false && (
                           <span className="px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/30 text-[10px]">
                             NOT NULL
                           </span>
                         )}
-                        {c.isUnique && (
+                        {column.isUnique && (
                           <span className="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/30 text-[10px]">
                             UNIQUE
                           </span>
                         )}
+                        {column.foreignKey && (
+                          <span className="px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/30 text-[10px]">
+                            FK
+                          </span>
+                        )}
                       </td>
                       <td className="p-3 text-muted-foreground font-mono">
-                        {c.defaultValue || '—'}
+                        {column.defaultValue || '—'}
                       </td>
                       <td className="p-3 text-right">
-                        {!c.isPrimary && (
+                        <div className="inline-flex items-center gap-1">
                           <button
-                            onClick={() => handleRemoveColumn(c.name)}
-                            className="p-1 hover:bg-muted text-muted-foreground hover:text-destructive rounded transition-colors"
+                            type="button"
+                            disabled={readOnly}
+                            onClick={() => setEditColumn(column)}
+                            className="p-1 hover:bg-muted text-muted-foreground hover:text-foreground rounded transition-colors disabled:opacity-40"
+                            aria-label={`Edit ${column.name}`}
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Pencil className="w-3.5 h-3.5" />
                           </button>
-                        )}
+                          {!column.isPrimary && (
+                            <button
+                              type="button"
+                              disabled={readOnly}
+                              onClick={() => setDeleteColumn(column)}
+                              className="p-1 hover:bg-muted text-muted-foreground hover:text-destructive rounded transition-colors disabled:opacity-40"
+                              aria-label={`Delete ${column.name}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -253,7 +159,7 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
         )}
 
         {activeTab === 'indexes' && (
-          <div className="space-y-4 max-w-4xl font-mono text-xs">
+          <div className="font-mono text-xs">
             <div className="border border-border rounded-xl overflow-hidden bg-card">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-background border-b border-border">
@@ -265,20 +171,20 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {indexes.map((idx) => (
-                    <tr key={idx.name} className="hover:bg-accent/60 transition-colors">
-                      <td className="p-3 font-bold text-foreground">{idx.name}</td>
-                      <td className="p-3 text-primary">{idx.columns.join(', ')}</td>
-                      <td className="p-3 text-muted-foreground">{idx.type}</td>
+                  {indexes.map((index) => (
+                    <tr key={index.name} className="hover:bg-accent/60 transition-colors">
+                      <td className="p-3 font-bold text-foreground">{index.name}</td>
+                      <td className="p-3 text-primary">{index.columns.join(', ')}</td>
+                      <td className="p-3 text-muted-foreground">{index.type}</td>
                       <td className="p-3">
                         <span
                           className={`px-1.5 py-0.5 rounded text-[10px] ${
-                            idx.isUnique
+                            index.isUnique
                               ? 'bg-emerald-500/10 text-emerald-400'
                               : 'bg-muted text-muted-foreground'
                           }`}
                         >
-                          {idx.isUnique ? 'YES' : 'NO'}
+                          {index.isUnique ? 'YES' : 'NO'}
                         </span>
                       </td>
                     </tr>
@@ -290,13 +196,41 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
         )}
 
         {activeTab === 'ddl' && (
-          <div className="max-w-4xl font-mono text-xs">
+          <div className="font-mono text-xs">
             <pre className="p-4 bg-card border border-border rounded-xl text-foreground overflow-x-auto leading-relaxed">
-              {generateDdl()}
+              {buildTableDdlPreview(table)}
             </pre>
           </div>
         )}
       </div>
+
+      <AddColumnDrawer
+        isOpen={addOpen}
+        table={table}
+        tables={tables}
+        types={types}
+        disabled={disabled}
+        onClose={() => setAddOpen(false)}
+        onExecute={onExecute}
+      />
+      <EditColumnModal
+        isOpen={editColumn != null}
+        table={table}
+        tables={tables}
+        types={types}
+        column={editColumn}
+        disabled={disabled}
+        onClose={() => setEditColumn(null)}
+        onExecute={onExecute}
+      />
+      <DeleteColumnModal
+        isOpen={deleteColumn != null}
+        table={table}
+        column={deleteColumn}
+        disabled={disabled}
+        onClose={() => setDeleteColumn(null)}
+        onExecute={onExecute}
+      />
     </div>
   );
 };

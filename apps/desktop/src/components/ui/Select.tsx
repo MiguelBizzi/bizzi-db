@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Search } from 'lucide-react';
 
 export interface SelectOption<T extends string = string> {
@@ -37,7 +38,14 @@ export function Select<T extends string>({
 }: SelectProps<T>) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [menuBox, setMenuBox] = useState<{
+    top: number;
+    bottom: number;
+    left: number;
+    width: number;
+  } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const listId = useId();
   const selected = options.find((option) => option.value === value);
@@ -55,10 +63,24 @@ export function Select<T extends string>({
   useEffect(() => {
     if (!open) {
       setQuery('');
+      setMenuBox(null);
       return;
     }
+    const updateBox = () => {
+      const rect = rootRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setMenuBox({
+        top: rect.top,
+        bottom: rect.bottom,
+        left: rect.left,
+        width: rect.width,
+      });
+    };
+    updateBox();
     const onPointer = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -68,12 +90,16 @@ export function Select<T extends string>({
     };
     document.addEventListener('mousedown', onPointer);
     document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', updateBox);
+    document.addEventListener('scroll', updateBox, true);
     if (searchable) {
       requestAnimationFrame(() => searchRef.current?.focus());
     }
     return () => {
       document.removeEventListener('mousedown', onPointer);
       document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', updateBox);
+      document.removeEventListener('scroll', updateBox, true);
     };
   }, [open, searchable]);
 
@@ -92,7 +118,7 @@ export function Select<T extends string>({
           setOpen((current) => !current);
         }}
         className={`w-full flex items-center gap-2 bg-background border border-border text-foreground hover:border-primary/50 focus:outline-none focus:border-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-          compact ? 'h-7 px-2 rounded-lg text-xs' : 'h-9 px-3 rounded-xl'
+          compact ? 'h-7 px-2 rounded-lg text-xs' : 'h-9 px-3 rounded-xl text-xs'
         }`}
       >
         <OptionMark option={selected} showEmoji={false} />
@@ -109,11 +135,25 @@ export function Select<T extends string>({
           } ${open ? 'rotate-180' : ''}`}
         />
       </button>
-      {open && (
+      {open &&
+        menuBox &&
+        createPortal(
         <div
-          className={`absolute z-50 left-0 min-w-full w-max bg-popover border border-border rounded-xl shadow-lg overflow-hidden ${
-            placement === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'
-          }`}
+          ref={menuRef}
+          className="fixed z-[200] bg-popover border border-border rounded-xl shadow-lg overflow-hidden"
+          style={
+            placement === 'top'
+              ? {
+                  left: menuBox.left,
+                  width: menuBox.width,
+                  bottom: window.innerHeight - menuBox.top + 4,
+                }
+              : {
+                  left: menuBox.left,
+                  width: menuBox.width,
+                  top: menuBox.bottom + 4,
+                }
+          }
         >
           {searchable && (
             <div className="relative px-2 pt-2 pb-1">
@@ -135,7 +175,7 @@ export function Select<T extends string>({
           <ul
             id={listId}
             role="listbox"
-            className={`py-1 max-h-56 overflow-y-auto ${searchable ? 'min-w-48' : ''}`}
+            className="py-1 max-h-56 overflow-y-auto"
           >
             {filtered.length === 0 && (
               <li className="px-3 py-2 text-xs text-muted-foreground">No matches</li>
@@ -152,21 +192,22 @@ export function Select<T extends string>({
                       onChange(option.value);
                       setOpen(false);
                     }}
-                    className={`w-full px-3 flex items-center gap-2 text-left transition-colors ${
-                      compact ? 'py-1.5 text-xs' : 'py-2'
+                    className={`w-full px-3 min-w-0 flex items-center gap-2 text-left text-xs transition-colors ${
+                      compact ? 'py-1.5' : 'py-2'
                     } ${
                       active ? 'bg-primary/15 text-primary' : 'hover:bg-accent text-foreground'
                     }`}
                   >
                     <OptionMark option={option} />
-                    <span className="flex-1 whitespace-nowrap pr-2">{option.label}</span>
+                    <span className="flex-1 min-w-0 truncate pr-2">{option.label}</span>
                     {active && <Check className="w-3.5 h-3.5 shrink-0" />}
                   </button>
                 </li>
               );
             })}
           </ul>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
