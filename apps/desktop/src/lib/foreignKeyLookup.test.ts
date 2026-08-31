@@ -7,6 +7,7 @@ import {
   foreignKeyPreviewSql,
   lookupColumns,
   resolveReferencedTable,
+  rowKeyValue,
   rowSecondaryLabel,
 } from './foreignKeyLookup';
 
@@ -175,6 +176,13 @@ describe('buildLookupSql', () => {
     expect(buildLookupSql(users, 'id', "O'Brien%", 20)).toBe(
       `SELECT "id", "name", "email" FROM "public"."users" WHERE CAST("id" AS text) ILIKE '%O''Brien\\%%' ESCAPE '\\' OR CAST("name" AS text) ILIKE '%O''Brien\\%%' ESCAPE '\\' OR CAST("email" AS text) ILIKE '%O''Brien\\%%' ESCAPE '\\' ORDER BY "id" LIMIT 21 OFFSET 20;`
     );
+  });
+});
+
+describe('rowKeyValue', () => {
+  test('stringifies the target column and treats null as empty', () => {
+    expect(rowKeyValue({ id: 3, name: 'Ada' }, 'id')).toBe('3');
+    expect(rowKeyValue({ id: null }, 'id')).toBe('');
   });
 });
 

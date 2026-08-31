@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
     "@db/core": "workspace:*",

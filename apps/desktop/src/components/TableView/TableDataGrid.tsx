@@ -30,7 +30,7 @@ import {
   foreignKeyPreviewSql,
   resolveReferencedTable,
 } from "../../lib/foreignKeyLookup";
-import { createDefaultFilter } from "../../lib/tableFilters";
+import { createDefaultFilter, applyTableView } from "../../lib/tableFilters";
 import { useDebouncedValue } from "../../lib/useDebouncedValue";
 import { Select, SelectOption } from "../ui/Select";
 
@@ -159,50 +159,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   };
 
   // Filter & Search processing
-  let filteredRows = [...rows];
-
-  if (searchTerm) {
-    filteredRows = filteredRows.filter((row) =>
-      Object.values(row).some((val) =>
-        String(val ?? "")
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase()),
-      ),
-    );
-  }
-
-  filters.forEach((f) => {
-    if (!f.enabled || !f.value) return;
-    filteredRows = filteredRows.filter((row) => {
-      const cellVal = String(row[f.column] ?? "").toLowerCase();
-      const targetVal = f.value.toLowerCase();
-      switch (f.operator) {
-        case "=":
-          return cellVal === targetVal;
-        case "!=":
-          return cellVal !== targetVal;
-        case "LIKE":
-        case "ILIKE":
-          return cellVal.includes(targetVal);
-        case ">":
-          return Number(cellVal) > Number(targetVal);
-        case "<":
-          return Number(cellVal) < Number(targetVal);
-        default:
-          return true;
-      }
-    });
-  });
-
-  if (sort) {
-    filteredRows.sort((a, b) => {
-      const valA = a[sort.column];
-      const valB = b[sort.column];
-      if (valA < valB) return sort.direction === "ASC" ? -1 : 1;
-      if (valA > valB) return sort.direction === "ASC" ? 1 : -1;
-      return 0;
-    });
-  }
+  const filteredRows = applyTableView(rows, { searchTerm, filters, sort });
 
   const exportRows =
     selectedRowPks.length > 0

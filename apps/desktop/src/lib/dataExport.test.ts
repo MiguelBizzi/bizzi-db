@@ -57,6 +57,12 @@ describe('formatExport', () => {
       ].join('\n')
     );
   });
+
+  test('empty rows still emit headers for csv and an empty json array', () => {
+    const empty = { columns: ['id'], rows: [] as Record<string, unknown>[] };
+    expect(formatExport(empty, 'csv')).toBe('id');
+    expect(formatExport(empty, 'json')).toBe('[]');
+  });
 });
 
 describe('sqlLiteral', () => {

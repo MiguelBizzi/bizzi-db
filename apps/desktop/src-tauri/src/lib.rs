@@ -3,10 +3,11 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use db_core::{
-    classify_sql, ActivityLogItem, Adapter, ConnectConfig, ConnectionProfile, ConnectionStatus,
-    DatabaseSchema, ExecuteQueryRequest, HistoryStatus, QueryExecutionResult, SaveConnectionInput,
-    SavedQuery, Session, TablePreviewRequest, TestConnectionResult, WorkspaceState,
-    DEFAULT_ROW_CAP,
+    history_item_from_result, new_connection_requires_password, overlay_schema,
+    profile_from_save_input, ActivityLogItem, Adapter, ConnectConfig, ConnectionProfile,
+    ConnectionStatus, DatabaseSchema, ExecuteQueryRequest, QueryExecutionResult,
+    SaveConnectionInput, SavedQuery, Session, TablePreviewRequest, TestConnectionResult,
+    WorkspaceState, DEFAULT_ROW_CAP,
 };
 use db_postgres::PostgresAdapter;
 use db_storage::{KeychainSecrets, SecretStore, Storage};
@@ -36,19 +37,11 @@ fn connect_config(profile: &ConnectionProfile, password: String) -> ConnectConfi
 }
 
 fn profile_from_input(input: SaveConnectionInput) -> ConnectionProfile {
-    ConnectionProfile {
-        id: input.id.unwrap_or_else(|| format!("conn_{}", Uuid::new_v4())),
-        name: input.name,
-        dialect: input.dialect,
-        host: input.host,
-        port: input.port,
-        database: input.database,
-        user: input.user,
-        ssl: input.ssl,
-        pool_size: input.pool_size.max(1),
-        environment: input.environment,
-        status: ConnectionStatus::Disconnected,
-    }
+    let id = input
+        .id
+        .clone()
+        .unwrap_or_else(|| format!("conn_{}", Uuid::new_v4()));
+    profile_from_save_input(input, id)
 }
 
 #[tauri::command]
@@ -73,7 +66,7 @@ fn connections_save(
     state: State<'_, AppState>,
     input: SaveConnectionInput,
 ) -> Result<ConnectionProfile, String> {
-    if input.password.is_empty() && input.id.is_none() {
+    if new_connection_requires_password(&input) {
         return Err("Password is required".into());
     }
     let mut profile = profile_from_input(input.clone());
@@ -111,12 +104,13 @@ async fn connections_delete(state: State<'_, AppState>, id: String) -> Result<()
 }
 
 #[tauri::command]
-async fn connections_test(
-    input: SaveConnectionInput,
-) -> Result<TestConnectionResult, String> {
+async fn connections_test(input: SaveConnectionInput) -> Result<TestConnectionResult, String> {
     let profile = profile_from_input(input.clone());
     let adapter = PostgresAdapter;
-    match adapter.test_connection(&connect_config(&profile, input.password)).await {
+    match adapter
+        .test_connection(&connect_config(&profile, input.password))
+        .await
+    {
         Ok((latency_ms, version)) => Ok(TestConnectionResult {
             ok: true,
             latency_ms,
@@ -173,16 +167,6 @@ async fn session_for(state: &AppState, id: &str) -> Result<Arc<dyn Session>, Str
         .ok_or_else(|| "Not connected".to_string())
 }
 
-fn overlay_schema(mut schema: DatabaseSchema, profile: &ConnectionProfile) -> DatabaseSchema {
-    schema.id = profile.id.clone();
-    schema.name = profile.name.clone();
-    schema.connection_host = profile.host.clone();
-    schema.connection_port = profile.port;
-    schema.environment = profile.environment;
-    schema.status = ConnectionStatus::Connected;
-    schema
-}
-
 #[tauri::command]
 async fn schema_introspect(
     state: State<'_, AppState>,
@@ -217,22 +201,7 @@ fn record_history(
     profile: &ConnectionProfile,
     result: &QueryExecutionResult,
 ) -> Result<(), String> {
-    let item = ActivityLogItem {
-        id: format!("log_{}", Uuid::new_v4()),
-        timestamp: result.timestamp.clone(),
-        database_name: profile.name.clone(),
-        query: result.query.clone(),
-        query_type: classify_sql(&result.query).into(),
-        execution_time_ms: result.execution_time_ms,
-        rows_affected: result.affected_rows.unwrap_or(0),
-        status: if result.error.is_some() {
-            HistoryStatus::Error
-        } else {
-            HistoryStatus::Success
-        },
-        error_message: result.error.clone(),
-        user: profile.user.clone(),
-    };
+    let item = history_item_from_result(format!("log_{}", Uuid::new_v4()), profile, result);
     state
         .storage
         .lock()
@@ -266,7 +235,12 @@ async fn query_execute(
 
 #[tauri::command]
 fn history_list(state: State<'_, AppState>) -> Result<Vec<ActivityLogItem>, String> {
-    state.storage.lock().map_err(map_err)?.list_history().map_err(map_err)
+    state
+        .storage
+        .lock()
+        .map_err(map_err)?
+        .list_history()
+        .map_err(map_err)
 }
 
 #[tauri::command]
@@ -280,10 +254,7 @@ fn saved_queries_list(state: State<'_, AppState>) -> Result<Vec<SavedQuery>, Str
 }
 
 #[tauri::command]
-fn saved_queries_save(
-    state: State<'_, AppState>,
-    query: SavedQuery,
-) -> Result<SavedQuery, String> {
+fn saved_queries_save(state: State<'_, AppState>, query: SavedQuery) -> Result<SavedQuery, String> {
     state
         .storage
         .lock()
@@ -319,7 +290,12 @@ fn saved_queries_update_tags(
 
 #[tauri::command]
 fn workspace_load(state: State<'_, AppState>) -> Result<WorkspaceState, String> {
-    state.storage.lock().map_err(map_err)?.load_workspace().map_err(map_err)
+    state
+        .storage
+        .lock()
+        .map_err(map_err)?
+        .load_workspace()
+        .map_err(map_err)
 }
 
 #[tauri::command]
@@ -333,10 +309,7 @@ fn workspace_save(app_state: State<'_, AppState>, state: WorkspaceState) -> Resu
 }
 
 fn db_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?;
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&dir).map_err(map_err)?;
     Ok(dir.join("workspace.sqlite"))
 }
