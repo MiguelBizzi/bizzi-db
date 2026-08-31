@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
-import { TabsBar } from './components/TabsBar';
+import { WorkspacePanes } from './components/WorkspacePanes';
 import { TableDataGrid } from './components/TableView/TableDataGrid';
 import { SqlEditorTab } from './components/SqlEditor/SqlEditorTab';
 import { InteractiveErd } from './components/SchemaView/InteractiveErd';
@@ -58,14 +58,41 @@ import {
   sqlForChange,
   type PendingChangeRef,
 } from './lib/pendingChanges';
+import {
+  addTabToPane,
+  collapseEmptyPane,
+  focusedActiveTabId,
+  nextLayoutId,
+  paneById,
+  removeTabFromPane,
+  reorderPaneTabs,
+  replacePane,
+  resolveFocusedPaneId,
+  resizeSplit,
+  setPaneActiveTab,
+  singlePane,
+  splitPane,
+  type LayoutNode,
+  type SplitDirection,
+  type SplitSide,
+} from './lib/workspaceLayout';
+import {
+  cloneTabForSplit,
+  closePaneTabs,
+  newSplitTabId,
+  renameTab,
+  type CloseTabKind,
+} from './lib/tabPaneActions';
+
+const ROOT_PANE_ID = 'pane_root';
 
 export default function App() {
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
   const [databases, setDatabases] = useState<DatabaseSchema[]>([]);
   const [currentDbId, setCurrentDbId] = useState<string | null>(null);
   const [tabs, setTabs] = useState<WorkspaceTab[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string>('');
-  const [isSplitView, setIsSplitView] = useState(false);
+  const [layout, setLayout] = useState<LayoutNode>(() => singlePane([], '', ROOT_PANE_ID));
+  const [focusedPaneId, setFocusedPaneId] = useState(ROOT_PANE_ID);
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>([]);
   const [tableRows, setTableRows] = useState<Record<string, Record<string, unknown>[]>>({});
@@ -94,6 +121,8 @@ export default function App() {
     ? databases.find((d) => d.id === currentDbId) || null
     : null;
 
+  const activePaneId = resolveFocusedPaneId(layout, focusedPaneId);
+  const activeTabId = focusedActiveTabId(layout, activePaneId);
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
   const loadTableRows = useCallback(
@@ -175,7 +204,8 @@ export default function App() {
         setActivityLogs(logs);
         setCurrentDbId(null);
         setTabs([]);
-        setActiveTabId('');
+        setLayout(singlePane([], '', ROOT_PANE_ID));
+        setFocusedPaneId(ROOT_PANE_ID);
       } catch (e: unknown) {
         setLoadError(e instanceof Error ? e.message : 'Failed to load workspace');
       } finally {
@@ -202,7 +232,7 @@ export default function App() {
       workspaceSave(next).catch(() => undefined);
     }, 400);
     return () => window.clearTimeout(handle);
-  }, [bootstrapped, tabs, activeTabId, currentDbId]);
+  }, [bootstrapped, tabs, activeTabId, currentDbId, layout, focusedPaneId]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -230,7 +260,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [activeTabId, currentDatabase, tabs, refreshTableRows]);
+  }, [activeTabId, currentDatabase, tabs, refreshTableRows, layout, focusedPaneId]);
 
   const pendingCount = useMemo(
     () => countPendingChanges(pendingByTable),
@@ -270,47 +300,71 @@ export default function App() {
     return undefined;
   };
 
-  const handleSelectTableData = (table: TableSchema) => {
-    const existingTab = tabs.find((t) => t.type === 'table_data' && t.tableId === table.id);
-    if (existingTab) {
-      setActiveTabId(existingTab.id);
+  const paneTab = (paneId: string, tabId: string) => {
+    const pane = paneById(layout, paneId);
+    if (!pane?.tabIds.includes(tabId)) return undefined;
+    return tabs.find((tab) => tab.id === tabId);
+  };
+
+  const openTabInPane = (paneId: string, tab: WorkspaceTab) => {
+    const targetId = resolveFocusedPaneId(layout, paneId);
+    setTabs((prev) => [...prev, tab]);
+    setLayout((prev) => addTabToPane(prev, targetId, tab.id));
+    setFocusedPaneId(targetId);
+  };
+
+  const revealTabInPane = (
+    paneId: string,
+    match: (tab: WorkspaceTab) => boolean,
+    create: () => WorkspaceTab
+  ) => {
+    const pane = paneById(layout, paneId);
+    const existing = pane
+      ? pane.tabIds
+          .map((id) => tabs.find((tab) => tab.id === id))
+          .find((tab): tab is WorkspaceTab => Boolean(tab && match(tab)))
+      : undefined;
+    if (existing) {
+      setLayout(setPaneActiveTab(layout, paneId, existing.id));
+      setFocusedPaneId(paneId);
       return;
     }
-    const newTab: WorkspaceTab = {
-      id: 'tab_tbl_' + table.id + '_' + Date.now(),
-      type: 'table_data',
-      title: table.name,
-      tableId: table.id,
-      tableName: table.name,
-      databaseId: currentDatabase?.id,
-    };
-    setTabs([...tabs, newTab]);
-    setActiveTabId(newTab.id);
+    openTabInPane(paneId, create());
+  };
+
+  const handleSelectTableData = (table: TableSchema) => {
+    revealTabInPane(
+      activePaneId,
+      (tab) => tab.type === 'table_data' && tab.tableId === table.id,
+      () => ({
+        id: 'tab_tbl_' + table.id + '_' + Date.now(),
+        type: 'table_data',
+        title: table.name,
+        tableId: table.id,
+        tableName: table.name,
+        databaseId: currentDatabase?.id,
+      })
+    );
   };
 
   const handleSelectTableSchema = (table: TableSchema) => {
-    const existingTab = tabs.find(
-      (t) => t.type === 'schema_designer' && t.tableId === table.id
+    revealTabInPane(
+      activePaneId,
+      (tab) => tab.type === 'schema_designer' && tab.tableId === table.id,
+      () => ({
+        id: 'tab_schema_' + table.id + '_' + Date.now(),
+        type: 'schema_designer',
+        title: `${table.name} (Schema)`,
+        tableId: table.id,
+        databaseId: currentDatabase?.id,
+      })
     );
-    if (existingTab) {
-      setActiveTabId(existingTab.id);
-      return;
-    }
-    const newTab: WorkspaceTab = {
-      id: 'tab_schema_' + table.id + '_' + Date.now(),
-      type: 'schema_designer',
-      title: `${table.name} (Schema)`,
-      tableId: table.id,
-      databaseId: currentDatabase?.id,
-    };
-    setTabs([...tabs, newTab]);
-    setActiveTabId(newTab.id);
   };
 
-  const handleOpenNewQueryTab = (initialSql?: string) => {
+  const handleOpenNewQueryTab = (initialSql?: string, paneId = activePaneId) => {
     if (!currentDatabase) return;
     const queryNum = tabs.filter((t) => t.type === 'sql_editor').length + 1;
-    const newTab: WorkspaceTab = {
+    openTabInPane(paneId, {
       id: 'tab_sql_' + Date.now(),
       type: 'sql_editor',
       title: `Query ${queryNum}`,
@@ -318,35 +372,75 @@ export default function App() {
       sqlContent:
         initialSql ||
         `SELECT * FROM ${currentDatabase.tables[0]?.name || 'pg_catalog.pg_tables'} LIMIT 50;`,
-    };
-    setTabs([...tabs, newTab]);
-    setActiveTabId(newTab.id);
-  };
-
-  const handleCloseTab = (tabId: string) => {
-    const remainingTabs = tabs.filter((t) => t.id !== tabId);
-    setTabs(remainingTabs);
-    if (activeTabId === tabId) {
-      setActiveTabId(remainingTabs[remainingTabs.length - 1]?.id || '');
-    }
-  };
-
-  const handleReorderTabs = (fromIndex: number, toIndex: number) => {
-    if (fromIndex === toIndex) return;
-    setTabs((prev) => {
-      if (
-        fromIndex < 0 ||
-        toIndex < 0 ||
-        fromIndex >= prev.length ||
-        toIndex >= prev.length
-      ) {
-        return prev;
-      }
-      const updated = [...prev];
-      const [movedTab] = updated.splice(fromIndex, 1);
-      updated.splice(toIndex, 0, movedTab);
-      return updated;
     });
+  };
+
+  const syncFocus = (nextLayout: LayoutNode, preferredPaneId: string) => {
+    setLayout(nextLayout);
+    setFocusedPaneId(resolveFocusedPaneId(nextLayout, preferredPaneId));
+  };
+
+  const handleCloseTab = (paneId: string, tabId: string) => {
+    if (paneTab(paneId, tabId)?.isPinned) return;
+    setTabs((prev) => prev.filter((tab) => tab.id !== tabId));
+    syncFocus(removeTabFromPane(layout, paneId, tabId), paneId);
+  };
+
+  const handleCloseTabs = (paneId: string, tabId: string, kind: CloseTabKind) => {
+    const pane = paneById(layout, paneId);
+    if (!pane) return;
+    const result = closePaneTabs(tabs, pane.tabIds, tabId, kind);
+    if (result.removedTabIds.length === 0) return;
+    const nextActive = result.tabIds.includes(pane.activeTabId)
+      ? pane.activeTabId
+      : result.tabIds[result.tabIds.length - 1] ?? '';
+    const nextLayout = collapseEmptyPane(
+      replacePane(layout, paneId, {
+        ...pane,
+        tabIds: result.tabIds,
+        activeTabId: nextActive,
+      })
+    );
+    setTabs(result.tabs);
+    syncFocus(nextLayout, paneId);
+  };
+
+  const handleReorderTabs = (paneId: string, fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+    setLayout((prev) => reorderPaneTabs(prev, paneId, fromIndex, toIndex));
+  };
+
+  const handleRenameTab = (tabId: string, title: string) => {
+    setTabs((prev) => renameTab(prev, tabId, title));
+  };
+
+  const handleSplitPane = (
+    paneId: string,
+    tabId: string,
+    direction: SplitDirection,
+    side: SplitSide
+  ) => {
+    const source = paneTab(paneId, tabId);
+    if (!source) return;
+    const clone = cloneTabForSplit(source, newSplitTabId(source));
+    const newLeaf = {
+      type: 'leaf' as const,
+      id: nextLayoutId('pane'),
+      tabIds: [clone.id],
+      activeTabId: clone.id,
+    };
+    setTabs((prev) => [...prev, clone]);
+    const next = splitPane(layout, paneId, direction, side, newLeaf);
+    syncFocus(next, newLeaf.id);
+  };
+
+  const handleSelectPaneTab = (paneId: string, tabId: string) => {
+    setLayout(setPaneActiveTab(layout, paneId, tabId));
+    setFocusedPaneId(paneId);
+  };
+
+  const handleResizeSplit = (splitId: string, sizes: [number, number]) => {
+    setLayout((prev) => resizeSplit(prev, splitId, sizes));
   };
 
   const handleDeleteSavedQuery = async (id: string) => {
@@ -357,10 +451,6 @@ export default function App() {
   const handleUpdateSavedQueryTags = async (id: string, newTags: string[]) => {
     await savedQueriesUpdateTags(id, newTags);
     setSavedQueries(savedQueries.map((sq) => (sq.id === id ? { ...sq, tags: newTags } : sq)));
-  };
-
-  const handleTogglePinTab = (tabId: string) => {
-    setTabs(tabs.map((t) => (t.id === tabId ? { ...t, isPinned: !t.isPinned } : t)));
   };
 
   const getPending = (tableId: string) => pendingByTable[tableId] || emptyPending();
@@ -489,35 +579,29 @@ export default function App() {
   };
 
   const openErd = () => {
-    const erdTab = tabs.find((t) => t.type === 'erd_schema');
-    if (erdTab) {
-      setActiveTabId(erdTab.id);
-      return;
-    }
-    const newTab: WorkspaceTab = {
-      id: 'tab_erd_' + Date.now(),
-      type: 'erd_schema',
-      title: 'Schema ERD',
-      databaseId: currentDatabase?.id,
-    };
-    setTabs([...tabs, newTab]);
-    setActiveTabId(newTab.id);
+    revealTabInPane(
+      activePaneId,
+      (tab) => tab.type === 'erd_schema',
+      () => ({
+        id: 'tab_erd_' + Date.now(),
+        type: 'erd_schema',
+        title: 'Schema ERD',
+        databaseId: currentDatabase?.id,
+      })
+    );
   };
 
   const openMetrics = () => {
-    const metricsTab = tabs.find((t) => t.type === 'metrics');
-    if (metricsTab) {
-      setActiveTabId(metricsTab.id);
-      return;
-    }
-    const newTab: WorkspaceTab = {
-      id: 'tab_metrics_' + Date.now(),
-      type: 'metrics',
-      title: 'Health Metrics',
-      databaseId: currentDatabase?.id,
-    };
-    setTabs([...tabs, newTab]);
-    setActiveTabId(newTab.id);
+    revealTabInPane(
+      activePaneId,
+      (tab) => tab.type === 'metrics',
+      () => ({
+        id: 'tab_metrics_' + Date.now(),
+        type: 'metrics',
+        title: 'Health Metrics',
+        databaseId: currentDatabase?.id,
+      })
+    );
   };
 
   const handleOpenConnection = useCallback(
@@ -537,10 +621,12 @@ export default function App() {
             ws?.activeTabId && matchingTabs.some((t) => t.id === ws.activeTabId)
               ? ws.activeTabId
               : matchingTabs[0].id;
-          setActiveTabId(preferred);
+          setLayout(singlePane(matchingTabs.map((t) => t.id), preferred, ROOT_PANE_ID));
+          setFocusedPaneId(ROOT_PANE_ID);
         } else {
           setTabs([]);
-          setActiveTabId('');
+          setLayout(singlePane([], '', ROOT_PANE_ID));
+          setFocusedPaneId(ROOT_PANE_ID);
         }
         await refreshHistory();
       } catch (e: unknown) {
@@ -583,12 +669,12 @@ export default function App() {
     await handleOpenConnection(saved.id);
   };
 
-  const renderTabContent = (tab?: WorkspaceTab) => {
-    if (!tab || !currentDatabase) {
+  const renderTabContent = (tab: WorkspaceTab) => {
+    if (!currentDatabase) {
       return (
-        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3">
+        <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-3">
           <Database className="w-8 h-8 text-primary opacity-50" />
-          <p className="text-sm">Connect a PostgreSQL database to start querying.</p>
+          <p className="text-sm">Loading database schema…</p>
         </div>
       );
     }
@@ -608,7 +694,7 @@ export default function App() {
         const isLoading = Boolean(tableLoading[table.id]) || !(table.id in tableRows);
         return (
           <TableDataGrid
-            key={table.id}
+            key={tab.id}
             table={table}
             rows={rows}
             isLoading={isLoading}
@@ -679,6 +765,7 @@ export default function App() {
       case 'sql_editor':
         return (
           <SqlEditorTab
+            key={tab.id}
             initialSql={tab.sqlContent || tab.sqlQuery}
             currentDatabase={currentDatabase}
             savedQueries={savedQueries}
@@ -711,6 +798,7 @@ export default function App() {
       case 'erd_schema':
         return (
           <InteractiveErd
+            key={tab.id}
             database={currentDatabase}
             onSelectTableData={handleSelectTableData}
             onSelectTableSchema={handleSelectTableSchema}
@@ -727,6 +815,7 @@ export default function App() {
         }
         return (
           <TableSchemaDesigner
+            key={tab.id}
             table={table}
             tables={currentDatabase.tables}
             dialect={currentDatabase.dialect}
@@ -742,7 +831,7 @@ export default function App() {
         );
       }
       case 'metrics':
-        return <DatabaseMetrics database={currentDatabase} />;
+        return <DatabaseMetrics key={tab.id} database={currentDatabase} />;
       default:
         return null;
     }
@@ -798,14 +887,12 @@ export default function App() {
               onOpenErd={openErd}
               onOpenSchemaDesigner={handleSelectTableSchema}
               onOpenNewTableModal={() => {
-                const newTab: WorkspaceTab = {
+                openTabInPane(activePaneId, {
                   id: 'tab_schema_new_' + Date.now(),
                   type: 'schema_designer',
                   title: 'New Table Schema',
                   databaseId: currentDatabase.id,
-                };
-                setTabs([...tabs, newTab]);
-                setActiveTabId(newTab.id);
+                });
               }}
               onAddTagToTable={(tableName, tag) => {
                 setDatabases((prev) =>
@@ -827,32 +914,21 @@ export default function App() {
           )}
 
           <div className="flex-1 flex flex-col h-full overflow-hidden bg-background">
-            <TabsBar
+            <WorkspacePanes
+              layout={layout}
               tabs={tabs}
-              activeTabId={activeTabId}
-              isSplitView={isSplitView}
-              onSelectTab={(id) => setActiveTabId(id)}
+              focusedPaneId={activePaneId}
+              onFocusPane={setFocusedPaneId}
+              onSelectTab={handleSelectPaneTab}
               onCloseTab={handleCloseTab}
-              onTogglePinTab={handleTogglePinTab}
-              onToggleSplitView={() => setIsSplitView(!isSplitView)}
-              onOpenNewQueryTab={() => handleOpenNewQueryTab()}
-              onOpenErdTab={openErd}
-              onOpenMetricsTab={openMetrics}
+              onCloseTabs={handleCloseTabs}
+              onRenameTab={handleRenameTab}
+              onSplitPane={handleSplitPane}
               onReorderTabs={handleReorderTabs}
+              onOpenNewQueryTab={(paneId) => handleOpenNewQueryTab(undefined, paneId)}
+              onResizeSplit={handleResizeSplit}
+              renderTabContent={renderTabContent}
             />
-
-            <div className="flex-1 flex h-full overflow-hidden relative">
-              {isSplitView ? (
-                <div className="grid grid-cols-2 w-full h-full divide-x divide-border">
-                  <div className="h-full overflow-hidden">{renderTabContent(activeTab)}</div>
-                  <div className="h-full overflow-hidden">
-                    {renderTabContent(tabs.find((t) => t.id !== activeTabId) || activeTab)}
-                  </div>
-                </div>
-              ) : (
-                <div className="w-full h-full overflow-hidden">{renderTabContent(activeTab)}</div>
-              )}
-            </div>
           </div>
         </div>
       )}

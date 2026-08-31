@@ -9,11 +9,20 @@ import {
   Plus,
   X,
   Pin,
-  Columns,
-  Square,
+  Pencil,
+  CopyX,
+  ArrowLeftToLine,
+  ArrowRightToLine,
+  PanelRight,
+  PanelLeft,
+  PanelBottom,
+  PanelTop,
 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { WorkspaceTab } from '../types';
+import { ContextMenu, type ContextMenuItem } from './ui/ContextMenu';
+import { canClosePaneTabs, type CloseTabKind } from '../lib/tabPaneActions';
+import type { SplitDirection, SplitSide } from '../lib/workspaceLayout';
 
 const INDICATOR_INSET_PX = 8;
 const INDICATOR_HEIGHT_PX = 2;
@@ -26,14 +35,13 @@ const INDICATOR_TRANSITION = {
 interface TabsBarProps {
   tabs: WorkspaceTab[];
   activeTabId: string;
-  isSplitView: boolean;
+  focused?: boolean;
   onSelectTab: (tabId: string) => void;
   onCloseTab: (tabId: string) => void;
-  onTogglePinTab: (tabId: string) => void;
-  onToggleSplitView: () => void;
+  onCloseTabs: (tabId: string, kind: CloseTabKind) => void;
+  onRenameTab: (tabId: string, title: string) => void;
+  onSplitPane: (tabId: string, direction: SplitDirection, side: SplitSide) => void;
   onOpenNewQueryTab: () => void;
-  onOpenErdTab: () => void;
-  onOpenMetricsTab: () => void;
   onReorderTabs?: (fromIndex: number, toIndex: number) => void;
 }
 
@@ -47,6 +55,7 @@ type DragSession = {
 };
 
 const DRAG_THRESHOLD_PX = 5;
+const ICON = 'w-3.5 h-3.5 text-muted-foreground shrink-0';
 
 function insertIndexToDestination(fromIndex: number, insertAt: number): number {
   return fromIndex < insertAt ? insertAt - 1 : insertAt;
@@ -59,14 +68,17 @@ function isNoOpReorder(fromIndex: number, insertAt: number): boolean {
 export const TabsBar: React.FC<TabsBarProps> = ({
   tabs,
   activeTabId,
+  focused = true,
   onSelectTab,
   onCloseTab,
-  onToggleSplitView,
+  onCloseTabs,
+  onRenameTab,
+  onSplitPane,
   onOpenNewQueryTab,
   onReorderTabs,
-  isSplitView,
 }) => {
   const listRef = useRef<HTMLDivElement>(null);
+  const renameRef = useRef<HTMLInputElement>(null);
   const dragRef = useRef<DragSession | null>(null);
   const suppressClickRef = useRef(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -76,6 +88,9 @@ export const TabsBar: React.FC<TabsBarProps> = ({
     width: number;
     top: number;
   } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
+  const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
   const reduceMotion = useReducedMotion();
 
   const getTabIcon = (type: WorkspaceTab['type']) => {
@@ -95,6 +110,21 @@ export const TabsBar: React.FC<TabsBarProps> = ({
       default:
         return <TableIcon className="w-3.5 h-3.5 text-muted-foreground" />;
     }
+  };
+
+  const startRename = (tab: WorkspaceTab) => {
+    setRenamingTabId(tab.id);
+    setRenameValue(tab.title);
+  };
+
+  const commitRename = () => {
+    if (!renamingTabId) return;
+    onRenameTab(renamingTabId, renameValue);
+    setRenamingTabId(null);
+  };
+
+  const cancelRename = () => {
+    setRenamingTabId(null);
   };
 
   const updateInsertIndex = (clientX: number) => {
@@ -131,7 +161,8 @@ export const TabsBar: React.FC<TabsBarProps> = ({
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>, index: number) => {
     if (e.button !== 0) return;
-    if ((e.target as HTMLElement).closest('button')) return;
+    if (renamingTabId) return;
+    if ((e.target as HTMLElement).closest('button, input')) return;
 
     dragRef.current = {
       fromIndex: index,
@@ -185,6 +216,80 @@ export const TabsBar: React.FC<TabsBarProps> = ({
     insertAt === index &&
     !isNoOpReorder(draggedIndex, insertAt);
 
+  const menuItems = (tabId: string): ContextMenuItem[] => {
+    const tabIds = tabs.map((tab) => tab.id);
+    return [
+      {
+        id: 'rename',
+        label: 'Rename',
+        icon: <Pencil className={ICON} />,
+        onSelect: () => {
+          const tab = tabs.find((item) => item.id === tabId);
+          if (tab) startRename(tab);
+        },
+      },
+      {
+        id: 'close-this',
+        label: 'Close this tab',
+        icon: <X className={ICON} />,
+        disabled: !canClosePaneTabs(tabIds, tabId, tabs, 'this'),
+        onSelect: () => onCloseTab(tabId),
+      },
+      {
+        id: 'close-others',
+        label: 'Close other tabs',
+        icon: <CopyX className={ICON} />,
+        disabled: !canClosePaneTabs(tabIds, tabId, tabs, 'others'),
+        onSelect: () => onCloseTabs(tabId, 'others'),
+      },
+      {
+        id: 'close-left',
+        label: 'Close left tabs',
+        icon: <ArrowLeftToLine className={ICON} />,
+        disabled: !canClosePaneTabs(tabIds, tabId, tabs, 'left'),
+        onSelect: () => onCloseTabs(tabId, 'left'),
+      },
+      {
+        id: 'close-right',
+        label: 'Close right tabs',
+        icon: <ArrowRightToLine className={ICON} />,
+        disabled: !canClosePaneTabs(tabIds, tabId, tabs, 'right'),
+        onSelect: () => onCloseTabs(tabId, 'right'),
+      },
+      { id: 'sep-split', label: '', separator: true },
+      {
+        id: 'split-right',
+        label: 'Split right',
+        icon: <PanelRight className={ICON} />,
+        onSelect: () => onSplitPane(tabId, 'row', 'after'),
+      },
+      {
+        id: 'split-left',
+        label: 'Split left',
+        icon: <PanelLeft className={ICON} />,
+        onSelect: () => onSplitPane(tabId, 'row', 'before'),
+      },
+      {
+        id: 'split-down',
+        label: 'Split down',
+        icon: <PanelBottom className={ICON} />,
+        onSelect: () => onSplitPane(tabId, 'column', 'after'),
+      },
+      {
+        id: 'split-up',
+        label: 'Split up',
+        icon: <PanelTop className={ICON} />,
+        onSelect: () => onSplitPane(tabId, 'column', 'before'),
+      },
+    ];
+  };
+
+  useLayoutEffect(() => {
+    if (!renamingTabId) return;
+    renameRef.current?.focus();
+    renameRef.current?.select();
+  }, [renamingTabId]);
+
   useLayoutEffect(() => {
     const list = listRef.current;
     if (!list || !activeTabId) {
@@ -224,10 +329,14 @@ export const TabsBar: React.FC<TabsBarProps> = ({
     observer.observe(list);
     if (tab) observer.observe(tab);
     return () => observer.disconnect();
-  }, [activeTabId, tabs, draggedIndex, insertAt]);
+  }, [activeTabId, tabs, draggedIndex, insertAt, renamingTabId, renameValue]);
 
   return (
-    <div className="h-10 bg-background border-b border-border flex items-center px-2 select-none overflow-hidden shrink-0 text-foreground">
+    <div
+      className={`h-10 border-b border-border flex items-center px-2 select-none overflow-hidden shrink-0 text-foreground ${
+        focused ? 'bg-background' : 'bg-muted/30'
+      }`}
+    >
       <div
         ref={listRef}
         className="relative flex-1 min-w-0 h-full flex items-center gap-1 flex-nowrap overflow-x-auto overflow-y-hidden scrollbar-none"
@@ -235,6 +344,7 @@ export const TabsBar: React.FC<TabsBarProps> = ({
         {tabs.map((tab, index) => {
           const isActive = tab.id === activeTabId;
           const isDragging = draggedIndex === index;
+          const isRenaming = renamingTabId === tab.id;
 
           return (
             <React.Fragment key={tab.id}>
@@ -248,14 +358,24 @@ export const TabsBar: React.FC<TabsBarProps> = ({
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={clearDrag}
+                onDoubleClick={() => startRename(tab)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onSelectTab(tab.id);
+                  setMenu({ x: e.clientX, y: e.clientY, tabId: tab.id });
+                }}
                 onClick={() => {
                   if (suppressClickRef.current) {
                     suppressClickRef.current = false;
                     return;
                   }
+                  if (isRenaming) return;
                   onSelectTab(tab.id);
                 }}
-                className={`group flex items-center gap-1.5 h-7 px-3 rounded-lg text-xs font-medium transition-colors duration-200 cursor-grab active:cursor-grabbing shrink-0 max-w-[200px] touch-none ${
+                className={`group flex items-center gap-1.5 h-7 px-3 rounded-lg text-xs font-medium transition-colors duration-200 shrink-0 max-w-[200px] touch-none ${
+                  isRenaming ? 'cursor-text' : 'cursor-grab active:cursor-grabbing'
+                } ${
                   isDragging
                     ? 'opacity-40'
                     : isActive
@@ -265,7 +385,27 @@ export const TabsBar: React.FC<TabsBarProps> = ({
               >
                 <div className="shrink-0">{getTabIcon(tab.type)}</div>
 
-                <span className="truncate font-mono">{tab.title}</span>
+                {isRenaming ? (
+                  <input
+                    ref={renameRef}
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        commitRename();
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        cancelRename();
+                      }
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-28 min-w-0 bg-transparent border-b border-primary outline-none font-mono text-xs text-foreground"
+                  />
+                ) : (
+                  <span className="truncate font-mono">{tab.title}</span>
+                )}
 
                 {tab.hasUncommittedChanges && (
                   <span
@@ -282,7 +422,7 @@ export const TabsBar: React.FC<TabsBarProps> = ({
                   <Pin className="w-3 h-3 text-primary shrink-0 fill-primary/20" />
                 )}
 
-                {tabs.length > 1 && !tab.isPinned && (
+                {!tab.isPinned && !isRenaming && (
                   <button
                     type="button"
                     onClick={(e) => {
@@ -303,7 +443,7 @@ export const TabsBar: React.FC<TabsBarProps> = ({
           !isNoOpReorder(draggedIndex, insertAt) && (
             <div className="w-0.5 h-6 rounded-full bg-primary shrink-0" aria-hidden />
           )}
-        {indicator && (
+        {indicator && !renamingTabId && (
           <motion.div
             aria-hidden
             className="pointer-events-none absolute top-0 left-0 z-10 rounded-full bg-primary"
@@ -328,30 +468,14 @@ export const TabsBar: React.FC<TabsBarProps> = ({
         <Plus className="w-3.5 h-3.5" />
       </button>
 
-      <div className="flex items-center gap-1.5 shrink-0 ml-2 pl-2 border-l border-border">
-        <button
-          type="button"
-          onClick={onToggleSplitView}
-          title={isSplitView ? 'Switch to Single View' : 'Switch to Split Dual Pane'}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${
-            isSplitView
-              ? 'bg-primary/20 text-primary border-primary/40 font-semibold'
-              : 'bg-muted text-muted-foreground border-border hover:bg-accent hover:text-foreground'
-          }`}
-        >
-          {isSplitView ? (
-            <>
-              <Square className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Single</span>
-            </>
-          ) : (
-            <>
-              <Columns className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Split Dual</span>
-            </>
-          )}
-        </button>
-      </div>
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={menuItems(menu.tabId)}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </div>
   );
 };

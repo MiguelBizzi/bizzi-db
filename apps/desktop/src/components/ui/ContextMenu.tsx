@@ -9,6 +9,7 @@ export interface ContextMenuItem {
   hint?: string;
   icon?: ReactNode;
   disabled?: boolean;
+  separator?: boolean;
   submenu?: ContextMenuItem[];
   onSelect?: () => void;
 }
@@ -87,6 +88,10 @@ function MenuRow({ item, onClose }: { item: ContextMenuItem; onClose: () => void
     const rect = rowRef.current.getBoundingClientRect();
     setFlip(rect.right + 196 > window.innerWidth);
   }, [open]);
+
+  if (item.separator) {
+    return <div role="separator" className="h-px bg-border my-1 mx-1" />;
+  }
 
   const body = (
     <>
