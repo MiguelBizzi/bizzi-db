@@ -1,0 +1,32 @@
+export type {
+  ActivityLogItem,
+  ColumnDefinition,
+  ConnectionProfile,
+  ConnectionStatus,
+  DatabaseDialect,
+  DatabaseSchema,
+  Environment,
+  ExecuteQueryRequest,
+  ExplainPlanNode,
+  FilterClause,
+  IndexDefinition,
+  PendingCellUpdate,
+  PendingModifications,
+  PendingRowDelete,
+  PendingRowInsert,
+  QueryExecutionResult,
+  SaveConnectionInput,
+  SavedQuery,
+  SortClause,
+  TablePreviewRequest,
+  TableSchema,
+  TabType,
+  TestConnectionResult,
+  WorkspaceState,
+  WorkspaceTab,
+} from '@db/shared';
+
+export {
+  DEFAULT_PREVIEW_LIMIT,
+  DEFAULT_ROW_CAP,
+} from '@db/shared';

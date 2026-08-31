@@ -1,6 +1,6 @@
 {
-  "name": "Modern Database Client",
-  "description": "A next-generation desktop database workspace featuring interactive schema ERDs, spreadsheet data editing, AI SQL assistant, and execution performance tools.",
+  "name": "DB Pro Studio",
+  "description": "A next-generation desktop database workspace featuring interactive schema ERDs, spreadsheet data browsing, and a SQL editor.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

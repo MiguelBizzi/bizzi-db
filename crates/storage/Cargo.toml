@@ -1,0 +1,16 @@
+[package]
+name = "db-storage"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+db-core = { path = "../core" }
+keyring.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile = "=3.13.0"

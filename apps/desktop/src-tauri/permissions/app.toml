@@ -1,0 +1,21 @@
+[[permission]]
+identifier = "allow-app-commands"
+description = "Allow desktop IPC commands"
+commands.allow = [
+  "connections_list",
+  "connections_save",
+  "connections_delete",
+  "connections_test",
+  "connections_connect",
+  "connections_disconnect",
+  "schema_introspect",
+  "table_preview",
+  "query_execute",
+  "history_list",
+  "saved_queries_list",
+  "saved_queries_save",
+  "saved_queries_delete",
+  "saved_queries_update_tags",
+  "workspace_load",
+  "workspace_save"
+]

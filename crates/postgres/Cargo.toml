@@ -1,0 +1,17 @@
+[package]
+name = "db-postgres"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+chrono.workspace = true
+db-core = { path = "../core" }
+deadpool-postgres.workspace = true
+native-tls.workspace = true
+postgres-native-tls.workspace = true
+postgres-protocol.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-postgres.workspace = true
+uuid.workspace = true

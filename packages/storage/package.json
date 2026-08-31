@@ -1,0 +1,16 @@
+{
+  "name": "@db/storage",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@db/shared": "workspace:*",
+    "@tauri-apps/api": "^2.0.3"
+  }
+}
