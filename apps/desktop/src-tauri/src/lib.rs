@@ -4,8 +4,8 @@ use std::sync::{Arc, Mutex};
 
 use db_core::{
     history_item_from_result, new_connection_requires_password, overlay_schema,
-    profile_from_save_input, ActivityLogItem, Adapter, ConnectConfig, ConnectionProfile,
-    ConnectionStatus, DatabaseSchema, ExecuteQueryRequest, QueryExecutionResult,
+    profile_from_save_input, validate_save_input, ActivityLogItem, Adapter, ConnectConfig,
+    ConnectionProfile, ConnectionStatus, DatabaseSchema, ExecuteQueryRequest, QueryExecutionResult,
     SaveConnectionInput, SavedQuery, Session, TablePreviewRequest, TestConnectionResult,
     WorkspaceState, DEFAULT_ROW_CAP,
 };
@@ -69,6 +69,7 @@ fn connections_save(
     if new_connection_requires_password(&input) {
         return Err("Password is required".into());
     }
+    validate_save_input(&input)?;
     let mut profile = profile_from_input(input.clone());
     if !input.password.is_empty() {
         state
@@ -94,7 +95,7 @@ async fn connections_delete(state: State<'_, AppState>, id: String) -> Result<()
         let mut sessions = state.sessions.lock().await;
         sessions.remove(&id);
     }
-    let _ = state.secrets.delete_password(&id);
+    state.secrets.delete_password(&id).map_err(map_err)?;
     state
         .storage
         .lock()
@@ -105,6 +106,7 @@ async fn connections_delete(state: State<'_, AppState>, id: String) -> Result<()
 
 #[tauri::command]
 async fn connections_test(input: SaveConnectionInput) -> Result<TestConnectionResult, String> {
+    validate_save_input(&input)?;
     let profile = profile_from_input(input.clone());
     let adapter = PostgresAdapter;
     match adapter

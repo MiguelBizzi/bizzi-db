@@ -15,7 +15,7 @@ export default defineConfig({
     port: 1420,
     strictPort: true,
   },
-  envPrefix: ['VITE_', 'TAURI_'],
+  envPrefix: ['VITE_'],
   build: {
     target: ['es2021', 'chrome105', 'safari14'],
     minify: process.env.TAURI_ENV_DEBUG ? false : 'esbuild',

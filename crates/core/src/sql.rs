@@ -3,6 +3,10 @@ use crate::types::HistoryQueryType;
 pub const DEFAULT_ROW_CAP: usize = 1000;
 pub const DEFAULT_PREVIEW_LIMIT: i64 = 100;
 
+pub fn clamp_preview_page(limit: i64, offset: i64) -> (i64, i64) {
+    (limit.clamp(0, DEFAULT_ROW_CAP as i64), offset.max(0))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QueryKind {
     Select,
@@ -84,6 +88,20 @@ mod tests {
         assert_eq!(
             classify_sql("  -- note\nWITH x AS (SELECT 1) SELECT * FROM x"),
             QueryKind::Select
+        );
+    }
+
+    #[test]
+    fn clamp_preview_page_bounds_limit_and_offset() {
+        assert_eq!(clamp_preview_page(100, 0), (100, 0));
+        assert_eq!(clamp_preview_page(-5, -10), (0, 0));
+        assert_eq!(
+            clamp_preview_page(i64::MAX, i64::MAX),
+            (DEFAULT_ROW_CAP as i64, i64::MAX)
+        );
+        assert_eq!(
+            clamp_preview_page(DEFAULT_ROW_CAP as i64 + 1, 50),
+            (1000, 50)
         );
     }
 

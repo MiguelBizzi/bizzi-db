@@ -3,8 +3,8 @@ use std::time::Instant;
 use async_trait::async_trait;
 use chrono::Utc;
 use db_core::{
-    Adapter, AdapterError, ConnectConfig, ConnectionStatus, DatabaseDialect, DatabaseSchema,
-    QueryExecutionResult, Session, DEFAULT_ROW_CAP,
+    clamp_pool_size, clamp_preview_page, Adapter, AdapterError, ConnectConfig, ConnectionStatus,
+    DatabaseDialect, DatabaseSchema, QueryExecutionResult, Session, DEFAULT_ROW_CAP,
 };
 use deadpool_postgres::{ManagerConfig, Pool, RecyclingMethod, Runtime};
 use native_tls::TlsConnector;
@@ -66,8 +66,7 @@ impl Session for PostgresSession {
         limit: i64,
         offset: i64,
     ) -> Result<QueryExecutionResult, AdapterError> {
-        let limit = limit.max(0);
-        let offset = offset.max(0);
+        let (limit, offset) = clamp_preview_page(limit, offset);
         let sql = format!(
             "SELECT * FROM {} LIMIT {} OFFSET {}",
             qualify_table(schema, table),
@@ -97,7 +96,7 @@ fn create_pool(cfg: &ConnectConfig) -> Result<Pool, AdapterError> {
     let manager_cfg = ManagerConfig {
         recycling_method: RecyclingMethod::Fast,
     };
-    let size = cfg.pool_size.max(1) as usize;
+    let size = clamp_pool_size(cfg.pool_size) as usize;
     let manager = if cfg.ssl {
         let tls = MakeTlsConnector::new(
             TlsConnector::builder()

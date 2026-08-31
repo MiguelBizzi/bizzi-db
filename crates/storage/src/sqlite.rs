@@ -15,9 +15,15 @@ pub struct Storage {
 impl Storage {
     pub fn open(path: &Path) -> Result<Self, StorageError> {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| StorageError::msg(e.to_string()))?;
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent).map_err(|e| StorageError::msg(e.to_string()))?;
+                #[cfg(unix)]
+                restrict_unix_mode(parent, 0o700)?;
+            }
         }
         let conn = Connection::open(path).map_err(|e| StorageError::msg(e.to_string()))?;
+        #[cfg(unix)]
+        restrict_unix_mode(path, 0o600)?;
         let storage = Self { conn };
         storage.migrate()?;
         Ok(storage)
@@ -333,6 +339,13 @@ impl Storage {
     }
 }
 
+#[cfg(unix)]
+fn restrict_unix_mode(path: &Path, mode: u32) -> Result<(), StorageError> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
+        .map_err(|e| StorageError::msg(e.to_string()))
+}
+
 fn dialect_str(d: DatabaseDialect) -> &'static str {
     match d {
         DatabaseDialect::PostgreSQL => "PostgreSQL",
@@ -563,6 +576,28 @@ mod tests {
         }
         let db = Storage::open(&path).unwrap();
         assert_eq!(db.get_connection("c1").unwrap().unwrap().name, "Local");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn open_sets_restrictive_unix_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let nested = dir.path().join("app-data");
+        let path = nested.join("workspace.sqlite");
+        Storage::open(&path).unwrap();
+        let dir_mode = std::fs::metadata(&nested).unwrap().permissions().mode() & 0o777;
+        let file_mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(dir_mode, 0o700, "app data dir should be owner-only");
+        assert_eq!(
+            file_mode, 0o600,
+            "workspace db should not be group/world readable"
+        );
+
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        Storage::open(&path).unwrap();
+        let tightened = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(tightened, 0o600);
     }
 
     #[test]

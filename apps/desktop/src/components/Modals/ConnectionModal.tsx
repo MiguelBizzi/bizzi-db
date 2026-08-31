@@ -1,10 +1,14 @@
 import React, { useMemo, useState } from "react";
 import { Environment, SaveConnectionInput } from "../../types";
 import { SUPPORTED_DIALECTS } from "@db/database";
-import { ShieldCheck, X, AlertCircle } from "lucide-react";
+import { ShieldCheck, X, AlertCircle, AlertTriangle } from "lucide-react";
 import { Select, SelectOption } from "../ui/Select";
 import { Switch } from "../ui/Switch";
 import { PostgresLogo } from "../icons/PostgresLogo";
+import {
+  defaultSslForHost,
+  warnInsecureConnection,
+} from "../../lib/connectionSecurity";
 
 interface ConnectionModalProps {
   isOpen: boolean;
@@ -49,7 +53,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   const [username, setUsername] = useState("postgres");
   const [databaseName, setDatabaseName] = useState("postgres");
   const [password, setPassword] = useState("");
-  const [ssl, setSsl] = useState(false);
+  const [ssl, setSsl] = useState(() => defaultSslForHost("127.0.0.1"));
   const [poolSize, setPoolSize] = useState(8);
   const [environment, setEnvironment] = useState<Environment>("development");
   const [isTesting, setIsTesting] = useState(false);
@@ -77,6 +81,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   }, [name, host, port, databaseName, username, password, poolSize]);
 
   const isValid = Object.keys(errors).length === 0;
+  const sslWarning = warnInsecureConnection(host, ssl, environment);
   const showError = (field: FieldName) =>
     (touched[field] || attempted) && errors[field];
   const markTouched = (field: FieldName) =>
@@ -206,7 +211,9 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                 type="text"
                 value={host}
                 onChange={(e) => {
-                  setHost(e.target.value);
+                  const next = e.target.value;
+                  setHost(next);
+                  setSsl(defaultSslForHost(next));
                   markTouched("host");
                 }}
                 onBlur={() => markTouched("host")}
@@ -370,6 +377,13 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
               </div>
             </div>
           </div>
+
+          {sslWarning && (
+            <div className="p-2.5 rounded-xl border text-xs flex items-center gap-2 bg-amber-500/10 border-amber-500/30 text-amber-200">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{sslWarning}</span>
+            </div>
+          )}
 
           {testResult && (
             <div

@@ -4,6 +4,29 @@ use crate::types::{
     QueryExecutionResult, SaveConnectionInput,
 };
 
+pub const MIN_POOL_SIZE: u32 = 1;
+pub const MAX_POOL_SIZE: u32 = 32;
+
+pub fn clamp_pool_size(size: u32) -> u32 {
+    size.clamp(MIN_POOL_SIZE, MAX_POOL_SIZE)
+}
+
+pub fn validate_save_input(input: &SaveConnectionInput) -> Result<(), String> {
+    if input.host.trim().is_empty() {
+        return Err("Host is required".into());
+    }
+    if input.port == 0 {
+        return Err("Port must be between 1 and 65535".into());
+    }
+    if input.database.trim().is_empty() {
+        return Err("Database is required".into());
+    }
+    if input.user.trim().is_empty() {
+        return Err("Username is required".into());
+    }
+    Ok(())
+}
+
 pub fn new_connection_requires_password(input: &SaveConnectionInput) -> bool {
     input.password.is_empty() && input.id.is_none()
 }
@@ -18,7 +41,7 @@ pub fn profile_from_save_input(input: SaveConnectionInput, id: String) -> Connec
         database: input.database,
         user: input.user,
         ssl: input.ssl,
-        pool_size: input.pool_size.max(1),
+        pool_size: clamp_pool_size(input.pool_size),
         environment: input.environment,
         status: ConnectionStatus::Disconnected,
     }
@@ -99,6 +122,42 @@ mod tests {
         assert_eq!(profile.pool_size, 1);
         assert_eq!(profile.status, ConnectionStatus::Disconnected);
         assert_eq!(profile.id, "conn_1");
+        let huge = profile_from_save_input(save_input("secret", None, 10_000), "conn_2".into());
+        assert_eq!(huge.pool_size, MAX_POOL_SIZE);
+        assert_eq!(clamp_pool_size(8), 8);
+    }
+
+    #[test]
+    fn validate_save_input_rejects_empty_fields_and_port_zero() {
+        let ok = save_input("secret", None, 8);
+        assert!(validate_save_input(&ok).is_ok());
+
+        let mut missing_host = ok.clone();
+        missing_host.host = "  ".into();
+        assert_eq!(
+            validate_save_input(&missing_host).unwrap_err(),
+            "Host is required"
+        );
+
+        let mut bad_port = ok.clone();
+        bad_port.port = 0;
+        assert!(validate_save_input(&bad_port)
+            .unwrap_err()
+            .contains("Port must be"));
+
+        let mut missing_db = ok.clone();
+        missing_db.database = String::new();
+        assert_eq!(
+            validate_save_input(&missing_db).unwrap_err(),
+            "Database is required"
+        );
+
+        let mut missing_user = ok.clone();
+        missing_user.user = " ".into();
+        assert_eq!(
+            validate_save_input(&missing_user).unwrap_err(),
+            "Username is required"
+        );
     }
 
     #[test]

@@ -6,7 +6,7 @@ services:
     container_name: db-manager-postgres
     restart: unless-stopped
     ports:
-      - "${DB_PORT:-5433}:5432"
+      - "127.0.0.1:${DB_PORT:-5433}:5432"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
