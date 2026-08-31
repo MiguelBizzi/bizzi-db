@@ -16,8 +16,9 @@ import {
   DataExportInput,
   downloadExport,
 } from '../../lib/dataExport';
+import { toast } from '../../lib/toast';
 
-const FORMAT_ICONS: Record<
+export const FORMAT_ICONS: Record<
   DataExportFormat,
   { icon: typeof FileSpreadsheet; className: string }
 > = {
@@ -69,8 +70,11 @@ export function DataExportMenu({
       await copyExport(inputRef.current, format);
       setCopied(true);
       setOpen(null);
+      const label = DATA_EXPORT_FORMATS.find((item) => item.id === format)?.label ?? format;
+      toast(`Copied as ${label}`);
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
+      toast.error('Could not copy to clipboard');
       setOpen(null);
     }
   };

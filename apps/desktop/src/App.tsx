@@ -12,6 +12,7 @@ import { ActivityLogDrawer } from './components/ActivityLog/ActivityLogDrawer';
 import { PendingChangesDrawer } from './components/PendingChanges/PendingChangesDrawer';
 import { ConnectionModal } from './components/Modals/ConnectionModal';
 import { ConnectionPicker } from './components/ConnectionPicker';
+import { Toaster } from './components/ui/Toaster';
 import {
   DatabaseSchema,
   TableSchema,
@@ -906,6 +907,7 @@ export default function App() {
         onTest={async (input) => connectionsTest(input)}
         onSave={handleSaveConnection}
       />
+      <Toaster />
     </div>
   );
 }

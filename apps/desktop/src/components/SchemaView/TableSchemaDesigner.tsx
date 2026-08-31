@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { columnTypesFor } from '@db/database';
 import type { ColumnDefinition, DatabaseDialect, TableSchema } from '../../types';
 import { Edit3, Key, Pencil, Plus, Trash2 } from 'lucide-react';
-import { formatSizeMb } from '../../lib/format';
+import { tableStatParts } from '../../lib/format';
 import { buildTableDdlPreview } from '../../lib/schemaChange';
 import { AddColumnDrawer } from './AddColumnDrawer';
 import { EditColumnModal } from './EditColumnModal';
@@ -49,8 +49,10 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
               Schema — {table.schema}.{table.name}
             </div>
             <div className="text-xs text-muted-foreground">
-              {table.isView ? 'View · read-only' : `${table.schema} schema`} •{' '}
-              {table.rowCount.toLocaleString()} rows • {formatSizeMb(table.sizeMb)}
+              {[
+                table.isView ? 'View · read-only' : `${table.schema} schema`,
+                ...tableStatParts(table),
+              ].join(' • ')}
             </div>
           </div>
         </div>

@@ -9,7 +9,7 @@ import {
   Edit3,
 } from 'lucide-react';
 import { DatabaseSchema, TableSchema } from '../types';
-import { formatSizeMb } from '../lib/format';
+import { tableStatParts } from '../lib/format';
 import { Select } from './ui/Select';
 import { PostgresLogo } from './icons/PostgresLogo';
 
@@ -153,6 +153,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {filteredTables.map((table) => {
           const isActive = table.id === activeTableId;
+          const stats = tableStatParts(table);
           return (
             <div
               key={table.id}
@@ -184,11 +185,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono">
-                      <span>{table.rowCount.toLocaleString()} rows</span>
-                      <span>•</span>
-                      <span>{formatSizeMb(table.sizeMb)}</span>
-                    </div>
+                    {stats.length > 0 && (
+                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono">
+                        {stats.join(' • ')}
+                      </div>
+                    )}
                   </div>
                 </div>
 

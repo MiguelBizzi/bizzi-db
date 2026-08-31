@@ -8,8 +8,10 @@ import {
   formatCellValue,
   groupUpdateRows,
   hasPending,
+  isSetColumnDefault,
   primaryKeyColumn,
   removeChange,
+  SET_COLUMN_DEFAULT,
   sqlForAll,
   sqlForBundle,
   sqlForChange,
@@ -168,6 +170,25 @@ describe('sqlForUpdateRow / sqlForDelete', () => {
       sqlForDelete(users, { rowId: 1, primaryKeyValue: 1, rowData: { id: 1 } })
     ).toBe('DELETE FROM "public"."users" WHERE "id" = 1;');
   });
+
+  test('emits DEFAULT instead of a quoted literal for the sentinel', () => {
+    const users = bundle();
+    expect(
+      sqlForUpdateRow(users, {
+        rowId: '1',
+        primaryKeyValue: 1,
+        cells: [
+          {
+            rowId: 1,
+            primaryKeyValue: 1,
+            columnName: 'role',
+            oldValue: 'staff',
+            newValue: SET_COLUMN_DEFAULT,
+          },
+        ],
+      })
+    ).toBe('UPDATE "public"."users" SET "role" = DEFAULT WHERE "id" = 1;');
+  });
 });
 
 describe('sqlForChange / sqlForAll', () => {
@@ -227,5 +248,11 @@ describe('formatCellValue', () => {
     expect(formatCellValue(true)).toBe('TRUE');
     expect(formatCellValue({ a: 1 })).toBe('{"a":1}');
     expect(formatCellValue('x'.repeat(90))).toBe(`${'x'.repeat(77)}…`);
+  });
+
+  test('renders the column-default sentinel as DEFAULT', () => {
+    expect(isSetColumnDefault(SET_COLUMN_DEFAULT)).toBe(true);
+    expect(isSetColumnDefault(null)).toBe(false);
+    expect(formatCellValue(SET_COLUMN_DEFAULT)).toBe('DEFAULT');
   });
 });

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { DatabaseSchema, TableSchema } from '../../types';
+import { knownRowCount } from '../../lib/format';
 import {
   Network,
   ZoomIn,
@@ -288,9 +289,11 @@ export const InteractiveErd: React.FC<InteractiveErdProps> = ({
                     </span>
                   </div>
 
-                  <span className="text-[10px] font-mono text-muted-foreground">
-                    {table.rowCount.toLocaleString()} r
-                  </span>
+                  {knownRowCount(table.rowCount) !== null && (
+                    <span className="text-[10px] font-mono text-muted-foreground">
+                      {table.rowCount.toLocaleString()} r
+                    </span>
+                  )}
                 </div>
 
                 {/* Columns List */}

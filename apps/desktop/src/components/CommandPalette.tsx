@@ -12,6 +12,7 @@ import {
   ListChecks,
 } from 'lucide-react';
 import { DatabaseSchema, TableSchema, SavedQuery } from '../types';
+import { knownRowCount } from '../lib/format';
 
 const isApplePlatform =
   typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -359,7 +360,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                         <span>{table.name}</span>
                       </div>
                       <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono">
-                        <span>{table.rowCount.toLocaleString()} rows</span>
+                        {knownRowCount(table.rowCount) !== null && (
+                          <span>{table.rowCount.toLocaleString()} rows</span>
+                        )}
                         <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                           {table.schema}
                         </span>

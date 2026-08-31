@@ -25,14 +25,33 @@ import { JsonModal } from "./JsonModal";
 import { InsertRowDrawer } from "./InsertRowDrawer";
 import { ForeignKeyFloater } from "./ForeignKeyFloater";
 import type { FkLookupFn } from "./ForeignKeyPicker";
-import { formatCellValue } from "../../lib/pendingChanges";
+import {
+  formatCellValue,
+  isSetColumnDefault,
+  SET_COLUMN_DEFAULT,
+} from "../../lib/pendingChanges";
 import {
   foreignKeyPreviewSql,
   resolveReferencedTable,
 } from "../../lib/foreignKeyLookup";
 import { createDefaultFilter, applyTableView } from "../../lib/tableFilters";
+import {
+  canSetDefault,
+  canSetEmpty,
+  canSetNull,
+  cellClipboardText,
+  filterFromCell,
+  numericFilterOps,
+  tableFooterRange,
+  truncateLabel,
+  type CellFilterOp,
+} from "../../lib/tableCellActions";
+import { copyExport, DATA_EXPORT_FORMATS } from "../../lib/dataExport";
+import { toast } from "../../lib/toast";
+import { FORMAT_ICONS } from "../DataExport/DataExportMenu";
 import { useDebouncedValue } from "../../lib/useDebouncedValue";
 import { Select, SelectOption } from "../ui/Select";
+import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 
 const SKELETON_ROW_COUNT = 8;
 const SKELETON_BAR_WIDTHS = [
@@ -71,6 +90,18 @@ interface TableDataGridProps {
   onLoadRows: (limit: number, offset: number) => Promise<void>;
   onLookup: FkLookupFn;
   onOpenTable: (table: TableSchema) => void;
+}
+
+interface GridContextMenu {
+  kind: "cell" | "header";
+  x: number;
+  y: number;
+  column: ColumnDefinition;
+  rowPk?: unknown;
+  rawValue?: unknown;
+  displayValue?: unknown;
+  row?: Record<string, unknown>;
+  isPendingDelete?: boolean;
 }
 
 interface ForeignKeyFloaterState {
@@ -120,8 +151,15 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   const [fkFloater, setFkFloater] = useState<ForeignKeyFloaterState | null>(
     null,
   );
+  const [showFilters, setShowFilters] = useState(false);
+  const [hiddenColumns, setHiddenColumns] = useState<string[]>([]);
+  const [contextMenu, setContextMenu] = useState<GridContextMenu | null>(null);
   const fkLookupGen = useRef(0);
   const loading = isLoading || pendingLoad;
+  const visibleColumns = table.columns.filter(
+    (col) => !hiddenColumns.includes(col.name),
+  );
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
   const onLoadRowsRef = useRef(onLoadRows);
   onLoadRowsRef.current = onLoadRows;
@@ -236,6 +274,75 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     );
   };
 
+  const applyCellFilter = (columnName: string, op: CellFilterOp, value: unknown) => {
+    setFilters((prev) => [...prev, filterFromCell(columnName, op, value)]);
+    setShowFilters(true);
+  };
+
+  const openCellMenu = (
+    event: React.MouseEvent,
+    opts: {
+      column: ColumnDefinition;
+      rowPk: unknown;
+      rawValue: unknown;
+      displayValue: unknown;
+      row: Record<string, unknown>;
+      isPendingDelete: boolean;
+    },
+  ) => {
+    event.preventDefault();
+    if (editingCell) return;
+    setContextMenu({
+      kind: "cell",
+      x: event.clientX,
+      y: event.clientY,
+      ...opts,
+    });
+  };
+
+  const openHeaderMenu = (event: React.MouseEvent, column: ColumnDefinition) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu({
+      kind: "header",
+      x: event.clientX,
+      y: event.clientY,
+      column,
+    });
+  };
+
+  const contextMenuItems: ContextMenuItem[] = contextMenu
+    ? contextMenu.kind === "header"
+      ? headerMenuItems({
+          onSort: (direction) => setSort({ column: contextMenu.column.name, direction }),
+          onHide: () =>
+            setHiddenColumns((prev) =>
+              prev.includes(contextMenu.column.name)
+                ? prev
+                : [...prev, contextMenu.column.name],
+            ),
+        })
+      : cellMenuItems({
+          table,
+          column: contextMenu.column,
+          displayValue: contextMenu.displayValue,
+          rowPk: contextMenu.rowPk,
+          row: contextMenu.row ?? {},
+          isPendingDelete: Boolean(contextMenu.isPendingDelete),
+          pendingModifications,
+          onFilter: applyCellFilter,
+          onSetValue: (newValue) => {
+            if (contextMenu.rowPk === undefined) return;
+            onUpdateCell(
+              contextMenu.rowPk,
+              contextMenu.column.name,
+              contextMenu.rawValue,
+              newValue,
+            );
+          },
+        })
+    : [];
+
   const closeFkFloater = useCallback(() => {
     fkLookupGen.current += 1;
     setFkFloater(null);
@@ -325,6 +432,10 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
             filters.map((f) => (f.id === id ? { ...f, [field]: val } : f)),
           )
         }
+        showFilters={showFilters}
+        onShowFiltersChange={setShowFilters}
+        hiddenColumns={hiddenColumns}
+        onHiddenColumnsChange={setHiddenColumns}
         selectedRowsCount={selectedRowPks.length}
         onInsertRow={() => setInsertOpen(true)}
         onDeleteSelectedRows={() => {
@@ -358,12 +469,16 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
               </th>
 
               {/* Data Columns */}
-              {table.columns.map((col) => {
+              {visibleColumns.map((col) => {
                 const isSorted = sort?.column === col.name;
                 return (
                   <th
                     key={col.name}
-                    onClick={() => handleSortToggle(col.name)}
+                    onClick={(event) => {
+                      if (event.ctrlKey || event.metaKey || event.button !== 0) return;
+                      handleSortToggle(col.name);
+                    }}
+                    onContextMenu={(event) => openHeaderMenu(event, col)}
                     className="px-3 py-2.5 border-r border-border font-semibold text-foreground hover:bg-accent cursor-pointer transition-colors whitespace-nowrap"
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -400,7 +515,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
           {/* Body */}
           <tbody className="divide-y divide-border bg-background">
             {loading ? (
-              <TableSkeletonRows columns={table.columns} />
+              <TableSkeletonRows columns={visibleColumns} />
             ) : (
               <>
             {filteredRows.map((row, idx) => {
@@ -431,7 +546,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
                   </td>
 
                   {/* Cells */}
-                  {table.columns.map((col) => {
+                  {visibleColumns.map((col) => {
                     const rawVal = row[col.name];
                     const pendingUpd = getCellPendingUpdate(rowPkVal, col.name);
                     const isPending = !!pendingUpd;
@@ -442,12 +557,24 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
                       editingCell?.column === col.name;
 
                     const isJson =
-                      typeof displayVal === "object" && displayVal !== null;
+                      typeof displayVal === "object" &&
+                      displayVal !== null &&
+                      !isSetColumnDefault(displayVal);
                     const fk = col.foreignKey;
 
                     return (
                       <td
                         key={col.name}
+                        onContextMenu={(event) =>
+                          openCellMenu(event, {
+                            column: col,
+                            rowPk: rowPkVal,
+                            rawValue: rawVal,
+                            displayValue: displayVal,
+                            row,
+                            isPendingDelete,
+                          })
+                        }
                         onDoubleClick={() => {
                           if (isPendingDelete) return;
                           if (isJson) {
@@ -461,7 +588,9 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
                             setEditingCell({
                               rowPk: rowPkVal,
                               column: col.name,
-                              value: String(displayVal ?? ""),
+                              value: isSetColumnDefault(displayVal)
+                                ? ""
+                                : String(displayVal ?? ""),
                             });
                           }
                         }}
@@ -535,6 +664,10 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
                           <span className="text-muted-foreground italic">
                             NULL
                           </span>
+                        ) : isSetColumnDefault(displayVal) ? (
+                          <span className="text-muted-foreground italic">
+                            DEFAULT
+                          </span>
                         ) : typeof displayVal === "boolean" ? (
                           <span
                             className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
@@ -587,7 +720,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
                     New
                   </span>
                 </td>
-                {table.columns.map((col) => (
+                {visibleColumns.map((col) => (
                   <td
                     key={col.name}
                     className="px-3 py-2 border-r border-border whitespace-nowrap font-mono text-emerald-200"
@@ -607,7 +740,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
               pendingModifications.inserts.length === 0 && (
                 <tr>
                   <td
-                    colSpan={table.columns.length + 1}
+                    colSpan={visibleColumns.length + 1}
                     className="py-12 text-center text-muted-foreground font-sans"
                   >
                     No records found matching filters or search queries.
@@ -623,9 +756,12 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
       {/* Grid Bottom Footer: pagination */}
       <div className="px-3 py-1.5 bg-card border-t border-border text-xs font-mono text-muted-foreground flex items-center justify-between gap-3 shrink-0">
         <div className="min-w-0 truncate">
-          {table.rowCount === 0
-            ? "No rows"
-            : `Showing ${rangeStart.toLocaleString()}–${rangeEnd.toLocaleString()} of ${table.rowCount.toLocaleString()}`}
+          {tableFooterRange({
+            rowCount: table.rowCount,
+            rangeStart,
+            rangeEnd,
+            selectedCount: selectedRowPks.length,
+          })}
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
@@ -718,6 +854,15 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
         />
       )}
 
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenuItems}
+          onClose={closeContextMenu}
+        />
+      )}
+
       {/* JSON Inspector Modal */}
       <JsonModal
         isOpen={jsonModalState.isOpen}
@@ -758,4 +903,183 @@ function TableSkeletonRows({ columns }: { columns: ColumnDefinition[] }) {
       ))}
     </>
   );
+}
+
+function quotedFilterValue(value: unknown): string {
+  if (value === null || value === undefined) return "NULL";
+  if (isSetColumnDefault(value)) return "DEFAULT";
+  const text =
+    typeof value === "object" ? cellClipboardText(value) : String(value);
+  return `"${truncateLabel(text)}"`;
+}
+
+function overlayPendingRow(
+  row: Record<string, unknown>,
+  rowPk: unknown,
+  pending: PendingModifications,
+): Record<string, unknown> {
+  const next = { ...row };
+  for (const cell of pending.updates) {
+    if (String(cell.primaryKeyValue) !== String(rowPk)) continue;
+    next[cell.columnName] = isSetColumnDefault(cell.newValue)
+      ? null
+      : cell.newValue;
+  }
+  return next;
+}
+
+function headerMenuItems(actions: {
+  onSort: (direction: "ASC" | "DESC") => void;
+  onHide: () => void;
+}): ContextMenuItem[] {
+  return [
+    {
+      id: "sort-asc",
+      label: "Sort Ascending",
+      onSelect: () => actions.onSort("ASC"),
+    },
+    {
+      id: "sort-desc",
+      label: "Sort Descending",
+      onSelect: () => actions.onSort("DESC"),
+    },
+    {
+      id: "hide",
+      label: "Hide Column",
+      onSelect: actions.onHide,
+    },
+  ];
+}
+
+function cellMenuItems(opts: {
+  table: TableSchema;
+  column: ColumnDefinition;
+  displayValue: unknown;
+  rowPk: unknown;
+  row: Record<string, unknown>;
+  isPendingDelete: boolean;
+  pendingModifications: PendingModifications;
+  onFilter: (column: string, op: CellFilterOp, value: unknown) => void;
+  onSetValue: (value: unknown) => void;
+}): ContextMenuItem[] {
+  const ctx = {
+    isView: Boolean(opts.table.isView),
+    isPendingDelete: opts.isPendingDelete,
+  };
+  const quoted = quotedFilterValue(opts.displayValue);
+  const numeric =
+    opts.displayValue !== null &&
+    opts.displayValue !== undefined &&
+    numericFilterOps(opts.column).length > 0;
+  const exportRow = overlayPendingRow(
+    opts.row,
+    opts.rowPk,
+    opts.pendingModifications,
+  );
+  const exportInput = {
+    columns: opts.table.columns.map((column) => column.name),
+    rows: [exportRow],
+    tableName: opts.table.name,
+    schema: opts.table.schema,
+  };
+
+  const filterItems: ContextMenuItem[] = [
+    {
+      id: "eq",
+      label: "Equals",
+      hint: quoted,
+      onSelect: () => opts.onFilter(opts.column.name, "equals", opts.displayValue),
+    },
+    {
+      id: "neq",
+      label: "Not equals",
+      hint: quoted,
+      onSelect: () =>
+        opts.onFilter(opts.column.name, "notEquals", opts.displayValue),
+    },
+    {
+      id: "contains",
+      label: "Contains",
+      hint: quoted,
+      disabled: opts.displayValue === null || opts.displayValue === undefined,
+      onSelect: () =>
+        opts.onFilter(opts.column.name, "contains", opts.displayValue),
+    },
+  ];
+  if (numeric) {
+    filterItems.push(
+      {
+        id: "gt",
+        label: "Greater than",
+        hint: quoted,
+        onSelect: () => opts.onFilter(opts.column.name, "gt", opts.displayValue),
+      },
+      {
+        id: "lt",
+        label: "Less than",
+        hint: quoted,
+        onSelect: () => opts.onFilter(opts.column.name, "lt", opts.displayValue),
+      },
+    );
+  }
+
+  return [
+    {
+      id: "copy-cell",
+      label: "Copy this cell value",
+      onSelect: () => {
+        void navigator.clipboard
+          .writeText(cellClipboardText(opts.displayValue))
+          .then(() => toast("Copied cell value"))
+          .catch(() => toast.error("Could not copy to clipboard"));
+      },
+    },
+    {
+      id: "filter",
+      label: "Filter by this column",
+      submenu: filterItems,
+    },
+    {
+      id: "set-as",
+      label: "Set as",
+      disabled: ctx.isView || ctx.isPendingDelete,
+      submenu: [
+        {
+          id: "empty",
+          label: "Empty",
+          disabled: !canSetEmpty(ctx),
+          onSelect: () => opts.onSetValue(""),
+        },
+        {
+          id: "null",
+          label: "NULL",
+          disabled: !canSetNull(opts.column, ctx),
+          onSelect: () => opts.onSetValue(null),
+        },
+        {
+          id: "default",
+          label: "Default",
+          disabled: !canSetDefault(opts.column, ctx),
+          onSelect: () => opts.onSetValue(SET_COLUMN_DEFAULT),
+        },
+      ],
+    },
+    {
+      id: "copy-row",
+      label: "Copy row as",
+      submenu: DATA_EXPORT_FORMATS.map((format) => {
+        const { icon: Icon, className } = FORMAT_ICONS[format.id];
+        return {
+          id: format.id,
+          label: format.label,
+          icon: <Icon className={`w-3.5 h-3.5 shrink-0 ${className}`} />,
+          onSelect: () => {
+            void copyExport(exportInput, format.id)
+              .then(() => toast(`Copied as ${format.label}`))
+              .catch(() => toast.error("Could not copy to clipboard"));
+          },
+        };
+      }),
+    },
+  ];
 }

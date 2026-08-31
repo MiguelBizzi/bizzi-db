@@ -66,7 +66,7 @@ function cellMatches(row: Record<string, unknown>, filter: FilterClause): boolea
   }
 }
 
-function filterNeedsValue(operator: FilterClause['operator']): boolean {
+export function filterNeedsValue(operator: FilterClause['operator']): boolean {
   return operator !== 'IS NULL' && operator !== 'IS NOT NULL';
 }
 

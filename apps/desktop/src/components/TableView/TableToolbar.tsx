@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Filter, Plus, Trash2, Search, RefreshCw } from 'lucide-react';
 import { TableSchema, FilterClause } from '../../types';
 import { Select, SelectOption } from '../ui/Select';
 import { DataExportMenu } from '../DataExport/DataExportMenu';
+import { ColumnVisibilityMenu } from './ColumnVisibilityMenu';
+import { filterNeedsValue } from '../../lib/tableFilters';
 
 const REFRESH_SHORTCUT = /Mac|iPhone|iPad|iPod/i.test(
   typeof navigator === 'undefined' ? '' : navigator.userAgent,
@@ -18,6 +20,10 @@ interface TableToolbarProps {
   onAddFilter: () => void;
   onRemoveFilter: (id: string) => void;
   onUpdateFilter: (id: string, field: keyof FilterClause, val: any) => void;
+  showFilters: boolean;
+  onShowFiltersChange: (show: boolean) => void;
+  hiddenColumns: string[];
+  onHiddenColumnsChange: (hidden: string[]) => void;
   selectedRowsCount: number;
   onInsertRow: () => void;
   onDeleteSelectedRows: () => void;
@@ -34,6 +40,10 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
   onAddFilter,
   onRemoveFilter,
   onUpdateFilter,
+  showFilters,
+  onShowFiltersChange,
+  hiddenColumns,
+  onHiddenColumnsChange,
   selectedRowsCount,
   onInsertRow,
   onDeleteSelectedRows,
@@ -41,11 +51,10 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
   onRefresh,
   isLoading = false,
 }) => {
-  const [showFilters, setShowFilters] = useState(false);
   const loadingHint = 'Unavailable while table data is loading';
 
   const openFilters = () => {
-    setShowFilters(true);
+    onShowFiltersChange(true);
     if (filters.length === 0) onAddFilter();
   };
 
@@ -58,6 +67,8 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
     { value: '<=', label: '<=' },
     { value: 'LIKE', label: 'LIKE' },
     { value: 'ILIKE', label: 'ILIKE' },
+    { value: 'IS NULL', label: 'IS NULL' },
+    { value: 'IS NOT NULL', label: 'IS NOT NULL' },
   ];
 
   return (
@@ -81,7 +92,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
           {/* Filter Builder Toggle — first open adds a default condition */}
           <button
             type="button"
-            onClick={() => (showFilters ? setShowFilters(false) : openFilters())}
+            onClick={() => (showFilters ? onShowFiltersChange(false) : openFilters())}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${
               filters.length > 0 || showFilters
                 ? 'bg-primary/20 text-primary border-primary/40'
@@ -91,6 +102,13 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
             <Filter className="w-3.5 h-3.5" />
             <span>Filters ({filters.length})</span>
           </button>
+
+          <ColumnVisibilityMenu
+            columns={table.columns}
+            hiddenColumns={hiddenColumns}
+            onHiddenColumnsChange={onHiddenColumnsChange}
+            disabled={isLoading}
+          />
 
           {/* Insert Row */}
           <button
@@ -173,20 +191,22 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
 
               <Select
                 size="sm"
-                className="w-[5.5rem]"
+                className="w-[8.5rem]"
                 value={f.operator}
                 options={operatorOptions}
                 onChange={(value) => onUpdateFilter(f.id, 'operator', value)}
                 aria-label="Filter operator"
               />
 
-              <input
-                type="text"
-                value={f.value}
-                onChange={(e) => onUpdateFilter(f.id, 'value', e.target.value)}
-                placeholder="Filter value..."
-                className="bg-card border border-border rounded px-2 py-1 text-foreground focus:outline-none focus:border-primary w-40"
-              />
+              {filterNeedsValue(f.operator) && (
+                <input
+                  type="text"
+                  value={f.value}
+                  onChange={(e) => onUpdateFilter(f.id, 'value', e.target.value)}
+                  placeholder="Filter value..."
+                  className="bg-card border border-border rounded px-2 py-1 text-foreground focus:outline-none focus:border-primary w-40"
+                />
+              )}
 
               <button
                 onClick={() => onRemoveFilter(f.id)}

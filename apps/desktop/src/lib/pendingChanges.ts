@@ -98,7 +98,14 @@ export function countPendingChanges(
   }, 0);
 }
 
+export const SET_COLUMN_DEFAULT = Object.freeze({ __kind: 'columnDefault' as const });
+
+export function isSetColumnDefault(value: unknown): boolean {
+  return value === SET_COLUMN_DEFAULT;
+}
+
 export function formatCellValue(value: unknown): string {
+  if (isSetColumnDefault(value)) return 'DEFAULT';
   if (value === null || value === undefined) return 'NULL';
   if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
   if (typeof value === 'object') {
@@ -117,6 +124,7 @@ function qualifyTable(schema: string, name: string): string {
 }
 
 function sqlLiteral(value: unknown): string {
+  if (isSetColumnDefault(value)) return 'DEFAULT';
   if (value === null || value === undefined) return 'NULL';
   if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
