@@ -184,6 +184,14 @@
     letter-spacing: var(--tracking-normal);
     overflow: hidden;
   }
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  [role="switch"]:not(:disabled) {
+    cursor: pointer;
+  }
+  label:has(input[type="checkbox"]:not(:disabled)) {
+    cursor: pointer;
+  }
 }
 
 .scrollbar-none {

@@ -797,7 +797,6 @@ export default function App() {
               activeTableId={activeTab?.type === 'table_data' ? activeTab.tableId : undefined}
               onSelectTableData={handleSelectTableData}
               onOpenErd={openErd}
-              onOpenNewQuery={(sql) => handleOpenNewQueryTab(sql)}
               onOpenSchemaDesigner={handleSelectTableSchema}
               onOpenNewTableModal={() => {
                 const newTab: WorkspaceTab = {

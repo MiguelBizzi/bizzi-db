@@ -6,7 +6,6 @@ import {
   Plus,
   Network,
   FolderTree,
-  Code,
   Edit3,
 } from 'lucide-react';
 import { DatabaseSchema, TableSchema } from '../types';
@@ -19,7 +18,6 @@ interface SidebarProps {
   activeTableId?: string;
   onSelectTableData: (table: TableSchema) => void;
   onOpenErd: () => void;
-  onOpenNewQuery: (initialSql?: string) => void;
   onOpenSchemaDesigner?: (table: TableSchema) => void;
   onOpenNewTableModal?: () => void;
   onAddTagToTable?: (tableName: string, tag: string) => void;
@@ -30,7 +28,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeTableId,
   onSelectTableData,
   onOpenErd,
-  onOpenNewQuery,
   onOpenSchemaDesigner,
   onOpenNewTableModal,
   onAddTagToTable,
@@ -197,16 +194,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                 {/* Contextual Action Overlay */}
                 <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenNewQuery(`SELECT * FROM ${table.name} LIMIT 100;`);
-                    }}
-                    title="Query in SQL Editor"
-                    className="p-1 rounded bg-muted hover:bg-accent text-primary"
-                  >
-                    <Code className="w-3 h-3" />
-                  </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
