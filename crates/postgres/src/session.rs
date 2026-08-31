@@ -250,10 +250,20 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
               NOT a.attnotnull AS is_nullable,
               COALESCE(pg_get_expr(ad.adbin, ad.adrelid), '')::text AS default_value,
               COALESCE(col_description(c.oid, a.attnum), '')::text AS comment,
-              a.attnum
+              COALESCE((
+                SELECT array_agg(e.enumlabel::text ORDER BY e.enumsortorder)
+                FROM pg_enum e
+                WHERE e.enumtypid = CASE
+                  WHEN t.typtype = 'e' THEN t.oid
+                  WHEN et.typtype = 'e' THEN et.oid
+                  ELSE NULL
+                END
+              ), ARRAY[]::text[]) AS enum_values
             FROM pg_attribute a
             JOIN pg_class c ON c.oid = a.attrelid
             JOIN pg_namespace n ON n.oid = c.relnamespace
+            JOIN pg_type t ON t.oid = a.atttypid
+            LEFT JOIN pg_type et ON et.oid = t.typelem
             LEFT JOIN pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
             WHERE a.attnum > 0
               AND NOT a.attisdropped
@@ -288,6 +298,7 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
               n.nspname::text,
               src.relname::text,
               src_att.attname::text,
+              tn.nspname::text,
               tgt.relname::text,
               tgt_att.attname::text,
               COALESCE(confdeltype::text, '') 
@@ -295,6 +306,7 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
             JOIN pg_class src ON src.oid = con.conrelid
             JOIN pg_namespace n ON n.oid = src.relnamespace
             JOIN pg_class tgt ON tgt.oid = con.confrelid
+            JOIN pg_namespace tn ON tn.oid = tgt.relnamespace
             JOIN unnest(con.conkey) WITH ORDINALITY AS src_cols(attnum, ord) ON true
             JOIN unnest(con.confkey) WITH ORDINALITY AS tgt_cols(attnum, ord) ON src_cols.ord = tgt_cols.ord
             JOIN pg_attribute src_att ON src_att.attrelid = src.oid AND src_att.attnum = src_cols.attnum
@@ -347,13 +359,19 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
         let schema: String = row.get(0);
         let table: String = row.get(1);
         let col: String = row.get(2);
-        let target_table: String = row.get(3);
-        let target_column: String = row.get(4);
+        let target_schema: String = row.get(3);
+        let target_table: String = row.get(4);
+        let target_column: String = row.get(5);
         fks.insert(
             (schema, table, col),
             ForeignKeyRef {
                 target_table,
                 target_column,
+                target_schema: if target_schema.is_empty() {
+                    None
+                } else {
+                    Some(target_schema)
+                },
                 on_delete: None,
             },
         );
@@ -391,6 +409,7 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
         let is_nullable: bool = row.get(4);
         let default_value: String = row.get(5);
         let comment: String = row.get(6);
+        let enum_values: Vec<String> = row.try_get(7).unwrap_or_default();
         let key = (schema.clone(), table.clone(), name.clone());
         columns
             .entry((schema.clone(), table.clone()))
@@ -407,6 +426,11 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
                     Some(default_value)
                 },
                 comment: if comment.is_empty() { None } else { Some(comment) },
+                enum_values: if enum_values.is_empty() {
+                    None
+                } else {
+                    Some(enum_values)
+                },
                 foreign_key: fks.get(&key).cloned(),
             });
     }

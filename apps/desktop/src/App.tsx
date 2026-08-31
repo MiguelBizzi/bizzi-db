@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { TabsBar } from './components/TabsBar';
@@ -9,7 +9,7 @@ import { TableSchemaDesigner } from './components/SchemaView/TableSchemaDesigner
 import { DatabaseMetrics } from './components/MetricsView/DatabaseMetrics';
 import { CommandPalette } from './components/CommandPalette';
 import { ActivityLogDrawer } from './components/ActivityLog/ActivityLogDrawer';
-import { SqlDiffModal } from './components/Modals/SqlDiffModal';
+import { PendingChangesDrawer } from './components/PendingChanges/PendingChangesDrawer';
 import { ConnectionModal } from './components/Modals/ConnectionModal';
 import { ConnectionPicker } from './components/ConnectionPicker';
 import {
@@ -45,12 +45,18 @@ import {
   savedQueriesUpdateTags,
 } from '@db/storage';
 import { Database } from 'lucide-react';
-
-const emptyPending = (): PendingModifications => ({
-  updates: [],
-  inserts: [],
-  deletes: [],
-});
+import {
+  changeKey,
+  countPendingChanges,
+  emptyPending,
+  flattenPending,
+  hasPending,
+  primaryKeyColumn,
+  removeChange,
+  sqlForAll,
+  sqlForChange,
+  type PendingChangeRef,
+} from './lib/pendingChanges';
 
 export default function App() {
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
@@ -70,17 +76,69 @@ export default function App() {
 
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
-  const [isSqlDiffModalOpen, setIsSqlDiffModalOpen] = useState(false);
+  const [isPendingChangesOpen, setIsPendingChangesOpen] = useState(false);
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
+  const [applyingChangeKey, setApplyingChangeKey] = useState<string | null>(null);
+  const [applyingAllChanges, setApplyingAllChanges] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<string | null>(null);
+  const [pendingError, setPendingError] = useState<string | null>(null);
 
   const skipWorkspaceSave = useRef(true);
   const workspaceRef = useRef<WorkspaceState | null>(null);
+  const tableFetchRef = useRef<Record<string, { limit: number; offset: number }>>({});
+  const tableLoadInflight = useRef<Record<string, number>>({});
+  const [tableLoading, setTableLoading] = useState<Record<string, boolean>>({});
 
   const currentDatabase = currentDbId
     ? databases.find((d) => d.id === currentDbId) || null
     : null;
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
+
+  const loadTableRows = useCallback(
+    async (table: TableSchema, limit: number, offset: number) => {
+      if (!currentDatabase) return;
+      tableFetchRef.current[table.id] = { limit, offset };
+      tableLoadInflight.current[table.id] = (tableLoadInflight.current[table.id] ?? 0) + 1;
+      setTableLoading((prev) => ({ ...prev, [table.id]: true }));
+      try {
+        const res = await tablePreview({
+          connectionId: currentDatabase.id,
+          schema: table.schema,
+          table: table.name,
+          limit,
+          offset,
+        });
+        setTableRows((prev) => ({
+          ...prev,
+          [table.id]: (res.rows || []) as Record<string, unknown>[],
+        }));
+      } catch {
+        setTableRows((prev) => ({
+          ...prev,
+          [table.id]: prev[table.id] ?? [],
+        }));
+      } finally {
+        const remaining = (tableLoadInflight.current[table.id] ?? 1) - 1;
+        tableLoadInflight.current[table.id] = remaining;
+        if (remaining <= 0) {
+          setTableLoading((prev) => ({ ...prev, [table.id]: false }));
+        }
+      }
+    },
+    [currentDatabase]
+  );
+
+  const refreshTableRows = useCallback(
+    async (table: TableSchema) => {
+      const params = tableFetchRef.current[table.id] || {
+        limit: DEFAULT_PREVIEW_LIMIT,
+        offset: 0,
+      };
+      await loadTableRows(table, params.limit, params.offset);
+    },
+    [loadTableRows]
+  );
 
   const refreshHistory = useCallback(async () => {
     try {
@@ -146,28 +204,57 @@ export default function App() {
   }, [bootstrapped, tabs, activeTabId, currentDbId]);
 
   useEffect(() => {
-    if (!currentDatabase || currentDatabase.status !== 'connected') return;
-    const tab = tabs.find((t) => t.id === activeTabId);
-    if (!tab || tab.type !== 'table_data') return;
-    const table = currentDatabase.tables.find(
-      (t) => t.id === tab.tableId || t.name === tab.tableName || t.name === tab.title
-    );
-    if (!table) return;
-    tablePreview({
-      connectionId: currentDatabase.id,
-      schema: table.schema,
-      table: table.name,
-      limit: DEFAULT_PREVIEW_LIMIT,
-      offset: 0,
-    })
-      .then((res) => {
-        setTableRows((prev) => ({
-          ...prev,
-          [table.id]: (res.rows || []) as Record<string, unknown>[],
-        }));
-      })
-      .catch(() => undefined);
-  }, [activeTabId, currentDatabase, tabs]);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.isComposing || event.repeat) return;
+      const isMod = event.metaKey || event.ctrlKey;
+      if (!isMod || event.altKey || event.shiftKey) return;
+      const key = event.key.toLowerCase();
+      if (key === 'k') {
+        event.preventDefault();
+        event.stopPropagation();
+        setIsCommandPaletteOpen((open) => !open);
+        return;
+      }
+      if (key !== 'r') return;
+      event.preventDefault();
+      event.stopPropagation();
+      const tab = tabs.find((t) => t.id === activeTabId);
+      if (!tab || tab.type !== 'table_data' || !currentDatabase) return;
+      const table = currentDatabase.tables.find(
+        (t) => t.id === tab.tableId || t.name === tab.tableName || t.name === tab.title
+      );
+      if (!table) return;
+      if ((tableLoadInflight.current[table.id] ?? 0) > 0) return;
+      void refreshTableRows(table);
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [activeTabId, currentDatabase, tabs, refreshTableRows]);
+
+  const pendingCount = useMemo(
+    () => countPendingChanges(pendingByTable),
+    [pendingByTable]
+  );
+
+  useEffect(() => {
+    setTabs((prev) => {
+      let changed = false;
+      const next = prev.map((tab) => {
+        if (tab.type !== 'table_data' || !tab.tableId) return tab;
+        const flag = hasPending(pendingByTable[tab.tableId] || emptyPending());
+        if (tab.hasUncommittedChanges === flag) return tab;
+        changed = true;
+        return { ...tab, hasUncommittedChanges: flag };
+      });
+      return changed ? next : prev;
+    });
+  }, [pendingByTable]);
+
+  useEffect(() => {
+    if (!pendingStatus) return;
+    const timeout = window.setTimeout(() => setPendingStatus(null), 3200);
+    return () => window.clearTimeout(timeout);
+  }, [pendingStatus]);
 
   const findTable = (tableId?: string, tableName?: string): TableSchema | undefined => {
     if (!currentDatabase) return undefined;
@@ -277,6 +364,12 @@ export default function App() {
 
   const getPending = (tableId: string) => pendingByTable[tableId] || emptyPending();
 
+  const openPendingChanges = () => {
+    setIsActivityLogOpen(false);
+    setPendingError(null);
+    setIsPendingChangesOpen(true);
+  };
+
   const handleUpdateCell = (
     tableId: string,
     pkValue: unknown,
@@ -302,46 +395,96 @@ export default function App() {
       }
       return { ...prev, [tableId]: { ...pending, updates } };
     });
-    setTabs(tabs.map((t) => (t.id === activeTabId ? { ...t, hasUncommittedChanges: true } : t)));
   };
 
-  const handleRollbackGridChanges = (tableId: string) => {
-    setPendingByTable((prev) => ({ ...prev, [tableId]: emptyPending() }));
-    setTabs(tabs.map((t) => (t.id === activeTabId ? { ...t, hasUncommittedChanges: false } : t)));
+  const handleCancelChange = (ref: PendingChangeRef) => {
+    setPendingByTable((prev) => {
+      const current = prev[ref.tableId] || emptyPending();
+      const nextMods = removeChange(current, ref);
+      if (!hasPending(nextMods)) {
+        const { [ref.tableId]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [ref.tableId]: nextMods };
+    });
+    setPendingStatus('Change discarded');
+    setPendingError(null);
   };
 
-  const handleExportData = (
-    table: TableSchema,
-    format: 'csv' | 'json' | 'markdown' | 'sql'
-  ) => {
-    const rows = tableRows[table.id] || [];
-    let content = '';
-    if (format === 'json') content = JSON.stringify(rows, null, 2);
-    else if (format === 'csv') {
-      const headers = table.columns.map((c) => c.name).join(',');
-      const body = rows
-        .map((r) =>
-          table.columns
-            .map((c) => `"${String(r[c.name] ?? '').replace(/"/g, '""')}"`)
-            .join(',')
-        )
-        .join('\n');
-      content = `${headers}\n${body}`;
-    } else if (format === 'sql') {
-      content = rows
-        .map((r) => {
-          const cols = Object.keys(r);
-          const vals = Object.values(r).map((v) => `'${v}'`);
-          return `INSERT INTO ${table.name} (${cols.join(', ')}) VALUES (${vals.join(', ')});`;
-        })
-        .join('\n');
+  const handleCancelAllChanges = () => {
+    const total = countPendingChanges(pendingByTable);
+    setPendingByTable({});
+    setPendingStatus(total === 0 ? null : `Discarded ${total} change${total === 1 ? '' : 's'}`);
+    setPendingError(null);
+  };
+
+  const handleApproveChange = async (ref: PendingChangeRef) => {
+    if (!currentDatabase) {
+      setPendingError('Reconnect to a database to apply changes.');
+      return;
     }
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${table.name}_export.${format}`;
-    a.click();
+    const bundles = flattenPending(pendingByTable, currentDatabase.tables);
+    const bundle = bundles.find((item) => item.tableId === ref.tableId);
+    if (!bundle) return;
+    const sql = sqlForChange(bundle, ref);
+    if (!sql) return;
+    setApplyingChangeKey(changeKey(ref));
+    setPendingError(null);
+    try {
+      const res = await queryExecute({ connectionId: currentDatabase.id, sql });
+      if (res.error) {
+        setPendingError(res.error);
+        return;
+      }
+      setPendingByTable((prev) => {
+        const current = prev[ref.tableId] || emptyPending();
+        const nextMods = removeChange(current, ref);
+        if (!hasPending(nextMods)) {
+          const { [ref.tableId]: _, ...rest } = prev;
+          return rest;
+        }
+        return { ...prev, [ref.tableId]: nextMods };
+      });
+      if (bundle.table) await refreshTableRows(bundle.table);
+      await refreshHistory();
+      setPendingStatus('Change applied');
+    } catch (e: unknown) {
+      setPendingError(e instanceof Error ? e.message : 'Failed to apply change');
+    } finally {
+      setApplyingChangeKey(null);
+    }
+  };
+
+  const handleApproveAllChanges = async () => {
+    if (!currentDatabase) {
+      setPendingError('Reconnect to a database to apply changes.');
+      return;
+    }
+    const bundles = flattenPending(pendingByTable, currentDatabase.tables);
+    const sql = sqlForAll(bundles);
+    const total = countPendingChanges(pendingByTable);
+    if (!sql || total === 0) return;
+    setApplyingAllChanges(true);
+    setPendingError(null);
+    try {
+      const res = await queryExecute({ connectionId: currentDatabase.id, sql });
+      if (res.error) {
+        setPendingError(res.error);
+        return;
+      }
+      setPendingByTable({});
+      await Promise.all(
+        bundles
+          .filter((bundle) => bundle.table)
+          .map((bundle) => refreshTableRows(bundle.table as TableSchema))
+      );
+      await refreshHistory();
+      setPendingStatus(`Applied ${total} change${total === 1 ? '' : 's'}`);
+    } catch (e: unknown) {
+      setPendingError(e instanceof Error ? e.message : 'Failed to apply changes');
+    } finally {
+      setApplyingAllChanges(false);
+    }
   };
 
   const openErd = () => {
@@ -461,60 +604,74 @@ export default function App() {
         }
         const rows = tableRows[table.id] || [];
         const pending = getPending(table.id);
+        const isLoading = Boolean(tableLoading[table.id]) || !(table.id in tableRows);
         return (
           <TableDataGrid
+            key={table.id}
             table={table}
             rows={rows}
+            isLoading={isLoading}
             pendingModifications={pending}
+            tables={currentDatabase.tables}
+            onOpenTable={handleSelectTableData}
+            onLookup={async (sql) => {
+              const res = await queryExecute({
+                connectionId: currentDatabase.id,
+                sql,
+                recordHistory: false,
+              });
+              return {
+                rows: (res.rows || []) as Record<string, unknown>[],
+                error: res.error,
+              };
+            }}
+            onLoadRows={(limit, offset) => loadTableRows(table, limit, offset)}
             onUpdateCell={(pk, col, oldV, newV) =>
               handleUpdateCell(table.id, pk, col, oldV, newV)
             }
-            onInsertRow={() => {
-              const newPk = 'row_' + Date.now();
-              setPendingByTable((prev) => {
-                const pendingNow = prev[table.id] ? { ...prev[table.id] } : emptyPending();
+            onInsertRow={async (sql) => {
+              try {
+                const res = await queryExecute({
+                  connectionId: currentDatabase.id,
+                  sql,
+                });
+                if (res.error) return { error: res.error };
+                await refreshTableRows(table);
+                await refreshHistory();
+                return {};
+              } catch (e: unknown) {
                 return {
-                  ...prev,
-                  [table.id]: {
-                    ...pendingNow,
-                    inserts: [...pendingNow.inserts, { tempId: newPk, data: { id: newPk } }],
-                  },
+                  error: e instanceof Error ? e.message : 'Failed to insert row',
                 };
-              });
-              setTabs(
-                tabs.map((t) =>
-                  t.id === tab.id ? { ...t, hasUncommittedChanges: true } : t
-                )
-              );
+              }
             }}
             onDeleteSelectedRows={(pks) => {
+              const rows = tableRows[table.id] || [];
+              const pkCol = primaryKeyColumn(table);
               setPendingByTable((prev) => {
                 const pendingNow = prev[table.id] ? { ...prev[table.id] } : emptyPending();
+                const existing = new Set(
+                  pendingNow.deletes.map((row) => String(row.primaryKeyValue))
+                );
+                const additions = pks
+                  .filter((pk) => !existing.has(String(pk)))
+                  .map((pk) => {
+                    const row = rows.find((candidate) => String(candidate[pkCol]) === String(pk));
+                    return {
+                      rowId: pk,
+                      primaryKeyValue: pk,
+                      rowData: row ? { ...row } : {},
+                    };
+                  });
                 return {
                   ...prev,
                   [table.id]: {
                     ...pendingNow,
-                    deletes: [
-                      ...pendingNow.deletes,
-                      ...pks.map((pk) => ({
-                        rowId: pk,
-                        primaryKeyValue: pk,
-                        rowData: {},
-                      })),
-                    ],
+                    deletes: [...pendingNow.deletes, ...additions],
                   },
                 };
               });
-              setTabs(
-                tabs.map((t) =>
-                  t.id === tab.id ? { ...t, hasUncommittedChanges: true } : t
-                )
-              );
             }}
-            onCommitChanges={() => handleRollbackGridChanges(table.id)}
-            onRollbackChanges={() => handleRollbackGridChanges(table.id)}
-            onOpenSqlDiffModal={() => setIsSqlDiffModalOpen(true)}
-            onExport={(fmt) => handleExportData(table, fmt)}
           />
         );
       }
@@ -600,11 +757,16 @@ export default function App() {
         variant={showPicker ? 'picker' : 'workspace'}
         databases={databases}
         currentDatabase={currentDatabase}
+        pendingCount={pendingCount}
         onSelectDatabase={(id) => {
           void handleOpenConnection(id);
         }}
         onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
-        onOpenActivityLog={() => setIsActivityLogOpen(true)}
+        onOpenActivityLog={() => {
+          setIsPendingChangesOpen(false);
+          setIsActivityLogOpen(true);
+        }}
+        onOpenPendingChanges={openPendingChanges}
         onOpenNewConnection={() => setIsConnectionModalOpen(true)}
         onOpenMetrics={openMetrics}
         onBackToConnections={() => {
@@ -707,7 +869,11 @@ export default function App() {
         onSelectQuery={(sql) => handleOpenNewQueryTab(sql)}
         onOpenErd={openErd}
         onOpenMetrics={openMetrics}
-        onOpenActivityLog={() => setIsActivityLogOpen(true)}
+        onOpenActivityLog={() => {
+          setIsPendingChangesOpen(false);
+          setIsActivityLogOpen(true);
+        }}
+        onOpenPendingChanges={openPendingChanges}
         onOpenNewQuery={() => handleOpenNewQueryTab()}
         onSelectDatabase={(dbId) => setCurrentDbId(dbId)}
       />
@@ -718,19 +884,24 @@ export default function App() {
         onClose={() => setIsActivityLogOpen(false)}
       />
 
-      {activeTab?.type === 'table_data' && findTable(activeTab.tableId, activeTab.title) && (
-        <SqlDiffModal
-          isOpen={isSqlDiffModalOpen}
-          tableName={findTable(activeTab.tableId, activeTab.title)?.name || ''}
-          modifications={getPending(findTable(activeTab.tableId, activeTab.title)?.id || '')}
-          onConfirmCommit={() => {
-            const table = findTable(activeTab.tableId, activeTab.title);
-            if (table) handleRollbackGridChanges(table.id);
-            setIsSqlDiffModalOpen(false);
-          }}
-          onClose={() => setIsSqlDiffModalOpen(false)}
-        />
-      )}
+      <PendingChangesDrawer
+        isOpen={isPendingChangesOpen}
+        pendingByTable={pendingByTable}
+        tables={currentDatabase?.tables || []}
+        applyingKey={applyingChangeKey}
+        applyingAll={applyingAllChanges}
+        statusMessage={pendingStatus}
+        errorMessage={pendingError}
+        onClose={() => setIsPendingChangesOpen(false)}
+        onApprove={(ref) => {
+          void handleApproveChange(ref);
+        }}
+        onCancel={handleCancelChange}
+        onApproveAll={() => {
+          void handleApproveAllChanges();
+        }}
+        onCancelAll={handleCancelAllChanges}
+      />
 
       <ConnectionModal
         isOpen={isConnectionModalOpen}

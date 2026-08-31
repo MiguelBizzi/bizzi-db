@@ -11,6 +11,7 @@ import {
   Cell,
 } from 'recharts';
 import { DatabaseSchema } from '../../types';
+import { formatSizeMb } from '../../lib/format';
 import { Activity, Server, HardDrive, Zap, Clock, ShieldAlert } from 'lucide-react';
 
 interface DatabaseMetricsProps {
@@ -97,7 +98,7 @@ export const DatabaseMetrics: React.FC<DatabaseMetricsProps> = ({ database }) =>
             <HardDrive className="w-4 h-4 text-purple-400" />
           </div>
           <div className="text-2xl font-bold text-foreground">
-            {database.totalSizeMb.toLocaleString()} MB
+            {formatSizeMb(database.totalSizeMb)}
           </div>
           <div className="text-[10px] text-muted-foreground">
             {database.tables.length} tables & views

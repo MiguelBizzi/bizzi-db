@@ -10,6 +10,7 @@ import {
   Edit3,
 } from 'lucide-react';
 import { DatabaseSchema, TableSchema } from '../types';
+import { formatSizeMb } from '../lib/format';
 import { Select } from './ui/Select';
 import { PostgresLogo } from './icons/PostgresLogo';
 
@@ -189,7 +190,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono">
                       <span>{table.rowCount.toLocaleString()} rows</span>
                       <span>•</span>
-                      <span>{table.sizeMb} MB</span>
+                      <span>{formatSizeMb(table.sizeMb)}</span>
                     </div>
                   </div>
                 </div>

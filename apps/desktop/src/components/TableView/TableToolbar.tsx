@@ -1,22 +1,14 @@
 import React, { useState } from 'react';
-import {
-  Filter,
-  Plus,
-  Trash2,
-  Download,
-  Check,
-  RotateCcw,
-  Code,
-  Search,
-  Sparkles,
-  ChevronDown,
-  ChevronRight,
-  Layers,
-  FileSpreadsheet,
-  FileText,
-} from 'lucide-react';
-import { TableSchema, FilterClause, PendingModifications } from '../../types';
+import { Filter, Plus, Trash2, Search, RefreshCw } from 'lucide-react';
+import { TableSchema, FilterClause } from '../../types';
 import { Select, SelectOption } from '../ui/Select';
+import { DataExportMenu } from '../DataExport/DataExportMenu';
+
+const REFRESH_SHORTCUT = /Mac|iPhone|iPad|iPod/i.test(
+  typeof navigator === 'undefined' ? '' : navigator.userAgent,
+)
+  ? '⌘R'
+  : 'Ctrl+R';
 
 interface TableToolbarProps {
   table: TableSchema;
@@ -29,13 +21,9 @@ interface TableToolbarProps {
   selectedRowsCount: number;
   onInsertRow: () => void;
   onDeleteSelectedRows: () => void;
-  pendingModifications: PendingModifications;
-  onCommitChanges: () => void;
-  onRollbackChanges: () => void;
-  onOpenSqlDiffModal: () => void;
-  onExport: (format: 'csv' | 'json' | 'markdown' | 'sql') => void;
-  limit: number;
-  onLimitChange: (newLimit: number) => void;
+  exportRows: Record<string, unknown>[];
+  onRefresh: () => void;
+  isLoading?: boolean;
 }
 
 export const TableToolbar: React.FC<TableToolbarProps> = ({
@@ -49,28 +37,17 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
   selectedRowsCount,
   onInsertRow,
   onDeleteSelectedRows,
-  pendingModifications,
-  onCommitChanges,
-  onRollbackChanges,
-  onOpenSqlDiffModal,
-  onExport,
-  limit,
-  onLimitChange,
+  exportRows,
+  onRefresh,
+  isLoading = false,
 }) => {
   const [showFilters, setShowFilters] = useState(false);
-  const [showExportMenu, setShowExportMenu] = useState(false);
+  const loadingHint = 'Unavailable while table data is loading';
 
-  const totalModifications =
-    pendingModifications.updates.length +
-    pendingModifications.inserts.length +
-    pendingModifications.deletes.length;
-
-  const limitOptions: SelectOption[] = [
-    { value: '100', label: '100' },
-    { value: '500', label: '500' },
-    { value: '1000', label: '1,000' },
-    { value: '5000', label: '5,000' },
-  ];
+  const openFilters = () => {
+    setShowFilters(true);
+    if (filters.length === 0) onAddFilter();
+  };
 
   const operatorOptions: SelectOption<FilterClause['operator']>[] = [
     { value: '=', label: '=' },
@@ -101,9 +78,10 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
             />
           </div>
 
-          {/* Filter Builder Toggle */}
+          {/* Filter Builder Toggle — first open adds a default condition */}
           <button
-            onClick={() => setShowFilters(!showFilters)}
+            type="button"
+            onClick={() => (showFilters ? setShowFilters(false) : openFilters())}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${
               filters.length > 0 || showFilters
                 ? 'bg-primary/20 text-primary border-primary/40'
@@ -117,7 +95,9 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
           {/* Insert Row */}
           <button
             onClick={onInsertRow}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-medium transition-colors"
+            disabled={table.isView}
+            title={table.isView ? 'Cannot insert into a view' : 'Add a row'}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-600/20"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add Row</span>
@@ -135,69 +115,27 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
           )}
         </div>
 
-        {/* Right Tools: Export & Limit */}
+        {/* Right Tools: Refresh & Export */}
         <div className="flex items-center gap-2">
-          {/* Limit selector */}
-          <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground">
-            <span>Limit:</span>
-            <Select
-              size="sm"
-              className="w-[5.5rem]"
-              value={String(limit)}
-              options={limitOptions}
-              onChange={(value) => onLimitChange(Number(value))}
-              aria-label="Row limit"
-            />
-          </div>
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={isLoading}
+            title={isLoading ? loadingHint : `Refresh Table (${REFRESH_SHORTCUT})`}
+            aria-label="Refresh Table"
+            className="p-1.5 rounded-lg bg-background border border-border hover:bg-accent text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-background"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
 
-          {/* Export Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setShowExportMenu(!showExportMenu)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-background border border-border hover:bg-accent text-foreground text-xs font-medium transition-colors"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export</span>
-              <ChevronDown className="w-3 h-3 text-muted-foreground" />
-            </button>
-
-            {showExportMenu && (
-              <div className="absolute right-0 mt-1 w-44 bg-popover border border-border rounded-xl shadow-2xl p-1.5 z-40 text-xs text-popover-foreground">
-                <button
-                  onClick={() => {
-                    onExport('csv');
-                    setShowExportMenu(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-accent text-foreground font-mono"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>CSV File (.csv)</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    onExport('json');
-                    setShowExportMenu(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-accent text-foreground font-mono"
-                >
-                  <FileText className="w-3.5 h-3.5 text-primary" />
-                  <span>JSON File (.json)</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    onExport('sql');
-                    setShowExportMenu(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-accent text-foreground font-mono"
-                >
-                  <Code className="w-3.5 h-3.5 text-amber-400" />
-                  <span>SQL INSERT Script</span>
-                </button>
-              </div>
-            )}
-          </div>
+          <DataExportMenu
+            columns={table.columns.map((column) => column.name)}
+            rows={exportRows}
+            tableName={table.name}
+            schema={table.schema}
+            disabled={isLoading}
+            disabledReason={loadingHint}
+          />
         </div>
       </div>
 
@@ -207,17 +145,18 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
           <div className="flex items-center justify-between text-xs font-mono text-muted-foreground font-semibold">
             <span>Data Filter Rules</span>
             <button
+              type="button"
               onClick={onAddFilter}
               className="flex items-center gap-1 text-[11px] text-primary hover:underline"
             >
               <Plus className="w-3 h-3" />
-              <span>Add Condition</span>
+              <span>Add Filter</span>
             </button>
           </div>
 
           {filters.length === 0 && (
             <div className="text-muted-foreground text-xs italic py-1">
-              No filter conditions active. Click "Add Condition" to filter rows.
+              No filter conditions active. Click "Add Filter" to filter rows.
             </div>
           )}
 
@@ -257,50 +196,6 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
               </button>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Pending Modifications Floating Commit Bar */}
-      {totalModifications > 0 && (
-        <div className="p-2.5 rounded-xl bg-card border border-amber-500/40 flex flex-wrap items-center justify-between gap-2 text-xs animate-in slide-in-from-bottom-2 duration-200">
-          <div className="flex items-center gap-2 text-amber-400 font-mono">
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-            <span className="font-bold">
-              ⚡ {totalModifications} Pending Modification
-              {totalModifications > 1 ? 's' : ''}
-            </span>
-            <span className="text-amber-400/80 text-[11px]">
-              ({pendingModifications.updates.length} updates,{' '}
-              {pendingModifications.inserts.length} inserts,{' '}
-              {pendingModifications.deletes.length} deletes)
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onOpenSqlDiffModal}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-background hover:bg-accent text-amber-400 border border-amber-500/30 text-xs font-mono font-medium transition-colors"
-            >
-              <Code className="w-3.5 h-3.5" />
-              <span>Preview SQL Diff</span>
-            </button>
-
-            <button
-              onClick={onRollbackChanges}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-background hover:bg-accent text-foreground text-xs font-medium border border-border transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Rollback</span>
-            </button>
-
-            <button
-              onClick={onCommitChanges}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-amber-950 font-bold text-xs shadow-md transition-colors"
-            >
-              <Check className="w-3.5 h-3.5" />
-              <span>Commit Changes</span>
-            </button>
-          </div>
         </div>
       )}
     </div>

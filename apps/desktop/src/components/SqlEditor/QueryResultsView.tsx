@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { QueryExecutionResult } from '../../types';
 import { ExplainPlanView } from './ExplainPlanView';
-import { AlertCircle, Check, Download, Table, Network } from 'lucide-react';
+import { AlertCircle, Table, Network } from 'lucide-react';
+import { DataExportMenu } from '../DataExport/DataExportMenu';
+import { inferQualifiedTable } from '../../lib/dataExport';
 
 interface QueryResultsViewProps {
   result: QueryExecutionResult | null;
@@ -46,6 +48,7 @@ export const QueryResultsView: React.FC<QueryResultsViewProps> = ({
 
   const columns = result.columns || (result.rows && result.rows.length > 0 ? Object.keys(result.rows[0]) : []);
   const rows = result.rows || [];
+  const sqlTarget = inferQualifiedTable(result.query);
 
   return (
     <div className="flex-1 flex flex-col bg-background overflow-hidden font-mono text-xs select-none">
@@ -79,10 +82,18 @@ export const QueryResultsView: React.FC<QueryResultsViewProps> = ({
           )}
         </div>
 
-        <div className="text-[11px] text-muted-foreground font-mono">
-          Executed in <span className="text-emerald-400 font-bold">{result.executionTimeMs}ms</span>
-          {result.affectedRows !== undefined && ` • ${result.affectedRows} rows affected`}
-          {result.truncated && ' • truncated'}
+        <div className="flex items-center gap-3">
+          <div className="text-[11px] text-muted-foreground font-mono">
+            Executed in <span className="text-emerald-400 font-bold">{result.executionTimeMs}ms</span>
+            {result.affectedRows !== undefined && ` • ${result.affectedRows} rows affected`}
+            {result.truncated && ' • truncated'}
+          </div>
+          <DataExportMenu
+            columns={columns}
+            rows={rows}
+            tableName={sqlTarget.table}
+            schema={sqlTarget.schema}
+          />
         </div>
       </div>
 

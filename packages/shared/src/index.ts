@@ -12,9 +12,11 @@ export interface ColumnDefinition {
   isUnique?: boolean;
   defaultValue?: string | null;
   comment?: string;
+  enumValues?: string[];
   foreignKey?: {
     targetTable: string;
     targetColumn: string;
+    targetSchema?: string;
     onDelete?: string;
   };
 }
@@ -227,6 +229,7 @@ export interface TablePreviewRequest {
 export interface ExecuteQueryRequest {
   connectionId: string;
   sql: string;
+  recordHistory?: boolean;
 }
 
 export interface WorkspaceState {

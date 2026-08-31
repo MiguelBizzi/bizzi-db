@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import {
   Table as TableIcon,
   Code,
@@ -12,7 +12,16 @@ import {
   Columns,
   Square,
 } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
 import { WorkspaceTab } from '../types';
+
+const INDICATOR_INSET_PX = 8;
+const INDICATOR_HEIGHT_PX = 2;
+const INDICATOR_TRANSITION = {
+  type: 'spring' as const,
+  duration: 0.2,
+  bounce: 0.12,
+};
 
 interface TabsBarProps {
   tabs: WorkspaceTab[];
@@ -62,6 +71,12 @@ export const TabsBar: React.FC<TabsBarProps> = ({
   const suppressClickRef = useRef(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [insertAt, setInsertAt] = useState<number | null>(null);
+  const [indicator, setIndicator] = useState<{
+    left: number;
+    width: number;
+    top: number;
+  } | null>(null);
+  const reduceMotion = useReducedMotion();
 
   const getTabIcon = (type: WorkspaceTab['type']) => {
     switch (type) {
@@ -170,11 +185,52 @@ export const TabsBar: React.FC<TabsBarProps> = ({
     insertAt === index &&
     !isNoOpReorder(draggedIndex, insertAt);
 
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list || !activeTabId) {
+      setIndicator(null);
+      return;
+    }
+
+    const measure = () => {
+      const tab = list.querySelector<HTMLElement>(
+        `[data-tab-id="${CSS.escape(activeTabId)}"]`,
+      );
+      if (!tab) {
+        setIndicator((prev) => (prev === null ? prev : null));
+        return;
+      }
+
+      const next = {
+        left: tab.offsetLeft,
+        width: tab.offsetWidth,
+        top: tab.offsetTop + tab.offsetHeight - INDICATOR_HEIGHT_PX,
+      };
+      setIndicator((prev) =>
+        prev &&
+        prev.left === next.left &&
+        prev.width === next.width &&
+        prev.top === next.top
+          ? prev
+          : next,
+      );
+    };
+
+    measure();
+    const tab = list.querySelector<HTMLElement>(
+      `[data-tab-id="${CSS.escape(activeTabId)}"]`,
+    );
+    const observer = new ResizeObserver(measure);
+    observer.observe(list);
+    if (tab) observer.observe(tab);
+    return () => observer.disconnect();
+  }, [activeTabId, tabs, draggedIndex, insertAt]);
+
   return (
     <div className="h-10 bg-background border-b border-border flex items-center px-2 select-none overflow-hidden shrink-0 text-foreground">
       <div
         ref={listRef}
-        className="flex-1 min-w-0 h-full flex items-center gap-1 flex-nowrap overflow-x-auto overflow-y-hidden scrollbar-none"
+        className="relative flex-1 min-w-0 h-full flex items-center gap-1 flex-nowrap overflow-x-auto overflow-y-hidden scrollbar-none"
       >
         {tabs.map((tab, index) => {
           const isActive = tab.id === activeTabId;
@@ -186,6 +242,7 @@ export const TabsBar: React.FC<TabsBarProps> = ({
                 <div className="w-0.5 h-6 rounded-full bg-primary shrink-0" aria-hidden />
               )}
               <div
+                data-tab-id={tab.id}
                 data-tab-index={index}
                 onPointerDown={(e) => handlePointerDown(e, index)}
                 onPointerMove={handlePointerMove}
@@ -198,12 +255,12 @@ export const TabsBar: React.FC<TabsBarProps> = ({
                   }
                   onSelectTab(tab.id);
                 }}
-                className={`group flex items-center gap-1.5 h-7 px-3 rounded-lg text-xs font-medium border transition-colors cursor-grab active:cursor-grabbing shrink-0 max-w-[200px] touch-none ${
+                className={`group flex items-center gap-1.5 h-7 px-3 rounded-lg text-xs font-medium transition-colors duration-200 cursor-grab active:cursor-grabbing shrink-0 max-w-[200px] touch-none ${
                   isDragging
-                    ? 'opacity-40 bg-muted border-primary/50'
+                    ? 'opacity-40'
                     : isActive
-                    ? 'bg-card border-border text-foreground shadow-sm font-semibold'
-                    : 'bg-background/40 border-transparent hover:bg-accent text-muted-foreground hover:text-foreground'
+                    ? 'text-foreground'
+                    : 'hover:bg-accent text-muted-foreground hover:text-foreground'
                 }`}
               >
                 <div className="shrink-0">{getTabIcon(tab.type)}</div>
@@ -246,6 +303,20 @@ export const TabsBar: React.FC<TabsBarProps> = ({
           !isNoOpReorder(draggedIndex, insertAt) && (
             <div className="w-0.5 h-6 rounded-full bg-primary shrink-0" aria-hidden />
           )}
+        {indicator && (
+          <motion.div
+            aria-hidden
+            className="pointer-events-none absolute top-0 left-0 z-10 rounded-full bg-primary"
+            style={{ height: INDICATOR_HEIGHT_PX }}
+            initial={false}
+            animate={{
+              x: indicator.left + INDICATOR_INSET_PX,
+              y: indicator.top,
+              width: Math.max(indicator.width - INDICATOR_INSET_PX * 2, 12),
+            }}
+            transition={reduceMotion ? { duration: 0 } : INDICATOR_TRANSITION}
+          />
+        )}
       </div>
 
       <button

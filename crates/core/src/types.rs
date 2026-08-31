@@ -33,6 +33,8 @@ pub struct ForeignKeyRef {
     pub target_table: String,
     pub target_column: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_schema: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub on_delete: Option<String>,
 }
 
@@ -52,6 +54,8 @@ pub struct ColumnDefinition {
     pub default_value: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub comment: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enum_values: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub foreign_key: Option<ForeignKeyRef>,
 }
@@ -265,6 +269,12 @@ pub struct TablePreviewRequest {
 pub struct ExecuteQueryRequest {
     pub connection_id: String,
     pub sql: String,
+    #[serde(default = "default_true")]
+    pub record_history: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -211,3 +211,79 @@
   app-region: no-drag;
 }
 
+@property --pending-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes pending-border-spin {
+  to {
+    --pending-angle: 360deg;
+  }
+}
+
+.pending-changes-ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: calc(var(--radius) - 2px);
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--pending-angle),
+    transparent 0%,
+    oklch(0.72 0.13 50) 16%,
+    oklch(0.87 0.09 68) 28%,
+    transparent 46%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  padding: 1.5px;
+  animation: pending-border-spin 2.8s linear infinite;
+}
+
+@keyframes pending-drawer-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.pending-changes-drawer,
+.insert-row-drawer {
+  animation: pending-drawer-in 180ms ease-out;
+}
+
+@keyframes table-skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.table-skeleton-bar {
+  position: relative;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--muted);
+}
+
+.table-skeleton-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklch, var(--foreground) 10%, transparent),
+    transparent
+  );
+  animation: table-skeleton-shimmer 1.2s ease-in-out infinite;
+}
+

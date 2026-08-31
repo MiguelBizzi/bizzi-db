@@ -6,18 +6,26 @@ import {
   Plus,
   Logs,
   ChevronDown,
-  Zap,
+  ListChecks,
 } from "lucide-react";
 import { DatabaseSchema } from "../types";
 import { PostgresLogo } from "./icons/PostgresLogo";
+
+const PALETTE_SHORTCUT = /Mac|iPhone|iPad|iPod/i.test(
+  typeof navigator === "undefined" ? "" : navigator.userAgent,
+)
+  ? "⌘K"
+  : "Ctrl+K";
 
 interface NavbarProps {
   databases: DatabaseSchema[];
   currentDatabase: DatabaseSchema | null;
   variant?: "picker" | "workspace";
+  pendingCount?: number;
   onSelectDatabase: (dbId: string) => void;
   onOpenCommandPalette: () => void;
   onOpenActivityLog: () => void;
+  onOpenPendingChanges: () => void;
   onOpenNewConnection: () => void;
   onOpenMetrics: () => void;
   onBackToConnections?: () => void;
@@ -27,9 +35,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   databases,
   currentDatabase,
   variant = "workspace",
+  pendingCount = 0,
   onSelectDatabase,
   onOpenCommandPalette,
   onOpenActivityLog,
+  onOpenPendingChanges,
   onOpenNewConnection,
   onOpenMetrics,
   onBackToConnections,
@@ -134,21 +144,50 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {!isPicker && (
-        <>
-          <button
-            onClick={onOpenCommandPalette}
-            className="hidden md:flex items-center justify-between w-80 px-3 py-1.5 rounded-lg bg-background hover:bg-muted border border-border text-muted-foreground hover:text-foreground transition-all text-xs cursor-pointer group shadow-inner"
-          >
-            <div className="flex items-center gap-2">
-              <Search className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
-              <span>Search tables, queries, actions...</span>
-            </div>
-            <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-muted border border-border rounded text-muted-foreground">
-              ⌘K
-            </kbd>
-          </button>
-
+        <button
+          type="button"
+          onClick={onOpenCommandPalette}
+          title={`Open command palette (${PALETTE_SHORTCUT})`}
+          className="hidden md:flex items-center justify-between w-80 px-3 py-1.5 rounded-lg bg-background hover:bg-muted border border-border text-muted-foreground hover:text-foreground transition-all text-xs cursor-pointer group shadow-inner"
+        >
           <div className="flex items-center gap-2">
+            <Search className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+            <span>Search tables, queries, actions...</span>
+          </div>
+          <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-muted border border-border rounded text-muted-foreground">
+            {PALETTE_SHORTCUT}
+          </kbd>
+        </button>
+      )}
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onOpenPendingChanges}
+          title={
+            pendingCount > 0
+              ? `${pendingCount} pending change${pendingCount === 1 ? "" : "s"}`
+              : "Pending changes"
+          }
+          className={`relative p-2 rounded-lg border transition-colors ${
+            pendingCount > 0
+              ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+              : "bg-muted hover:bg-accent border-border text-foreground"
+          }`}
+        >
+          {pendingCount > 0 && (
+            <span className="pending-changes-ring" aria-hidden />
+          )}
+          <ListChecks className="w-4 h-4 relative z-10" />
+          {pendingCount > 0 && (
+            <span className="absolute -top-1 -right-1 z-10 min-w-4 h-4 px-1 rounded-full bg-amber-500 text-amber-950 text-[9px] font-bold flex items-center justify-center leading-none">
+              {pendingCount > 99 ? "99+" : pendingCount}
+            </span>
+          )}
+        </button>
+
+        {!isPicker && (
+          <>
             <button
               onClick={onOpenMetrics}
               title="Database Metrics & Health"
@@ -164,9 +203,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Logs className="w-4 h-4 text-secondary" />
             </button>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
     </header>
   );
 };

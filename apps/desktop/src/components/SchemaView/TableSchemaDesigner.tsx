@@ -11,6 +11,7 @@ import {
   Layers,
   ShieldCheck,
 } from 'lucide-react';
+import { formatSizeMb } from '../../lib/format';
 import { Checkbox } from '../ui/Checkbox';
 import { Select } from '../ui/Select';
 
@@ -83,7 +84,7 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
               <span>Schema Inspector & Designer — {table.name}</span>
             </div>
             <div className="text-xs text-muted-foreground">
-              {table.schema} schema • {table.rowCount.toLocaleString()} rows • {table.sizeMb} MB
+              {table.schema} schema • {table.rowCount.toLocaleString()} rows • {formatSizeMb(table.sizeMb)}
             </div>
           </div>
         </div>

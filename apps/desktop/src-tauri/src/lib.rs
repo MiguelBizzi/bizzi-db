@@ -258,7 +258,9 @@ async fn query_execute(
         .execute(&input.sql, DEFAULT_ROW_CAP)
         .await
         .map_err(map_err)?;
-    record_history(&state, &profile, &result)?;
+    if input.record_history {
+        record_history(&state, &profile, &result)?;
+    }
     Ok(result)
 }
 
