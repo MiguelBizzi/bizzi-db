@@ -30,7 +30,11 @@ impl std::fmt::Debug for ConnectConfig {
 #[async_trait]
 pub trait Session: Send + Sync {
     async fn introspect(&self) -> Result<DatabaseSchema, AdapterError>;
-    async fn execute(&self, sql: &str, row_cap: usize) -> Result<QueryExecutionResult, AdapterError>;
+    async fn execute(
+        &self,
+        sql: &str,
+        row_cap: usize,
+    ) -> Result<QueryExecutionResult, AdapterError>;
     async fn preview(
         &self,
         schema: &str,

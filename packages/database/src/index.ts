@@ -1,5 +1,12 @@
 import type { DatabaseDialect } from '@db/shared';
 
+export {
+  columnTypesFor,
+  type ColumnTypeDef,
+  type ColumnTypeFamily,
+  type ColumnTypeParams,
+} from './columnTypes';
+
 export interface DialectMeta {
   id: DatabaseDialect;
   label: string;

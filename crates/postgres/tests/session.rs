@@ -113,4 +113,29 @@ async fn introspect_seed_tables_pks_fks_and_enums() {
     let fk = org.foreign_key.as_ref().expect("fk");
     assert_eq!(fk.target_table, "organizations");
     assert_eq!(fk.target_column, "id");
+    assert_eq!(fk.on_delete.as_deref(), Some("NO ACTION"));
+    let email = users
+        .columns
+        .iter()
+        .find(|column| column.name == "email")
+        .expect("email");
+    assert_eq!(email.is_unique, Some(true));
+    assert_eq!(id.is_unique, Some(false));
+    let addresses = schema
+        .tables
+        .iter()
+        .find(|table| table.schema == "shop" && table.name == "addresses")
+        .expect("shop.addresses");
+    let user_id = addresses
+        .columns
+        .iter()
+        .find(|column| column.name == "user_id")
+        .expect("user_id");
+    assert_eq!(
+        user_id
+            .foreign_key
+            .as_ref()
+            .and_then(|fk| fk.on_delete.as_deref()),
+        Some("CASCADE")
+    );
 }

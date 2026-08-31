@@ -55,7 +55,11 @@ impl Session for PostgresSession {
         introspect(self).await
     }
 
-    async fn execute(&self, sql: &str, row_cap: usize) -> Result<QueryExecutionResult, AdapterError> {
+    async fn execute(
+        &self,
+        sql: &str,
+        row_cap: usize,
+    ) -> Result<QueryExecutionResult, AdapterError> {
         run_sql(self, sql, row_cap).await
     }
 
@@ -184,7 +188,11 @@ async fn run_sql(
                 },
                 rows: Some(collected.rows),
                 error: None,
-                truncated: if collected.truncated { Some(true) } else { None },
+                truncated: if collected.truncated {
+                    Some(true)
+                } else {
+                    None
+                },
             })
         }
         Err(err) => Ok(QueryExecutionResult {
@@ -198,6 +206,17 @@ async fn run_sql(
             error: Some(err.to_string()),
             truncated: None,
         }),
+    }
+}
+
+fn on_delete_from_confdeltype(code: &str) -> Option<String> {
+    match code {
+        "a" => Some("NO ACTION".into()),
+        "r" => Some("RESTRICT".into()),
+        "c" => Some("CASCADE".into()),
+        "n" => Some("SET NULL".into()),
+        "d" => Some("SET DEFAULT".into()),
+        _ => None,
     }
 }
 
@@ -361,6 +380,7 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
         let target_schema: String = row.get(3);
         let target_table: String = row.get(4);
         let target_column: String = row.get(5);
+        let confdeltype: String = row.get(6);
         fks.insert(
             (schema, table, col),
             ForeignKeyRef {
@@ -371,12 +391,13 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
                 } else {
                     Some(target_schema)
                 },
-                on_delete: None,
+                on_delete: on_delete_from_confdeltype(confdeltype.trim()),
             },
         );
     }
 
     let mut indexes: HashMap<(String, String), Vec<IndexDefinition>> = HashMap::new();
+    let mut unique_cols: HashMap<(String, String, String), ()> = HashMap::new();
     for row in &index_rows {
         let schema: String = row.get(0);
         let table: String = row.get(1);
@@ -384,16 +405,20 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
         let is_unique: bool = row.get(3);
         let index_type: String = row.get(4);
         let cols_csv: String = row.get(5);
+        let columns: Vec<String> = if cols_csv.is_empty() {
+            Vec::new()
+        } else {
+            cols_csv.split(',').map(|s| s.to_string()).collect()
+        };
+        if is_unique && columns.len() == 1 {
+            unique_cols.insert((schema.clone(), table.clone(), columns[0].clone()), ());
+        }
         indexes
             .entry((schema, table))
             .or_default()
             .push(IndexDefinition {
                 name,
-                columns: if cols_csv.is_empty() {
-                    Vec::new()
-                } else {
-                    cols_csv.split(',').map(|s| s.to_string()).collect()
-                },
+                columns,
                 is_unique,
                 index_type: index_type.to_uppercase(),
             });
@@ -418,13 +443,17 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
                 data_type,
                 is_primary: Some(pk_set.contains_key(&key)),
                 is_nullable: Some(is_nullable),
-                is_unique: None,
+                is_unique: Some(unique_cols.contains_key(&key) && !pk_set.contains_key(&key)),
                 default_value: if default_value.is_empty() {
                     None
                 } else {
                     Some(default_value)
                 },
-                comment: if comment.is_empty() { None } else { Some(comment) },
+                comment: if comment.is_empty() {
+                    None
+                } else {
+                    Some(comment)
+                },
                 enum_values: if enum_values.is_empty() {
                     None
                 } else {
@@ -448,11 +477,17 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
             id: id.clone(),
             name: name.clone(),
             schema: schema.clone(),
-            description: if comment.is_empty() { None } else { Some(comment) },
+            description: if comment.is_empty() {
+                None
+            } else {
+                Some(comment)
+            },
             row_count: est_rows,
             size_mb: (size_bytes as f64) / (1024.0 * 1024.0),
             tags: Vec::new(),
-            columns: columns.remove(&(schema.clone(), name.clone())).unwrap_or_default(),
+            columns: columns
+                .remove(&(schema.clone(), name.clone()))
+                .unwrap_or_default(),
             indexes: indexes.remove(&(schema, name)).unwrap_or_default(),
             created_at: now.clone(),
             updated_at: now.clone(),
@@ -475,4 +510,26 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
         active_connections,
         queries_per_second: 0.0,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::on_delete_from_confdeltype;
+
+    #[test]
+    fn maps_confdeltype_codes() {
+        assert_eq!(
+            on_delete_from_confdeltype("a").as_deref(),
+            Some("NO ACTION")
+        );
+        assert_eq!(on_delete_from_confdeltype("r").as_deref(), Some("RESTRICT"));
+        assert_eq!(on_delete_from_confdeltype("c").as_deref(), Some("CASCADE"));
+        assert_eq!(on_delete_from_confdeltype("n").as_deref(), Some("SET NULL"));
+        assert_eq!(
+            on_delete_from_confdeltype("d").as_deref(),
+            Some("SET DEFAULT")
+        );
+        assert_eq!(on_delete_from_confdeltype(""), None);
+        assert_eq!(on_delete_from_confdeltype("x"), None);
+    }
 }
