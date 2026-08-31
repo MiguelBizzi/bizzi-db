@@ -104,4 +104,17 @@ mod tests {
         store.delete_password("c1").unwrap();
         assert_eq!(store.get_password("c1").unwrap(), None);
     }
+
+    #[test]
+    fn memory_secrets_overwrite_missing_and_idempotent_delete() {
+        let store = InMemorySecrets::default();
+        assert_eq!(store.get_password("missing").unwrap(), None);
+        store.set_password("c1", "one").unwrap();
+        store.set_password("c1", "two").unwrap();
+        assert_eq!(store.get_password("c1").unwrap().as_deref(), Some("two"));
+        store.delete_password("missing").unwrap();
+        store.delete_password("c1").unwrap();
+        store.delete_password("c1").unwrap();
+        assert_eq!(store.get_password("c1").unwrap(), None);
+    }
 }

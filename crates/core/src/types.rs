@@ -322,4 +322,23 @@ mod tests {
         let encoded = serde_json::to_value(&tab).unwrap();
         assert_eq!(encoded["type"], "sql_editor");
     }
+
+    #[test]
+    fn save_connection_and_execute_request_camel_case() {
+        let json = r#"{
+            "name":"Local","dialect":"PostgreSQL","host":"127.0.0.1","port":5432,
+            "database":"app","user":"postgres","password":"secret","ssl":false,
+            "poolSize":8,"environment":"development"
+        }"#;
+        let input: SaveConnectionInput = serde_json::from_str(json).unwrap();
+        assert_eq!(input.pool_size, 8);
+        assert!(input.id.is_none());
+        let encoded = serde_json::to_value(&input).unwrap();
+        assert_eq!(encoded["poolSize"], 8);
+
+        let req: ExecuteQueryRequest =
+            serde_json::from_str(r#"{"connectionId":"c1","sql":"SELECT 1"}"#).unwrap();
+        assert!(req.record_history);
+        assert_eq!(req.connection_id, "c1");
+    }
 }

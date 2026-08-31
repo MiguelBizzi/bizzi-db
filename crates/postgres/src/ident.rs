@@ -25,4 +25,14 @@ mod tests {
     fn qualifies_schema_table() {
         assert_eq!(qualify_table("public", "orders"), "\"public\".\"orders\"");
     }
+
+    #[test]
+    fn quotes_empty_unicode_and_injection_shaped_names() {
+        assert_eq!(quote_ident(""), "\"\"");
+        assert_eq!(quote_ident("usuários"), "\"usuários\"");
+        assert_eq!(
+            quote_ident("users\"; DROP TABLE t; --"),
+            "\"users\"\"; DROP TABLE t; --\""
+        );
+    }
 }

@@ -464,7 +464,8 @@ mod tests {
             is_bookmarked: true,
         };
         db.upsert_saved_query(&saved).unwrap();
-        db.update_saved_query_tags("q1", &["Analytics".into()]).unwrap();
+        db.update_saved_query_tags("q1", &["Analytics".into()])
+            .unwrap();
         let queries = db.list_saved_queries().unwrap();
         assert_eq!(queries[0].tags, vec!["Analytics".to_string()]);
 
@@ -477,5 +478,108 @@ mod tests {
         let loaded = db.load_workspace().unwrap();
         assert_eq!(loaded.current_connection_id.as_deref(), Some("c1"));
         assert_eq!(loaded.active_tab_id.as_deref(), Some("tab1"));
+    }
+
+    fn sample_profile(id: &str) -> ConnectionProfile {
+        ConnectionProfile {
+            id: id.into(),
+            name: "Local".into(),
+            dialect: DatabaseDialect::PostgreSQL,
+            host: "127.0.0.1".into(),
+            port: 5432,
+            database: "app".into(),
+            user: "postgres".into(),
+            ssl: false,
+            pool_size: 4,
+            environment: Environment::Development,
+            status: ConnectionStatus::Disconnected,
+        }
+    }
+
+    fn sample_history(id: &str, timestamp: &str) -> ActivityLogItem {
+        ActivityLogItem {
+            id: id.into(),
+            timestamp: timestamp.into(),
+            database_name: "Local".into(),
+            query: "SELECT 1".into(),
+            query_type: HistoryQueryType::Select,
+            execution_time_ms: 3,
+            rows_affected: 1,
+            status: HistoryStatus::Success,
+            error_message: None,
+            user: "postgres".into(),
+        }
+    }
+
+    #[test]
+    fn connections_schema_has_no_password_column() {
+        let db = Storage::open_in_memory().unwrap();
+        let mut stmt = db.conn.prepare("PRAGMA table_info(connections)").unwrap();
+        let names: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        assert!(!names
+            .iter()
+            .any(|name| name.to_lowercase().contains("password")));
+        db.upsert_connection(&sample_profile("c1")).unwrap();
+        let listed = db.list_connections().unwrap();
+        let encoded = serde_json::to_value(&listed[0]).unwrap();
+        assert!(encoded.get("password").is_none());
+    }
+
+    #[test]
+    fn get_delete_connection_and_saved_query() {
+        let db = Storage::open_in_memory().unwrap();
+        db.upsert_connection(&sample_profile("c1")).unwrap();
+        assert!(db.get_connection("c1").unwrap().is_some());
+        assert!(db.get_connection("missing").unwrap().is_none());
+        db.delete_connection("c1").unwrap();
+        assert!(db.get_connection("c1").unwrap().is_none());
+
+        let saved = SavedQuery {
+            id: "q1".into(),
+            title: "One".into(),
+            description: None,
+            sql: "SELECT 1".into(),
+            database_id: "c1".into(),
+            tags: vec!["Core".into()],
+            created_at: "2026-01-01T00:00:00Z".into(),
+            is_bookmarked: true,
+        };
+        db.upsert_saved_query(&saved).unwrap();
+        db.delete_saved_query("q1").unwrap();
+        assert!(db.list_saved_queries().unwrap().is_empty());
+    }
+
+    #[test]
+    fn open_persists_on_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("workspace.sqlite");
+        {
+            let db = Storage::open(&path).unwrap();
+            db.upsert_connection(&sample_profile("c1")).unwrap();
+        }
+        let db = Storage::open(&path).unwrap();
+        assert_eq!(db.get_connection("c1").unwrap().unwrap().name, "Local");
+    }
+
+    #[test]
+    fn history_trims_to_500_and_list_caps_at_200() {
+        let db = Storage::open_in_memory().unwrap();
+        for i in 0..501 {
+            db.insert_history(&sample_history(
+                &format!("h{i}"),
+                &format!("2026-01-01T00:00:{:02}.{:03}Z", i / 1000, i % 1000),
+            ))
+            .unwrap();
+        }
+        let stored: i64 = db
+            .conn
+            .query_row("SELECT COUNT(*) FROM query_history", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(stored, 500);
+        assert_eq!(db.list_history().unwrap().len(), 200);
     }
 }

@@ -20,11 +20,9 @@ pub fn collect_simple(messages: Vec<SimpleQueryMessage>, cap: usize) -> SimpleRe
                 if columns.is_empty() {
                     columns = column_names(&row);
                 }
-                if rows.len() >= cap {
+                if take_capped(&mut rows, simple_row_to_object(&row, &columns), cap) {
                     truncated = true;
-                    continue;
                 }
-                rows.push(simple_row_to_object(&row, &columns));
             }
             SimpleQueryMessage::CommandComplete(count) => {
                 affected_rows = affected_rows.saturating_add(count);
@@ -33,15 +31,28 @@ pub fn collect_simple(messages: Vec<SimpleQueryMessage>, cap: usize) -> SimpleRe
         }
     }
 
-    if affected_rows == 0 {
-        affected_rows = rows.len() as u64;
-    }
-
+    let affected_rows = finalize_affected(affected_rows, rows.len());
     SimpleResult {
         columns,
         rows,
         affected_rows,
         truncated,
+    }
+}
+
+fn take_capped<T>(rows: &mut Vec<T>, item: T, cap: usize) -> bool {
+    if rows.len() >= cap {
+        return true;
+    }
+    rows.push(item);
+    false
+}
+
+fn finalize_affected(affected: u64, row_count: usize) -> u64 {
+    if affected == 0 {
+        row_count as u64
+    } else {
+        affected
     }
 }
 
@@ -74,7 +85,9 @@ fn coerce_text(s: &str) -> Value {
         return json!(false);
     }
     if let Ok(n) = s.parse::<i64>() {
-        return json!(n);
+        if n.to_string() == s {
+            return json!(n);
+        }
     }
     if let Ok(n) = s.parse::<f64>() {
         if s.contains('.') || s.contains('e') || s.contains('E') {
@@ -91,8 +104,23 @@ mod tests {
     #[test]
     fn coerces_primitives() {
         assert_eq!(coerce_text("true"), json!(true));
+        assert_eq!(coerce_text("FALSE"), json!(false));
         assert_eq!(coerce_text("42"), json!(42));
         assert_eq!(coerce_text("3.14"), json!(3.14));
+        assert_eq!(coerce_text("1e3"), json!(1000.0));
+        assert_eq!(coerce_text("007"), json!("007"));
         assert_eq!(coerce_text("hello"), json!("hello"));
+        assert_eq!(simple_cell(None), json!(null));
+    }
+
+    #[test]
+    fn take_capped_and_affected_rows() {
+        let mut rows = Vec::new();
+        assert!(!take_capped(&mut rows, 1, 2));
+        assert!(!take_capped(&mut rows, 2, 2));
+        assert!(take_capped(&mut rows, 3, 2));
+        assert_eq!(rows, vec![1, 2]);
+        assert_eq!(finalize_affected(0, 4), 4);
+        assert_eq!(finalize_affected(9, 4), 9);
     }
 }

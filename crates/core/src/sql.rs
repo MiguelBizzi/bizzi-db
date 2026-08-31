@@ -54,7 +54,11 @@ fn strip_leading_comments(sql: &str) -> &str {
     let mut s = sql.trim_start();
     loop {
         if s.starts_with("--") {
-            s = s.split_once('\n').map(|(_, rest)| rest).unwrap_or("").trim_start();
+            s = s
+                .split_once('\n')
+                .map(|(_, rest)| rest)
+                .unwrap_or("")
+                .trim_start();
             continue;
         }
         if s.starts_with("/*") {
@@ -97,6 +101,36 @@ mod tests {
         assert_eq!(
             classify_sql("/* leading */\nALTER TABLE t ADD COLUMN x int"),
             QueryKind::Ddl
+        );
+    }
+
+    #[test]
+    fn classifies_remaining_keywords_and_edge_cases() {
+        assert_eq!(classify_sql("GRANT SELECT ON t TO u"), QueryKind::Ddl);
+        assert_eq!(classify_sql("REVOKE SELECT ON t FROM u"), QueryKind::Ddl);
+        assert_eq!(classify_sql("TRUNCATE t"), QueryKind::Ddl);
+        assert_eq!(classify_sql("TABLE users"), QueryKind::Select);
+        assert_eq!(classify_sql("VALUES (1)"), QueryKind::Select);
+        assert_eq!(classify_sql("SHOW TABLES"), QueryKind::Select);
+        assert_eq!(classify_sql("ANALYZE t"), QueryKind::Explain);
+        assert_eq!(classify_sql("select 1"), QueryKind::Select);
+        assert_eq!(classify_sql(""), QueryKind::System);
+        assert_eq!(classify_sql(";"), QueryKind::System);
+        assert_eq!(
+            classify_sql("/* a */\n/* b */\nDROP TABLE t"),
+            QueryKind::Ddl
+        );
+        assert_eq!(
+            classify_sql("/* outer /* inner */ leftover */ DROP TABLE t"),
+            QueryKind::System
+        );
+        assert_eq!(
+            HistoryQueryType::from(QueryKind::Select),
+            HistoryQueryType::Select
+        );
+        assert_eq!(
+            HistoryQueryType::from(QueryKind::Ddl),
+            HistoryQueryType::Ddl
         );
     }
 }

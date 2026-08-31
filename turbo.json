@@ -11,6 +11,11 @@
     },
     "lint": {
       "dependsOn": ["^lint"]
+    },
+    "test": {
+      "dependsOn": ["^test"],
+      "outputs": [],
+      "cache": false
     }
   }
 }

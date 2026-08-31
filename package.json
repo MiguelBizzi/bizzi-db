@@ -8,6 +8,9 @@
     "dev": "turbo run dev --filter=desktop",
     "build": "turbo run build",
     "lint": "turbo run lint",
+    "test": "turbo run test && cargo test --workspace --exclude db-desktop",
+    "test:watch": "bun test --watch",
+    "test:all": "bun run db:up && turbo run test && cargo test --workspace --exclude db-desktop -- --include-ignored",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d --wait"
