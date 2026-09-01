@@ -73,7 +73,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="p-1.5 rounded-lg bg-primary/15 text-primary border border-primary/30">
             <Database className="w-4 h-4" />
           </div>
-          <span>DB Pro Studio</span>
+          <span>Bizzi DB</span>
         </button>
 
         {!isPicker && (

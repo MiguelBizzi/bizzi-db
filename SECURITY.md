@@ -1,6 +1,6 @@
 # Security
 
-This document is the threat model and security posture for **DB Pro Studio**, a local-only Tauri desktop Postgres client. There is no application backend or cloud API.
+This document is the threat model and security posture for **Bizzi DB**, a local-only Tauri desktop Postgres client. There is no application backend or cloud API.
 
 ## Data flow
 
