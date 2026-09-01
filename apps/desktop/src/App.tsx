@@ -83,6 +83,7 @@ import {
   renameTab,
   type CloseTabKind,
 } from './lib/tabPaneActions';
+import { defaultQuerySql, nextUntitledQueryTitle } from './lib/sqlQuery';
 
 const ROOT_PANE_ID = 'pane_root';
 
@@ -361,17 +362,21 @@ export default function App() {
     );
   };
 
-  const handleOpenNewQueryTab = (initialSql?: string, paneId = activePaneId) => {
+  const handleOpenNewQueryTab = (
+    initialSql?: string,
+    paneId = activePaneId,
+    title?: string
+  ) => {
     if (!currentDatabase) return;
-    const queryNum = tabs.filter((t) => t.type === 'sql_editor').length + 1;
+    const existingTitles = tabs
+      .filter((t) => t.type === 'sql_editor')
+      .map((t) => t.title);
     openTabInPane(paneId, {
       id: 'tab_sql_' + Date.now(),
       type: 'sql_editor',
-      title: `Query ${queryNum}`,
+      title: title?.trim() || nextUntitledQueryTitle(existingTitles),
       databaseId: currentDatabase.id,
-      sqlContent:
-        initialSql ||
-        `SELECT * FROM ${currentDatabase.tables[0]?.name || 'pg_catalog.pg_tables'} LIMIT 50;`,
+      sqlContent: initialSql || defaultQuerySql(currentDatabase.tables[0]),
     });
   };
 
@@ -523,8 +528,9 @@ export default function App() {
     setPendingError(null);
     try {
       const res = await queryExecute({ connectionId: currentDatabase.id, sql });
-      if (res.error) {
-        setPendingError(res.error);
+      const result = res.results[0];
+      if (result?.error) {
+        setPendingError(result.error);
         return;
       }
       setPendingByTable((prev) => {
@@ -559,8 +565,9 @@ export default function App() {
     setPendingError(null);
     try {
       const res = await queryExecute({ connectionId: currentDatabase.id, sql });
-      if (res.error) {
-        setPendingError(res.error);
+      const result = res.results[0];
+      if (result?.error) {
+        setPendingError(result.error);
         return;
       }
       setPendingByTable({});
@@ -707,9 +714,10 @@ export default function App() {
                 sql,
                 recordHistory: false,
               });
+              const result = res.results[0];
               return {
-                rows: (res.rows || []) as Record<string, unknown>[],
-                error: res.error,
+                rows: (result?.rows || []) as Record<string, unknown>[],
+                error: result?.error,
               };
             }}
             onLoadRows={(limit, offset) => loadTableRows(table, limit, offset)}
@@ -722,7 +730,7 @@ export default function App() {
                   connectionId: currentDatabase.id,
                   sql,
                 });
-                if (res.error) return { error: res.error };
+                if (res.results[0]?.error) return { error: res.results[0].error };
                 await refreshTableRows(table);
                 await refreshHistory();
                 return {};
@@ -775,7 +783,7 @@ export default function App() {
                 sql,
               });
               await refreshHistory();
-              return res;
+              return res.results;
             }}
             onBookmarkQuery={async (title, sql, description, tags) => {
               const newSq: SavedQuery = {
@@ -793,6 +801,7 @@ export default function App() {
             }}
             onDeleteSavedQuery={handleDeleteSavedQuery}
             onUpdateSavedQueryTags={handleUpdateSavedQueryTags}
+            onLoadSavedQuery={(title) => handleRenameTab(tab.id, title)}
           />
         );
       case 'erd_schema':
@@ -822,7 +831,7 @@ export default function App() {
             disabled={currentDatabase.status !== 'connected'}
             onExecute={async (sql) => {
               const res = await queryExecute({ connectionId: currentDatabase.id, sql });
-              if (res.error) return { error: res.error };
+              if (res.results[0]?.error) return { error: res.results[0].error };
               await loadSchema(currentDatabase.id);
               await refreshHistory();
               return {};
@@ -940,7 +949,7 @@ export default function App() {
         currentDatabase={currentDatabase}
         savedQueries={savedQueries}
         onSelectTable={handleSelectTableData}
-        onSelectQuery={(sql) => handleOpenNewQueryTab(sql)}
+        onSelectQuery={(sql, title) => handleOpenNewQueryTab(sql, undefined, title)}
         onOpenErd={openErd}
         onOpenMetrics={openMetrics}
         onOpenActivityLog={() => {

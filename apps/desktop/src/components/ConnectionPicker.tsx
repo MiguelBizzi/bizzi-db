@@ -114,7 +114,7 @@ export const ConnectionPicker: React.FC<ConnectionPickerProps> = ({
                         type="button"
                         disabled={busy}
                         onClick={() => onSelect(profile.id)}
-                        className="flex-1 min-w-0 px-4 py-3.5 flex items-center gap-3 disabled:opacity-60"
+                        className="flex-1 min-w-0 px-4 py-3.5 flex items-center gap-3 text-left disabled:opacity-60"
                       >
                         <div className="p-2 rounded-xl bg-muted border border-border text-primary shrink-0">
                           {isConnecting ? (

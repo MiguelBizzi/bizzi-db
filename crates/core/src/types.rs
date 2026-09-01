@@ -165,6 +165,12 @@ pub struct QueryExecutionResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+pub struct QueryExecuteResponse {
+    pub results: Vec<QueryExecutionResult>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct SavedQuery {
     pub id: String,
     pub title: String,

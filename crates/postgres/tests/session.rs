@@ -43,6 +43,7 @@ async fn test_connection_reports_version() {
 async fn execute_select_and_row_cap() {
     let session = connect().await;
     let result = session.execute("SELECT 1 AS n", 10).await.expect("execute");
+    let result = result.into_iter().next().expect("one result");
     assert!(result.error.is_none(), "{:?}", result.error);
     assert_eq!(result.columns.as_deref(), Some(&["n".to_string()][..]));
     assert_eq!(result.rows.as_ref().map(|rows| rows.len()), Some(1));
@@ -51,6 +52,7 @@ async fn execute_select_and_row_cap() {
         .execute("SELECT * FROM shop.users", 2)
         .await
         .expect("capped execute");
+    let capped = capped.into_iter().next().expect("one result");
     assert!(capped.error.is_none(), "{:?}", capped.error);
     assert_eq!(capped.rows.as_ref().map(|rows| rows.len()), Some(2));
     assert_eq!(capped.truncated, Some(true));
@@ -77,8 +79,35 @@ async fn execute_error_is_returned_not_panic() {
         .execute("SELECT * FROM definitely_missing_table_xyz", 10)
         .await
         .expect("execute should not fail the adapter");
+    let result = result.into_iter().next().expect("one result");
     assert!(result.error.is_some());
     assert!(result.rows.is_none() || result.rows.as_ref().unwrap().is_empty());
+}
+
+#[tokio::test]
+#[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
+async fn execute_multiple_statements_returns_separate_results() {
+    let session = connect().await;
+    let results = session
+        .execute("SELECT 1 AS n; SELECT 2 AS n", 10)
+        .await
+        .expect("execute batch");
+    assert_eq!(results.len(), 2);
+    assert!(results.iter().all(|r| r.error.is_none()), "{results:?}");
+    let first = results[0]
+        .rows
+        .as_ref()
+        .and_then(|rows| rows.first())
+        .and_then(|row| row.get("n"))
+        .and_then(|v| v.as_i64());
+    let second = results[1]
+        .rows
+        .as_ref()
+        .and_then(|rows| rows.first())
+        .and_then(|row| row.get("n"))
+        .and_then(|v| v.as_i64());
+    assert_eq!(first, Some(1));
+    assert_eq!(second, Some(2));
 }
 
 #[tokio::test]

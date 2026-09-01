@@ -5,9 +5,9 @@ use std::sync::{Arc, Mutex};
 use db_core::{
     history_item_from_result, new_connection_requires_password, overlay_schema,
     profile_from_save_input, validate_save_input, ActivityLogItem, Adapter, ConnectConfig,
-    ConnectionProfile, ConnectionStatus, DatabaseSchema, ExecuteQueryRequest, QueryExecutionResult,
-    SaveConnectionInput, SavedQuery, Session, TablePreviewRequest, TestConnectionResult,
-    WorkspaceState, DEFAULT_ROW_CAP,
+    ConnectionProfile, ConnectionStatus, DatabaseSchema, ExecuteQueryRequest, QueryExecuteResponse,
+    QueryExecutionResult, SaveConnectionInput, SavedQuery, Session, TablePreviewRequest,
+    TestConnectionResult, WorkspaceState, DEFAULT_ROW_CAP,
 };
 use db_postgres::PostgresAdapter;
 use db_storage::{KeychainSecrets, SecretStore, Storage};
@@ -216,7 +216,7 @@ fn record_history(
 async fn query_execute(
     state: State<'_, AppState>,
     input: ExecuteQueryRequest,
-) -> Result<QueryExecutionResult, String> {
+) -> Result<QueryExecuteResponse, String> {
     let profile = state
         .storage
         .lock()
@@ -225,14 +225,16 @@ async fn query_execute(
         .map_err(map_err)?
         .ok_or_else(|| "Connection not found".to_string())?;
     let session = session_for(&state, &input.connection_id).await?;
-    let result = session
+    let results = session
         .execute(&input.sql, DEFAULT_ROW_CAP)
         .await
         .map_err(map_err)?;
     if input.record_history {
-        record_history(&state, &profile, &result)?;
+        for result in &results {
+            record_history(&state, &profile, result)?;
+        }
     }
-    Ok(result)
+    Ok(QueryExecuteResponse { results })
 }
 
 #[tauri::command]

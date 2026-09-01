@@ -2,36 +2,36 @@ import React, { useState } from 'react';
 import { format } from 'sql-formatter';
 import {
   Play,
-  Zap,
   Code,
-  Check,
   Save,
   Bookmark,
-  RotateCcw,
-  Network,
-  FileCode,
-  Layers,
-  History,
   Tag as TagIcon,
   Plus,
   X,
   Search,
   Trash2,
-  Copy,
-  ExternalLink,
-  FolderHeart,
 } from 'lucide-react';
 import { QueryExecutionResult, SavedQuery, DatabaseSchema } from '../../types';
 import { QueryResultsView } from './QueryResultsView';
+import { SqlCodeEditor } from './SqlCodeEditor';
+import { SplitHandle } from '../ui/SplitHandle';
+import { invokeErrorMessage } from '../../lib/invokeError';
+import {
+  clampResultsFraction,
+  DEFAULT_RESULTS_FRACTION,
+  readResultsFraction,
+  writeResultsFraction,
+} from '../../lib/sqlEditorLayout';
 
 interface SqlEditorTabProps {
   initialSql?: string;
   currentDatabase: DatabaseSchema;
   savedQueries: SavedQuery[];
-  onExecuteQuery: (sql: string) => Promise<QueryExecutionResult>;
+  onExecuteQuery: (sql: string) => Promise<QueryExecutionResult[]>;
   onBookmarkQuery: (title: string, sql: string, description?: string, tags?: string[]) => void;
   onDeleteSavedQuery?: (id: string) => void;
   onUpdateSavedQueryTags?: (id: string, tags: string[]) => void;
+  onLoadSavedQuery?: (title: string, sql: string) => void;
 }
 
 export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
@@ -42,11 +42,17 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
   onBookmarkQuery,
   onDeleteSavedQuery,
   onUpdateSavedQueryTags,
+  onLoadSavedQuery,
 }) => {
   const [sql, setSql] = useState(initialSql);
   const [isRunning, setIsRunning] = useState(false);
-  const [queryResult, setQueryResult] = useState<QueryExecutionResult | null>(null);
+  const [queryResults, setQueryResults] = useState<QueryExecutionResult[]>([]);
   const [showSavedQueries, setShowSavedQueries] = useState(false);
+  const [resultsFraction, setResultsFraction] = useState(() =>
+    typeof localStorage === 'undefined'
+      ? DEFAULT_RESULTS_FRACTION
+      : readResultsFraction(localStorage)
+  );
 
   // Save Modal state
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -63,9 +69,6 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
 
   const SUGGESTED_TAGS = ['Core', 'Analytics', 'Revenue', 'Inventory', 'Performance', 'Daily', 'Audit'];
 
-  // Line numbers calculation
-  const lines = sql.split('\n');
-
   const handleRunQuery = async (queryToRun?: string) => {
     const targetSql = queryToRun || sql;
     if (!targetSql.trim()) return;
@@ -73,15 +76,17 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
     setIsRunning(true);
     try {
       const res = await onExecuteQuery(targetSql);
-      setQueryResult(res);
-    } catch (e: any) {
-      setQueryResult({
-        id: 'res_err_' + Date.now(),
-        query: targetSql,
-        timestamp: new Date().toISOString(),
-        executionTimeMs: 0,
-        error: e.message || 'Execution error',
-      });
+      setQueryResults(res);
+    } catch (e: unknown) {
+      setQueryResults([
+        {
+          id: 'res_err_' + Date.now(),
+          query: targetSql,
+          timestamp: new Date().toISOString(),
+          executionTimeMs: 0,
+          error: invokeErrorMessage(e),
+        },
+      ]);
     } finally {
       setIsRunning(false);
     }
@@ -286,6 +291,7 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
                         <button
                           onClick={() => {
                             setSql(sq.sql);
+                            onLoadSavedQuery?.(sq.title, sq.sql);
                             setShowSavedQueries(false);
                           }}
                           title="Load SQL into editor"
@@ -386,32 +392,37 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
           </div>
         )}
 
-        {/* Code Area */}
-        <div className="h-56 bg-background border-b border-border flex overflow-hidden font-mono text-xs">
-          {/* Line Numbers */}
-          <div className="w-12 py-3 bg-muted/40 border-r border-border text-muted-foreground text-right pr-2 select-none shrink-0 leading-relaxed font-mono">
-            {lines.map((_, i) => (
-              <div key={i}>{i + 1}</div>
-            ))}
+        {/* Code Area + Results */}
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div
+            className="min-h-0 bg-background overflow-hidden"
+            style={{ flex: `${1 - resultsFraction} 1 0%` }}
+          >
+            <SqlCodeEditor
+              value={sql}
+              tables={currentDatabase.tables}
+              onChange={setSql}
+              onRun={() => {
+                void handleRunQuery();
+              }}
+            />
           </div>
 
-          {/* Textarea Code Editor */}
-          <textarea
-            value={sql}
-            onChange={(e) => setSql(e.target.value)}
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-                e.preventDefault();
-                handleRunQuery();
+          <SplitHandle
+            direction="column"
+            onResize={([, second]) => {
+              const next = clampResultsFraction(second);
+              setResultsFraction(next);
+              if (typeof localStorage !== 'undefined') {
+                writeResultsFraction(localStorage, next);
               }
             }}
-            placeholder="Type your SQL query here... Press Cmd+Enter to execute."
-            className="w-full h-full p-3 bg-transparent text-foreground focus:outline-none resize-none leading-relaxed font-mono font-medium placeholder-muted-foreground"
           />
-        </div>
 
-        {/* Results View Pane */}
-        <QueryResultsView result={queryResult} />
+          <div className="min-h-0 overflow-hidden" style={{ flex: `${resultsFraction} 1 0%` }}>
+            <QueryResultsView results={queryResults} isLoading={isRunning} />
+          </div>
+        </div>
       </div>
 
       {/* Save Query Modal */}

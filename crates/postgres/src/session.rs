@@ -3,8 +3,9 @@ use std::time::Instant;
 use async_trait::async_trait;
 use chrono::Utc;
 use db_core::{
-    clamp_pool_size, clamp_preview_page, Adapter, AdapterError, ConnectConfig, ConnectionStatus,
-    DatabaseDialect, DatabaseSchema, QueryExecutionResult, Session, DEFAULT_ROW_CAP,
+    clamp_pool_size, clamp_preview_page, split_sql_statements, Adapter, AdapterError,
+    ConnectConfig, ConnectionStatus, DatabaseDialect, DatabaseSchema, QueryExecutionResult,
+    Session, DEFAULT_ROW_CAP,
 };
 use deadpool_postgres::{ManagerConfig, Pool, RecyclingMethod, Runtime};
 use native_tls::TlsConnector;
@@ -27,11 +28,25 @@ impl Adapter for PostgresAdapter {
         let started = Instant::now();
         let session = self.connect(cfg).await?;
         let result = session.execute("SELECT version()", 1).await?;
+        let first = result
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| QueryExecutionResult {
+                id: format!("res_{}", Uuid::new_v4()),
+                query: "SELECT version()".into(),
+                timestamp: Utc::now().to_rfc3339(),
+                execution_time_ms: 0,
+                affected_rows: None,
+                columns: None,
+                rows: None,
+                error: Some("empty result".into()),
+                truncated: None,
+            });
         let latency = started.elapsed().as_millis() as u64;
-        if let Some(err) = result.error {
+        if let Some(err) = first.error {
             return Err(AdapterError::msg(err));
         }
-        let version = result
+        let version = first
             .rows
             .as_ref()
             .and_then(|rows| rows.first())
@@ -59,8 +74,8 @@ impl Session for PostgresSession {
         &self,
         sql: &str,
         row_cap: usize,
-    ) -> Result<QueryExecutionResult, AdapterError> {
-        run_sql(self, sql, row_cap).await
+    ) -> Result<Vec<QueryExecutionResult>, AdapterError> {
+        run_script(self, sql, row_cap).await
     }
 
     async fn preview(
@@ -173,39 +188,83 @@ async fn run_sql(
     let started = Instant::now();
     let timestamp = Utc::now().to_rfc3339();
     match session.simple_query(sql).await {
-        Ok(messages) => {
-            let collected = collect_simple(messages, row_cap);
-            Ok(QueryExecutionResult {
-                id: format!("res_{}", Uuid::new_v4()),
-                query: sql.to_string(),
-                timestamp,
-                execution_time_ms: started.elapsed().as_millis() as u64,
-                affected_rows: Some(collected.affected_rows),
-                columns: if collected.columns.is_empty() {
-                    None
-                } else {
-                    Some(collected.columns)
-                },
-                rows: Some(collected.rows),
-                error: None,
-                truncated: if collected.truncated {
-                    Some(true)
-                } else {
-                    None
-                },
-            })
+        Ok(messages) => Ok(success_result(sql, timestamp, started, messages, row_cap)),
+        Err(err) => Ok(error_result(sql, timestamp, started, err.to_string())),
+    }
+}
+
+async fn run_script(
+    session: &PostgresSession,
+    sql: &str,
+    row_cap: usize,
+) -> Result<Vec<QueryExecutionResult>, AdapterError> {
+    let statements = split_sql_statements(sql);
+    if statements.is_empty() {
+        return Ok(Vec::new());
+    }
+    let client = session.client().await?;
+    let mut results = Vec::with_capacity(statements.len());
+    for stmt in statements {
+        let started = Instant::now();
+        let timestamp = Utc::now().to_rfc3339();
+        match client.simple_query(&stmt).await {
+            Ok(messages) => {
+                results.push(success_result(&stmt, timestamp, started, messages, row_cap));
+            }
+            Err(err) => {
+                results.push(error_result(&stmt, timestamp, started, err.to_string()));
+                break;
+            }
         }
-        Err(err) => Ok(QueryExecutionResult {
-            id: format!("res_{}", Uuid::new_v4()),
-            query: sql.to_string(),
-            timestamp,
-            execution_time_ms: started.elapsed().as_millis() as u64,
-            affected_rows: None,
-            columns: None,
-            rows: None,
-            error: Some(err.to_string()),
-            truncated: None,
-        }),
+    }
+    Ok(results)
+}
+
+fn success_result(
+    sql: &str,
+    timestamp: String,
+    started: Instant,
+    messages: Vec<tokio_postgres::SimpleQueryMessage>,
+    row_cap: usize,
+) -> QueryExecutionResult {
+    let collected = collect_simple(messages, row_cap);
+    QueryExecutionResult {
+        id: format!("res_{}", Uuid::new_v4()),
+        query: sql.to_string(),
+        timestamp,
+        execution_time_ms: started.elapsed().as_millis() as u64,
+        affected_rows: Some(collected.affected_rows),
+        columns: if collected.columns.is_empty() {
+            None
+        } else {
+            Some(collected.columns)
+        },
+        rows: Some(collected.rows),
+        error: None,
+        truncated: if collected.truncated {
+            Some(true)
+        } else {
+            None
+        },
+    }
+}
+
+fn error_result(
+    sql: &str,
+    timestamp: String,
+    started: Instant,
+    error: String,
+) -> QueryExecutionResult {
+    QueryExecutionResult {
+        id: format!("res_{}", Uuid::new_v4()),
+        query: sql.to_string(),
+        timestamp,
+        execution_time_ms: started.elapsed().as_millis() as u64,
+        affected_rows: None,
+        columns: None,
+        rows: None,
+        error: Some(error),
+        truncated: None,
     }
 }
 

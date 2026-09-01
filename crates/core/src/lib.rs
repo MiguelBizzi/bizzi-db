@@ -9,6 +9,7 @@ pub use profiles::{
     profile_from_save_input, validate_save_input, MAX_POOL_SIZE, MIN_POOL_SIZE,
 };
 pub use sql::{
-    clamp_preview_page, classify_sql, QueryKind, DEFAULT_PREVIEW_LIMIT, DEFAULT_ROW_CAP,
+    clamp_preview_page, classify_sql, split_sql_statements, QueryKind, DEFAULT_PREVIEW_LIMIT,
+    DEFAULT_ROW_CAP,
 };
 pub use types::*;

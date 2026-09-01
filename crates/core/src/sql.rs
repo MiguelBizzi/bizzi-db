@@ -54,6 +54,132 @@ pub fn classify_sql(sql: &str) -> QueryKind {
     }
 }
 
+/// Split a SQL script into statements on top-level semicolons.
+/// Semicolons inside quotes, comments, and dollar-quoted strings are ignored.
+pub fn split_sql_statements(sql: &str) -> Vec<String> {
+    let chars: Vec<char> = sql.chars().collect();
+    let mut statements = Vec::new();
+    let mut current = String::new();
+    let mut i = 0;
+
+    while i < chars.len() {
+        let c = chars[i];
+
+        if c == '-' && chars.get(i + 1) == Some(&'-') {
+            while i < chars.len() && chars[i] != '\n' {
+                current.push(chars[i]);
+                i += 1;
+            }
+            continue;
+        }
+
+        if c == '/' && chars.get(i + 1) == Some(&'*') {
+            let mut depth = 1;
+            current.push('/');
+            current.push('*');
+            i += 2;
+            while i < chars.len() && depth > 0 {
+                if chars[i] == '/' && chars.get(i + 1) == Some(&'*') {
+                    depth += 1;
+                    current.push('/');
+                    current.push('*');
+                    i += 2;
+                    continue;
+                }
+                if chars[i] == '*' && chars.get(i + 1) == Some(&'/') {
+                    depth -= 1;
+                    current.push('*');
+                    current.push('/');
+                    i += 2;
+                    continue;
+                }
+                current.push(chars[i]);
+                i += 1;
+            }
+            continue;
+        }
+
+        if c == '$' {
+            if let Some(tag_len) = dollar_tag_len(&chars[i..]) {
+                let tag: Vec<char> = chars[i..i + tag_len].to_vec();
+                for ch in &tag {
+                    current.push(*ch);
+                }
+                i += tag_len;
+                while i + tag_len <= chars.len() {
+                    if chars[i..i + tag_len] == tag[..] {
+                        for ch in &tag {
+                            current.push(*ch);
+                        }
+                        i += tag_len;
+                        break;
+                    }
+                    current.push(chars[i]);
+                    i += 1;
+                }
+                continue;
+            }
+        }
+
+        if c == '\'' || c == '"' {
+            current.push(c);
+            i += 1;
+            while i < chars.len() {
+                current.push(chars[i]);
+                if chars[i] == c {
+                    if chars.get(i + 1) == Some(&c) {
+                        current.push(chars[i + 1]);
+                        i += 2;
+                        continue;
+                    }
+                    i += 1;
+                    break;
+                }
+                i += 1;
+            }
+            continue;
+        }
+
+        if c == ';' {
+            push_statement(&mut statements, &mut current);
+            i += 1;
+            continue;
+        }
+
+        current.push(c);
+        i += 1;
+    }
+
+    push_statement(&mut statements, &mut current);
+    statements
+}
+
+fn push_statement(statements: &mut Vec<String>, current: &mut String) {
+    let trimmed = current.trim();
+    if !trimmed.is_empty() {
+        statements.push(trimmed.to_string());
+    }
+    current.clear();
+}
+
+fn dollar_tag_len(chars: &[char]) -> Option<usize> {
+    if chars.first() != Some(&'$') {
+        return None;
+    }
+    let mut i = 1;
+    while i < chars.len() {
+        let c = chars[i];
+        if c == '$' {
+            return Some(i + 1);
+        }
+        if !(c.is_ascii_alphanumeric() || c == '_') {
+            return None;
+        }
+        i += 1;
+    }
+    None
+}
+
 fn strip_leading_comments(sql: &str) -> &str {
     let mut s = sql.trim_start();
     loop {
@@ -149,6 +275,52 @@ mod tests {
         assert_eq!(
             HistoryQueryType::from(QueryKind::Ddl),
             HistoryQueryType::Ddl
+        );
+    }
+
+    #[test]
+    fn splits_statements_on_semicolons() {
+        assert_eq!(
+            split_sql_statements("SELECT 1; SELECT 2;"),
+            vec!["SELECT 1", "SELECT 2"]
+        );
+        assert_eq!(split_sql_statements("SELECT 1"), vec!["SELECT 1"]);
+        assert_eq!(split_sql_statements("  ;  ;  "), Vec::<String>::new());
+        assert_eq!(
+            split_sql_statements("SELECT 1;; SELECT 2"),
+            vec!["SELECT 1", "SELECT 2"]
+        );
+    }
+
+    #[test]
+    fn split_ignores_semicolons_in_quotes_comments_and_dollar_quotes() {
+        assert_eq!(
+            split_sql_statements("SELECT 'a;b'; SELECT 2"),
+            vec!["SELECT 'a;b'", "SELECT 2"]
+        );
+        assert_eq!(
+            split_sql_statements(r#"SELECT "col;name" FROM t; SELECT 2"#),
+            vec![r#"SELECT "col;name" FROM t"#, "SELECT 2"]
+        );
+        assert_eq!(
+            split_sql_statements("SELECT 1; -- ignore ; here\nSELECT 2"),
+            vec!["SELECT 1", "-- ignore ; here\nSELECT 2"]
+        );
+        assert_eq!(
+            split_sql_statements("SELECT 1; /* ; */ SELECT 2"),
+            vec!["SELECT 1", "/* ; */ SELECT 2"]
+        );
+        assert_eq!(
+            split_sql_statements("SELECT $tag$ a;b $tag$; SELECT 2"),
+            vec!["SELECT $tag$ a;b $tag$", "SELECT 2"]
+        );
+        assert_eq!(
+            split_sql_statements("SELECT $$ a;b $$; SELECT 2"),
+            vec!["SELECT $$ a;b $$", "SELECT 2"]
+        );
+        assert_eq!(
+            split_sql_statements("SELECT 'it''s;ok'; SELECT 2"),
+            vec!["SELECT 'it''s;ok'", "SELECT 2"]
         );
     }
 }

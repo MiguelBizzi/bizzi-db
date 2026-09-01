@@ -34,7 +34,7 @@ pub trait Session: Send + Sync {
         &self,
         sql: &str,
         row_cap: usize,
-    ) -> Result<QueryExecutionResult, AdapterError>;
+    ) -> Result<Vec<QueryExecutionResult>, AdapterError>;
     async fn preview(
         &self,
         schema: &str,

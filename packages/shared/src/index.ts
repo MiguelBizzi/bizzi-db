@@ -160,6 +160,10 @@ export interface QueryExecutionResult {
   explainPlan?: ExplainPlanNode;
 }
 
+export interface QueryExecuteResponse {
+  results: QueryExecutionResult[];
+}
+
 export interface SavedQuery {
   id: string;
   title: string;

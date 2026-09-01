@@ -1,7 +1,12 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ExecuteQueryRequest, QueryExecutionResult, TablePreviewRequest } from '@db/shared';
+import type {
+  ExecuteQueryRequest,
+  QueryExecuteResponse,
+  QueryExecutionResult,
+  TablePreviewRequest,
+} from '@db/shared';
 
-export function queryExecute(input: ExecuteQueryRequest): Promise<QueryExecutionResult> {
+export function queryExecute(input: ExecuteQueryRequest): Promise<QueryExecuteResponse> {
   return invoke('query_execute', { input });
 }
 

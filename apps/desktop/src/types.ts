@@ -14,6 +14,7 @@ export type {
   PendingModifications,
   PendingRowDelete,
   PendingRowInsert,
+  QueryExecuteResponse,
   QueryExecutionResult,
   SaveConnectionInput,
   SavedQuery,

@@ -26,7 +26,7 @@ interface CommandPaletteProps {
   currentDatabase: DatabaseSchema | null;
   savedQueries: SavedQuery[];
   onSelectTable: (table: TableSchema) => void;
-  onSelectQuery: (sql: string) => void;
+  onSelectQuery: (sql: string, title?: string) => void;
   onOpenErd: () => void;
   onOpenMetrics: () => void;
   onOpenActivityLog: () => void;
@@ -156,7 +156,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       ...filteredQueries.map((saved) => ({
         id: `query-${saved.id}`,
         run: () => {
-          onSelectQuery(saved.sql);
+          onSelectQuery(saved.sql, saved.title);
           onClose();
         },
       })),
@@ -391,7 +391,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       ref={index === selectedIndex ? selectedRef : undefined}
                       onMouseEnter={() => setSelectedIndex(index)}
                       onClick={() => {
-                        onSelectQuery(saved.sql);
+                        onSelectQuery(saved.sql, saved.title);
                         onClose();
                       }}
                       className={`${itemClass(index)} text-left`}
