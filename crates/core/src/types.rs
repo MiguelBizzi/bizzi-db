@@ -376,6 +376,22 @@ pub struct ExecuteQueryRequest {
     pub record_history: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SchemaSyncRequest {
+    pub connection_id: String,
+    pub last_fingerprint: Option<String>,
+    #[serde(default)]
+    pub force: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SchemaSyncResponse {
+    pub fingerprint: String,
+    pub schema: Option<DatabaseSchema>,
+}
+
 fn default_true() -> bool {
     true
 }
@@ -435,8 +451,7 @@ mod tests {
         let folder: ConnectionFolder =
             serde_json::from_str(r#"{"id":"folder_1","name":"Prod"}"#).unwrap();
         assert_eq!(folder.name, "Prod");
-        let input: SaveFolderInput =
-            serde_json::from_str(r#"{"name":" Staging "}"#).unwrap();
+        let input: SaveFolderInput = serde_json::from_str(r#"{"name":" Staging "}"#).unwrap();
         assert!(input.id.is_none());
         assert_eq!(input.name, " Staging ");
     }
@@ -469,6 +484,18 @@ mod tests {
             serde_json::from_str(r#"{"connectionId":"c1","sql":"SELECT 1"}"#).unwrap();
         assert!(req.record_history);
         assert_eq!(req.connection_id, "c1");
+
+        let sync: SchemaSyncRequest =
+            serde_json::from_str(r#"{"connectionId":"c1","lastFingerprint":"abc"}"#).unwrap();
+        assert!(!sync.force);
+        assert_eq!(sync.last_fingerprint.as_deref(), Some("abc"));
+        let encoded = serde_json::to_value(&SchemaSyncResponse {
+            fingerprint: "abc".into(),
+            schema: None,
+        })
+        .unwrap();
+        assert_eq!(encoded["fingerprint"], "abc");
+        assert!(encoded["schema"].is_null());
     }
 
     #[test]

@@ -116,6 +116,7 @@ export interface PendingModifications {
   updates: PendingCellUpdate[];
   inserts: PendingRowInsert[];
   deletes: PendingRowDelete[];
+  tableAction?: 'truncate' | 'drop' | null;
 }
 
 export interface FilterClause {
@@ -273,6 +274,17 @@ export interface ExecuteQueryRequest {
   connectionId: string;
   sql: string;
   recordHistory?: boolean;
+}
+
+export interface SchemaSyncRequest {
+  connectionId: string;
+  lastFingerprint?: string | null;
+  force?: boolean;
+}
+
+export interface SchemaSyncResponse {
+  fingerprint: string;
+  schema: DatabaseSchema | null;
 }
 
 export interface WorkspaceState {

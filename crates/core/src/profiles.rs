@@ -59,9 +59,7 @@ pub fn validate_ssh_save_input(
     match input.ssh_auth {
         SshAuthMethod::Password => {
             if !keychain_enabled {
-                return Err(
-                    "SSH password authentication requires the system keychain".into(),
-                );
+                return Err("SSH password authentication requires the system keychain".into());
             }
             if input.ssh_password.is_empty() && input.id.is_none() {
                 return Err("SSH password is required".into());
@@ -231,7 +229,11 @@ pub fn profile_from_save_input(input: SaveConnectionInput, id: String) -> Connec
         sort_order: 0,
         ssh_enabled: input.ssh_enabled,
         ssh_host: input.ssh_host.trim().to_string(),
-        ssh_port: if input.ssh_port == 0 { 22 } else { input.ssh_port },
+        ssh_port: if input.ssh_port == 0 {
+            22
+        } else {
+            input.ssh_port
+        },
         ssh_user: input.ssh_user.trim().to_string(),
         ssh_auth: input.ssh_auth,
         ssh_key_path: input.ssh_key_path.and_then(|path| {
@@ -281,7 +283,7 @@ pub fn history_item_from_result(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{DatabaseDialect, Environment, HistoryQueryType, SslMode, SshAuthMethod};
+    use crate::types::{DatabaseDialect, Environment, HistoryQueryType, SshAuthMethod, SslMode};
 
     fn save_input(password: &str, id: Option<&str>, pool_size: u32) -> SaveConnectionInput {
         SaveConnectionInput {

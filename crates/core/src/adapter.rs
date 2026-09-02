@@ -37,8 +37,13 @@ pub struct SshTunnelConfig {
 
 #[derive(Clone)]
 pub enum SshTunnelAuth {
-    Password { password: String },
-    PrivateKey { path: String, passphrase: Option<String> },
+    Password {
+        password: String,
+    },
+    PrivateKey {
+        path: String,
+        passphrase: Option<String>,
+    },
 }
 
 impl std::fmt::Debug for SshTunnelConfig {
@@ -71,6 +76,7 @@ impl std::fmt::Debug for SshTunnelAuth {
 #[async_trait]
 pub trait Session: Send + Sync {
     async fn introspect(&self) -> Result<DatabaseSchema, AdapterError>;
+    async fn schema_fingerprint(&self) -> Result<String, AdapterError>;
     async fn execute(
         &self,
         sql: &str,
@@ -103,9 +109,19 @@ impl AdapterError {
     }
 }
 
+/// Full introspection is skipped when a cheap catalog fingerprint matches
+/// the last refresh. Force always reloads (manual refresh, connect, known DDL).
+pub fn schema_cache_is_fresh(
+    force: bool,
+    last_fingerprint: Option<&str>,
+    next_fingerprint: &str,
+) -> bool {
+    !force && last_fingerprint == Some(next_fingerprint)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ConnectConfig, SshTunnelAuth, SshTunnelConfig};
+    use super::{schema_cache_is_fresh, ConnectConfig, SshTunnelAuth, SshTunnelConfig};
     use crate::types::SslMode;
 
     fn sample() -> ConnectConfig {
@@ -155,5 +171,13 @@ mod tests {
         assert!(!key_debug.contains("key-phrase"));
         assert!(key_debug.contains("/tmp/id_ed25519"));
         assert!(key_debug.contains("***"));
+    }
+
+    #[test]
+    fn schema_cache_skips_unchanged_catalog() {
+        assert!(schema_cache_is_fresh(false, Some("abc"), "abc"));
+        assert!(!schema_cache_is_fresh(true, Some("abc"), "abc"));
+        assert!(!schema_cache_is_fresh(false, None, "abc"));
+        assert!(!schema_cache_is_fresh(false, Some("abc"), "def"));
     }
 }

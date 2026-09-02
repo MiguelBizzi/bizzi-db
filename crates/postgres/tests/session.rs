@@ -168,3 +168,49 @@ async fn introspect_seed_tables_pks_fks_and_enums() {
         Some("CASCADE")
     );
 }
+
+#[tokio::test]
+#[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
+async fn schema_fingerprint_ignores_row_changes_and_detects_ddl() {
+    let session = connect().await;
+    let suffix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let table = format!("fp_{suffix}");
+    let create = format!("CREATE TABLE shop.{table} (id int PRIMARY KEY)");
+    session.execute(&create, 1).await.expect("create");
+    let before = session
+        .schema_fingerprint()
+        .await
+        .expect("fingerprint before");
+    assert!(!before.is_empty());
+    assert_eq!(
+        before,
+        session
+            .schema_fingerprint()
+            .await
+            .expect("fingerprint again")
+    );
+
+    let insert = format!("INSERT INTO shop.{table} (id) VALUES (1)");
+    session.execute(&insert, 1).await.expect("insert");
+    assert_eq!(
+        before,
+        session
+            .schema_fingerprint()
+            .await
+            .expect("fingerprint after insert")
+    );
+
+    let alter = format!("ALTER TABLE shop.{table} ADD COLUMN note text");
+    session.execute(&alter, 1).await.expect("alter");
+    let after_ddl = session
+        .schema_fingerprint()
+        .await
+        .expect("fingerprint after ddl");
+    assert_ne!(before, after_ddl);
+
+    let drop = format!("DROP TABLE shop.{table}");
+    session.execute(&drop, 1).await.expect("drop");
+}

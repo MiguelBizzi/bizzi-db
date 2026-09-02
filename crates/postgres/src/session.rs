@@ -70,6 +70,10 @@ impl Session for PostgresSession {
         introspect(self).await
     }
 
+    async fn schema_fingerprint(&self) -> Result<String, AdapterError> {
+        schema_fingerprint(self).await
+    }
+
     async fn execute(
         &self,
         sql: &str,
@@ -286,6 +290,108 @@ fn on_delete_from_confdeltype(code: &str) -> Option<String> {
         "d" => Some("SET DEFAULT".into()),
         _ => None,
     }
+}
+
+const SCHEMA_FINGERPRINT_SQL: &str = r#"
+SELECT COALESCE(md5(string_agg(part, E'\n' ORDER BY kind, part)), '')
+FROM (
+  SELECT
+    1::int AS kind,
+    concat_ws(
+      ':',
+      n.nspname,
+      c.relname,
+      c.relkind,
+      COALESCE(obj_description(c.oid, 'pg_class'), '')
+    ) AS part
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+    AND c.relkind IN ('r', 'p', 'v', 'm')
+
+  UNION ALL
+
+  SELECT
+    2,
+    concat_ws(
+      ':',
+      n.nspname,
+      c.relname,
+      a.attnum::text,
+      a.attname,
+      a.atttypid::text,
+      a.atttypmod::text,
+      a.attnotnull::text,
+      COALESCE(ad.oid::text, ''),
+      COALESCE(col_description(c.oid, a.attnum), '')
+    )
+  FROM pg_attribute a
+  JOIN pg_class c ON c.oid = a.attrelid
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  LEFT JOIN pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
+  WHERE a.attnum > 0
+    AND NOT a.attisdropped
+    AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+    AND c.relkind IN ('r', 'p', 'v', 'm')
+
+  UNION ALL
+
+  SELECT
+    3,
+    concat_ws(
+      ':',
+      n.nspname,
+      c.relname,
+      con.conname,
+      con.contype,
+      con.conkey::text,
+      COALESCE(tn.nspname, ''),
+      COALESCE(tgt.relname, ''),
+      COALESCE(con.confkey::text, ''),
+      COALESCE(con.confdeltype::text, '')
+    )
+  FROM pg_constraint con
+  JOIN pg_class c ON c.oid = con.conrelid
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  LEFT JOIN pg_class tgt ON tgt.oid = con.confrelid
+  LEFT JOIN pg_namespace tn ON tn.oid = tgt.relnamespace
+  WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+
+  UNION ALL
+
+  SELECT
+    4,
+    concat_ws(
+      ':',
+      n.nspname,
+      t.relname,
+      i.relname,
+      ix.indisunique::text,
+      COALESCE(am.amname::text, ''),
+      ix.indkey::text
+    )
+  FROM pg_index ix
+  JOIN pg_class t ON t.oid = ix.indrelid
+  JOIN pg_class i ON i.oid = ix.indexrelid
+  JOIN pg_namespace n ON n.oid = t.relnamespace
+  LEFT JOIN pg_am am ON am.oid = i.relam
+  WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+    AND t.relkind IN ('r', 'p', 'm')
+
+  UNION ALL
+
+  SELECT
+    5,
+    concat_ws(':', n.nspname, t.typname, e.enumsortorder::text, e.enumlabel)
+  FROM pg_enum e
+  JOIN pg_type t ON t.oid = e.enumtypid
+  JOIN pg_namespace n ON n.oid = t.typnamespace
+  WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+) catalog_parts
+"#;
+
+async fn schema_fingerprint(session: &PostgresSession) -> Result<String, AdapterError> {
+    session.query_one_string(SCHEMA_FINGERPRINT_SQL).await
 }
 
 async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, AdapterError> {
@@ -582,7 +688,7 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
 
 #[cfg(test)]
 mod tests {
-    use super::{on_delete_from_confdeltype, tokio_ssl_mode};
+    use super::{on_delete_from_confdeltype, tokio_ssl_mode, SCHEMA_FINGERPRINT_SQL};
     use db_core::SslMode as AppSslMode;
     use tokio_postgres::config::SslMode;
 
@@ -610,5 +716,16 @@ mod tests {
         assert_eq!(tokio_ssl_mode(AppSslMode::Enabled), SslMode::Require);
         assert!(AppSslMode::Require.danger_accept_invalid_certs());
         assert!(!AppSslMode::Enabled.danger_accept_invalid_certs());
+    }
+
+    #[test]
+    fn fingerprint_sql_covers_structure_not_table_stats() {
+        assert!(SCHEMA_FINGERPRINT_SQL.contains("pg_attribute"));
+        assert!(SCHEMA_FINGERPRINT_SQL.contains("pg_constraint"));
+        assert!(SCHEMA_FINGERPRINT_SQL.contains("pg_index"));
+        assert!(SCHEMA_FINGERPRINT_SQL.contains("pg_enum"));
+        assert!(!SCHEMA_FINGERPRINT_SQL.contains("reltuples"));
+        assert!(!SCHEMA_FINGERPRINT_SQL.contains("pg_total_relation_size"));
+        assert!(!SCHEMA_FINGERPRINT_SQL.contains("pg_database_size"));
     }
 }
