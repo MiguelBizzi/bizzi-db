@@ -178,11 +178,12 @@
   body,
   #root {
     height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
   }
   body {
     @apply bg-background text-foreground;
     letter-spacing: var(--tracking-normal);
-    overflow: hidden;
   }
   button:not(:disabled),
   [role="button"]:not(:disabled),
@@ -192,6 +193,14 @@
   label:has(input[type="checkbox"]:not(:disabled)) {
     cursor: pointer;
   }
+}
+
+/* Keep data grids inside their pane — no rubber-band on either axis. */
+.table-scroll-port {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: none;
 }
 
 .scrollbar-none {

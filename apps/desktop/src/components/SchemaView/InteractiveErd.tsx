@@ -13,6 +13,7 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import { DatabaseSchema, TableSchema } from '../../types';
+import { shortColumnType } from '../../lib/columnTypeDisplay';
 import { knownRowCount } from '../../lib/format';
 import { buildErdEdges, type ErdEdge } from '../../lib/erdEdges';
 import { downloadDataUrl, erdExportFileName, snapshotErdPng } from '../../lib/erdExport';
@@ -552,8 +553,11 @@ export const InteractiveErd: React.FC<InteractiveErdProps> = ({
                                 <span className="text-muted-foreground/70">?</span>
                               ) : null}
                             </span>
-                            <span className="ml-auto shrink-0 min-w-18 text-right text-[10px] text-muted-foreground font-sans tabular-nums">
-                              {col.type}
+                            <span
+                              className="ml-auto shrink-0 min-w-18 text-right text-[10px] text-muted-foreground font-sans tabular-nums"
+                              title={col.type}
+                            >
+                              {shortColumnType(col.type)}
                             </span>
                           </div>
                         );

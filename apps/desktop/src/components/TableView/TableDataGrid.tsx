@@ -35,6 +35,8 @@ import {
   resolveReferencedTable,
 } from "../../lib/foreignKeyLookup";
 import { createDefaultFilter, applyTableView } from "../../lib/tableFilters";
+import { shortColumnType } from "../../lib/columnTypeDisplay";
+import { useTableScrollPort } from "../../lib/tableScroll";
 import {
   canSetDefault,
   canSetEmpty,
@@ -128,6 +130,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   onLookup,
   onOpenTable,
 }) => {
+  const bindTableScroll = useTableScrollPort();
   const [searchInput, setSearchInput] = useState("");
   const searchTerm = useDebouncedValue(searchInput);
   const [filters, setFilters] = useState<FilterClause[]>([]);
@@ -413,7 +416,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-background overflow-hidden font-sans select-none text-foreground">
+    <div className="flex flex-col h-full min-h-0 min-w-0 bg-background overflow-hidden font-sans select-none text-foreground">
       {/* Toolbar */}
       <TableToolbar
         table={table}
@@ -452,7 +455,8 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
 
       {/* Spreadsheet Grid Canvas */}
       <div
-        className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-muted"
+        ref={bindTableScroll}
+        className="flex-1 table-scroll-port scrollbar-thin scrollbar-thumb-muted"
         aria-busy={loading}
         aria-live="polite"
       >
@@ -491,8 +495,11 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
                           <Link className="w-3.5 h-3.5 text-primary shrink-0" />
                         )}
                         <span className="truncate">{col.name}</span>
-                        <span className="text-[10px] text-muted-foreground font-normal font-sans">
-                          ({col.type})
+                        <span
+                          className="text-[10px] text-muted-foreground font-normal font-sans"
+                          title={col.type}
+                        >
+                          ({shortColumnType(col.type)})
                         </span>
                       </div>
 

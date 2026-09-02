@@ -26,6 +26,7 @@ import {
   type InsertFieldState,
 } from '../../lib/insertRow';
 import { resolveReferencedTable } from '../../lib/foreignKeyLookup';
+import { shortColumnType } from '../../lib/columnTypeDisplay';
 
 interface InsertRowDrawerProps {
   isOpen: boolean;
@@ -307,8 +308,8 @@ function ColumnField({
             <span className="truncate">{column.name}</span>
             {required && <span className="text-destructive">*</span>}
           </div>
-          <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate">
-            {column.type}
+          <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate" title={column.type}>
+            {shortColumnType(column.type)}
             {fkHint}
             {column.defaultValue ? ` · DEFAULT ${truncate(column.defaultValue, 40)}` : ''}
             {!nullable ? ' · NOT NULL' : ' · nullable'}
