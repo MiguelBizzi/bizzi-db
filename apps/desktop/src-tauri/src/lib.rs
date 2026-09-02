@@ -6,12 +6,13 @@ use std::sync::{Arc, Mutex};
 
 use db_core::{
     connect_config_from_profile, history_item_from_result, new_connection_requires_password,
-    overlay_schema, profile_from_save_input, resolve_connection_password, ssh_secret_key,
-    ssh_tunnel_from_profile, ssh_tunnel_from_save, validate_folder_name, validate_save_input,
-    ActivityLogItem, Adapter, AppSettings, ConnectionFolder, ConnectionProfile,
-    ConnectionStatus, DatabaseSchema, ExecuteQueryRequest, QueryExecuteResponse,
-    QueryExecutionResult, SaveConnectionInput, SaveFolderInput, SavedQuery, Session,
-    SshAuthMethod, TablePreviewRequest, TestConnectionResult, WorkspaceState, DEFAULT_ROW_CAP,
+    overlay_schema, profile_from_save_input, resolve_connection_password, schema_cache_is_fresh,
+    ssh_secret_key, ssh_tunnel_from_profile, ssh_tunnel_from_save, validate_folder_name,
+    validate_save_input, ActivityLogItem, Adapter, AppSettings, ConnectionFolder,
+    ConnectionProfile, ConnectionStatus, DatabaseSchema, ExecuteQueryRequest, QueryExecuteResponse,
+    QueryExecutionResult, SaveConnectionInput, SaveFolderInput, SavedQuery, SchemaSyncRequest,
+    SchemaSyncResponse, Session, SshAuthMethod, TablePreviewRequest, TestConnectionResult,
+    WorkspaceState, DEFAULT_ROW_CAP,
 };
 use db_postgres::PostgresAdapter;
 use db_storage::{DualSecretStore, FileSecrets, KeychainSecrets, Storage};
@@ -304,7 +305,11 @@ async fn connections_connect(
         ))
         .await
         .map_err(map_err)?;
-    state.sessions.lock().await.insert(id.clone(), Arc::from(session));
+    state
+        .sessions
+        .lock()
+        .await
+        .insert(id.clone(), Arc::from(session));
     if let Some(tunnel) = tunnel {
         state.tunnels.lock().await.insert(id, tunnel);
     }
@@ -343,6 +348,33 @@ async fn schema_introspect(
     let session = session_for(&state, &connection_id).await?;
     let schema = session.introspect().await.map_err(map_err)?;
     Ok(overlay_schema(schema, &profile))
+}
+
+#[tauri::command]
+async fn schema_sync(
+    state: State<'_, AppState>,
+    input: SchemaSyncRequest,
+) -> Result<SchemaSyncResponse, String> {
+    let profile = state
+        .storage
+        .lock()
+        .map_err(map_err)?
+        .get_connection(&input.connection_id)
+        .map_err(map_err)?
+        .ok_or_else(|| "Connection not found".to_string())?;
+    let session = session_for(&state, &input.connection_id).await?;
+    let fingerprint = session.schema_fingerprint().await.map_err(map_err)?;
+    if schema_cache_is_fresh(input.force, input.last_fingerprint.as_deref(), &fingerprint) {
+        return Ok(SchemaSyncResponse {
+            fingerprint,
+            schema: None,
+        });
+    }
+    let schema = session.introspect().await.map_err(map_err)?;
+    Ok(SchemaSyncResponse {
+        fingerprint,
+        schema: Some(overlay_schema(schema, &profile)),
+    })
 }
 
 #[tauri::command]
@@ -482,10 +514,7 @@ fn settings_get(state: State<'_, AppState>) -> Result<AppSettings, String> {
 }
 
 #[tauri::command]
-fn settings_save(
-    state: State<'_, AppState>,
-    settings: AppSettings,
-) -> Result<AppSettings, String> {
+fn settings_save(state: State<'_, AppState>, settings: AppSettings) -> Result<AppSettings, String> {
     let previous = state
         .storage
         .lock()
@@ -578,6 +607,7 @@ pub fn run() {
             folders_save,
             folders_delete,
             schema_introspect,
+            schema_sync,
             table_preview,
             query_execute,
             history_list,

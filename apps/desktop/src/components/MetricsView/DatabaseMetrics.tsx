@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 import {
   LineChart,
   Line,
@@ -9,23 +9,32 @@ import {
   PieChart,
   Pie,
   Cell,
-} from 'recharts';
-import { DatabaseSchema } from '../../types';
-import { formatSizeMb } from '../../lib/format';
-import { Activity, Server, HardDrive, Zap, Clock, ShieldAlert } from 'lucide-react';
+} from "recharts";
+import { DatabaseSchema } from "../../types";
+import { formatSizeMb } from "../../lib/format";
+import {
+  Activity,
+  Server,
+  HardDrive,
+  Zap,
+  Clock,
+  ShieldAlert,
+} from "lucide-react";
 
 interface DatabaseMetricsProps {
   database: DatabaseSchema;
 }
 
-export const DatabaseMetrics: React.FC<DatabaseMetricsProps> = ({ database }) => {
+export const DatabaseMetrics: React.FC<DatabaseMetricsProps> = ({
+  database,
+}) => {
   const qpsData = [
-    { time: '16:00', qps: 280, latency: 11 },
-    { time: '16:05', qps: 310, latency: 12 },
-    { time: '16:10', qps: 420, latency: 18 },
-    { time: '16:15', qps: 342, latency: 12 },
-    { time: '16:20', qps: 390, latency: 14 },
-    { time: '16:25', qps: 355, latency: 13 },
+    { time: "16:00", qps: 280, latency: 11 },
+    { time: "16:05", qps: 310, latency: 12 },
+    { time: "16:10", qps: 420, latency: 18 },
+    { time: "16:15", qps: 342, latency: 12 },
+    { time: "16:20", qps: 390, latency: 14 },
+    { time: "16:25", qps: 355, latency: 13 },
   ];
 
   const storageData = database.tables.map((t) => ({
@@ -33,10 +42,17 @@ export const DatabaseMetrics: React.FC<DatabaseMetricsProps> = ({ database }) =>
     value: t.sizeMb,
   }));
 
-  const COLORS = ['#6366f1', '#a855f7', '#ec4899', '#3b82f6', '#10b981', '#f59e0b'];
+  const COLORS = [
+    "#6366f1",
+    "#a855f7",
+    "#ec4899",
+    "#3b82f6",
+    "#10b981",
+    "#f59e0b",
+  ];
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-background overflow-y-auto p-6 font-sans text-foreground scrollbar-thin scrollbar-thumb-muted space-y-6 select-none">
+    <div className="flex-1 flex flex-col h-full bg-background overflow-y-auto p-6 font-sans text-foreground space-y-6 select-none">
       {/* Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
         <div>
@@ -80,7 +96,9 @@ export const DatabaseMetrics: React.FC<DatabaseMetricsProps> = ({ database }) =>
           <div className="text-2xl font-bold text-foreground">
             {database.activeConnections} / 50
           </div>
-          <div className="text-[10px] text-muted-foreground">Pool utilization: 36%</div>
+          <div className="text-[10px] text-muted-foreground">
+            Pool utilization: 36%
+          </div>
         </div>
 
         <div className="p-4 rounded-2xl bg-card border border-border space-y-1">
@@ -89,7 +107,9 @@ export const DatabaseMetrics: React.FC<DatabaseMetricsProps> = ({ database }) =>
             <Activity className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="text-2xl font-bold text-emerald-400">99.4%</div>
-          <div className="text-[10px] text-emerald-400/80">Buffer pool optimal</div>
+          <div className="text-[10px] text-emerald-400/80">
+            Buffer pool optimal
+          </div>
         </div>
 
         <div className="p-4 rounded-2xl bg-card border border-border space-y-1">
@@ -112,30 +132,39 @@ export const DatabaseMetrics: React.FC<DatabaseMetricsProps> = ({ database }) =>
         <div className="lg:col-span-2 p-4 rounded-2xl bg-card border border-border space-y-3">
           <div className="font-bold text-foreground flex items-center justify-between">
             <span>Queries Per Second & Latency Trend</span>
-            <span className="text-muted-foreground text-[10px]">Last 30 Minutes</span>
+            <span className="text-muted-foreground text-[10px]">
+              Last 30 Minutes
+            </span>
           </div>
 
           <div className="h-60 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={qpsData}>
-                <XAxis dataKey="time" stroke="var(--muted-foreground, #64748b)" />
+                <XAxis
+                  dataKey="time"
+                  stroke="var(--muted-foreground, #64748b)"
+                />
                 <YAxis stroke="var(--muted-foreground, #64748b)" />
                 <Tooltip
-                  contentStyle={{ backgroundColor: 'var(--popover, #0f172a)', borderColor: 'var(--border, #334155)', color: 'var(--popover-foreground, #fff)' }}
+                  contentStyle={{
+                    backgroundColor: "var(--popover, #0f172a)",
+                    borderColor: "var(--border, #334155)",
+                    color: "var(--popover-foreground, #fff)",
+                  }}
                 />
                 <Line
                   type="monotone"
                   dataKey="qps"
                   stroke="var(--primary, #6366f1)"
                   strokeWidth={2}
-                  dot={{ fill: 'var(--primary, #6366f1)' }}
+                  dot={{ fill: "var(--primary, #6366f1)" }}
                 />
                 <Line
                   type="monotone"
                   dataKey="latency"
                   stroke="#10b981"
                   strokeWidth={2}
-                  dot={{ fill: '#10b981' }}
+                  dot={{ fill: "#10b981" }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -144,7 +173,9 @@ export const DatabaseMetrics: React.FC<DatabaseMetricsProps> = ({ database }) =>
 
         {/* Table Storage Pie Chart */}
         <div className="p-4 rounded-2xl bg-card border border-border space-y-3">
-          <div className="font-bold text-foreground">Storage Distribution (MB)</div>
+          <div className="font-bold text-foreground">
+            Storage Distribution (MB)
+          </div>
           <div className="h-60 w-full flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -162,7 +193,11 @@ export const DatabaseMetrics: React.FC<DatabaseMetricsProps> = ({ database }) =>
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{ backgroundColor: 'var(--popover, #0f172a)', borderColor: 'var(--border, #334155)', color: 'var(--popover-foreground, #fff)' }}
+                  contentStyle={{
+                    backgroundColor: "var(--popover, #0f172a)",
+                    borderColor: "var(--border, #334155)",
+                    color: "var(--popover-foreground, #fff)",
+                  }}
                 />
               </PieChart>
             </ResponsiveContainer>

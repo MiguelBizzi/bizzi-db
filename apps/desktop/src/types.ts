@@ -25,6 +25,8 @@ export type {
   SshAuthMethod,
   SslMode,
   TablePreviewRequest,
+  SchemaSyncRequest,
+  SchemaSyncResponse,
   TableSchema,
   TabType,
   TestConnectionResult,

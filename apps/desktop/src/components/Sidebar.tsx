@@ -7,13 +7,17 @@ import {
   RefreshCw,
   Network,
   FolderTree,
-  Edit3,
 } from 'lucide-react';
 import { DatabaseSchema, TableSchema } from '../types';
 import { tableStatParts } from '../lib/format';
 import { explorerListMode } from '../lib/explorerList';
 import { Select } from './ui/Select';
+import { ContextMenu } from './ui/ContextMenu';
 import { PostgresLogo } from './icons/PostgresLogo';
+import {
+  tableManagementMenuItems,
+  type TableManagementHandlers,
+} from './tableManagementMenu';
 
 const EXPLORER_SKELETON_COUNT = 7;
 const EXPLORER_SKELETON_NAME_WIDTHS = [
@@ -44,6 +48,10 @@ interface SidebarProps {
   onOpenNewTableModal?: () => void;
   onRefreshSchemas?: () => void | Promise<void>;
   onAddTagToTable?: (tableName: string, tag: string) => void;
+  onOpenTableSql: (table: TableSchema) => void;
+  onCopyTableSchema: (table: TableSchema) => void;
+  onEmptyTable: (table: TableSchema) => void;
+  onDeleteTable: (table: TableSchema) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -55,6 +63,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenNewTableModal,
   onRefreshSchemas,
   onAddTagToTable,
+  onOpenTableSql,
+  onCopyTableSchema,
+  onEmptyTable,
+  onDeleteTable,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [refreshingSchemas, setRefreshingSchemas] = useState(false);
@@ -62,6 +74,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [selectedSchema, setSelectedSchema] = useState<string>('ALL');
   const [tagInputTable, setTagInputTable] = useState<string | null>(null);
   const [newTagText, setNewTagText] = useState('');
+  const [menu, setMenu] = useState<{ x: number; y: number; table: TableSchema } | null>(
+    null
+  );
 
   // Collect all unique tags and schemas across tables
   const allTags = Array.from(
@@ -93,6 +108,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setNewTagText('');
       setTagInputTable(null);
     }
+  };
+
+  const tableHandlers: TableManagementHandlers = {
+    onOpen: onSelectTableData,
+    onOpenSql: onOpenTableSql,
+    onEdit: onOpenSchemaDesigner,
+    onCopySchema: onCopyTableSchema,
+    onEmpty: onEmptyTable,
+    onDelete: onDeleteTable,
   };
 
   return (
@@ -191,7 +215,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Main Table Tree List */}
       <div
-        className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin scrollbar-thumb-muted"
+        className="flex-1 overflow-y-auto p-2 space-y-1"
         aria-busy={listMode === 'skeleton'}
         aria-label={listMode === 'skeleton' ? 'Loading tables and views' : undefined}
       >
@@ -216,11 +240,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
             return (
               <div
                 key={table.id}
-                className={`group relative rounded-lg border transition-all ${
+                className={`relative rounded-lg border transition-all ${
                   isActive
                     ? 'bg-primary/20 border-primary/50 text-primary font-medium'
                     : 'bg-card/40 border-sidebar-border hover:bg-accent/60 text-card-foreground'
                 }`}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setMenu({ x: event.clientX, y: event.clientY, table });
+                }}
               >
                 <div
                   onClick={() => onSelectTableData(table)}
@@ -251,20 +279,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       )}
                     </div>
                   </div>
-
-                  {/* Contextual Action Overlay */}
-                  <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenSchemaDesigner?.(table);
-                      }}
-                      title="Edit Schema Columns"
-                      className="p-1 rounded bg-muted hover:bg-accent text-amber-400"
-                    >
-                      <Edit3 className="w-3 h-3" />
-                    </button>
-                  </div>
                 </div>
               </div>
             );
@@ -288,6 +302,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span>Interactive Visual ERD</span>
         </button>
       </div>
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={tableManagementMenuItems(menu.table, tableHandlers)}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </aside>
   );
 };

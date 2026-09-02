@@ -5,7 +5,6 @@ import { AlertCircle, Table, Network } from 'lucide-react';
 import { DataExportMenu } from '../DataExport/DataExportMenu';
 import { inferQualifiedTable } from '../../lib/dataExport';
 import { queryErrorText, resultTabLabel } from '../../lib/sqlQuery';
-import { useTableScrollPort } from '../../lib/tableScroll';
 
 const SKELETON_ROWS = 8;
 const SKELETON_COLS = 5;
@@ -187,7 +186,6 @@ function SingleResultView({
   isLoading: boolean;
 }) {
   const [activeSubTab, setActiveSubTab] = useState<'grid' | 'explain'>('grid');
-  const bindTableScroll = useTableScrollPort();
 
   if (result.error && !isLoading) {
     return (
@@ -230,10 +228,7 @@ function SingleResultView({
       {isLoading ? (
         <ResultsSkeleton />
       ) : (
-        <div
-          ref={bindTableScroll}
-          className="flex-1 table-scroll-port scrollbar-thin scrollbar-thumb-muted"
-        >
+        <div className="flex-1 table-scroll-port">
           {activeSubTab === 'explain' && result.explainPlan ? (
             <div className="p-2">
               <ExplainPlanView planNode={result.explainPlan} />
@@ -258,7 +253,7 @@ function SingleResultView({
               </thead>
               <tbody className="divide-y divide-border">
                 {rows.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-accent/60 transition-colors">
+                  <tr key={idx} className="hover:bg-accent/60">
                     {columns.map((col) => {
                       const val = row[col];
                       return (

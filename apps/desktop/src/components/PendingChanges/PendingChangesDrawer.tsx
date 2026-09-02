@@ -12,6 +12,7 @@ import {
   RotateCcw,
   ArrowRight,
   Table2,
+  Eraser,
 } from 'lucide-react';
 import type { PendingModifications, TableSchema } from '../../types';
 import {
@@ -166,7 +167,7 @@ export const PendingChangesDrawer: React.FC<PendingChangesDrawerProps> = ({
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-thin scrollbar-thumb-muted">
+        <div className="flex-1 overflow-y-auto p-3 space-y-3">
           {total === 0 && (
             <div className="h-full min-h-64 flex flex-col items-center justify-center text-center px-8 gap-2">
               <ListChecks className="w-8 h-8 text-muted-foreground/50" />
@@ -302,6 +303,26 @@ export const PendingChangesDrawer: React.FC<PendingChangesDrawerProps> = ({
                   })}
                 </KindGroup>
               )}
+
+              {bundle.tableAction ? (
+                <TableActionCard
+                  tableId={bundle.tableId}
+                  action={bundle.tableAction}
+                  sql={
+                    sqlForChange(bundle, {
+                      kind: bundle.tableAction,
+                      tableId: bundle.tableId,
+                    }) || ''
+                  }
+                  mode={mode}
+                  busy={busy}
+                  applyingKey={applyingKey}
+                  armed={armed}
+                  onArmApprove={armOrRun}
+                  onApprove={onApprove}
+                  onCancel={onCancel}
+                />
+              ) : null}
             </section>
           ))}
         </div>
@@ -395,22 +416,77 @@ function ModeButton({
   );
 }
 
+function TableActionCard({
+  tableId,
+  action,
+  sql,
+  mode,
+  busy,
+  applyingKey,
+  armed,
+  onArmApprove,
+  onApprove,
+  onCancel,
+}: {
+  tableId: string;
+  action: 'truncate' | 'drop';
+  sql: string;
+  mode: ReviewMode;
+  busy: boolean;
+  applyingKey: string | null;
+  armed: string | null;
+  onArmApprove: (key: string, action: () => void) => void;
+  onApprove: (ref: PendingChangeRef) => void;
+  onCancel: (ref: PendingChangeRef) => void;
+}) {
+  const ref: PendingChangeRef = { kind: action, tableId };
+  const key = changeKey(ref);
+  return (
+    <KindGroup kind={action} label={action === 'drop' ? 'Drop table' : 'Empty table'}>
+      <ChangeCard
+        kind={action}
+        title={action === 'drop' ? 'Delete table' : 'Empty table'}
+        sql={sql}
+        mode={mode}
+        busy={busy}
+        applying={applyingKey === key}
+        armed={armed === key}
+        onArmApprove={() => onArmApprove(key, () => onApprove(ref))}
+        onCancel={() => onCancel(ref)}
+      >
+        <p className="text-[11px] text-rose-200/90">
+          {action === 'drop'
+            ? 'Permanently drop the table and all of its data.'
+            : 'Remove all rows. The table structure is kept.'}
+        </p>
+      </ChangeCard>
+    </KindGroup>
+  );
+}
+
 function KindGroup({
   kind,
   label,
   children,
 }: {
-  kind: 'insert' | 'update' | 'delete';
+  kind: 'insert' | 'update' | 'delete' | 'truncate' | 'drop';
   label: string;
   children: React.ReactNode;
 }) {
   const tone =
     kind === 'insert'
       ? 'text-emerald-400'
-      : kind === 'delete'
+      : kind === 'delete' || kind === 'truncate' || kind === 'drop'
         ? 'text-rose-400'
         : 'text-amber-400';
-  const Icon = kind === 'insert' ? Plus : kind === 'delete' ? Trash2 : Pencil;
+  const Icon =
+    kind === 'insert'
+      ? Plus
+      : kind === 'delete' || kind === 'drop'
+        ? Trash2
+        : kind === 'truncate'
+          ? Eraser
+          : Pencil;
   return (
     <div className="space-y-1.5">
       <div className={`flex items-center gap-1 px-1 text-[10px] font-bold uppercase tracking-wider font-mono ${tone}`}>
@@ -434,7 +510,7 @@ function ChangeCard({
   onCancel,
   children,
 }: {
-  kind: 'insert' | 'update' | 'delete';
+  kind: 'insert' | 'update' | 'delete' | 'truncate' | 'drop';
   title: string;
   sql: string;
   mode: ReviewMode;
@@ -445,16 +521,17 @@ function ChangeCard({
   onCancel: () => void;
   children: React.ReactNode;
 }) {
+  const destructive = kind === 'delete' || kind === 'truncate' || kind === 'drop';
   const ring =
     kind === 'insert'
       ? 'border-emerald-500/30'
-      : kind === 'delete'
+      : destructive
         ? 'border-rose-500/30'
         : 'border-amber-500/30';
   const badge =
     kind === 'insert'
       ? 'bg-emerald-500/15 text-emerald-300'
-      : kind === 'delete'
+      : destructive
         ? 'bg-rose-500/15 text-rose-300'
         : 'bg-amber-500/15 text-amber-300';
 

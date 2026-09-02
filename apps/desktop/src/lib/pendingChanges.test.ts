@@ -18,6 +18,7 @@ import {
   sqlForDelete,
   sqlForInsert,
   sqlForUpdateRow,
+  stageTableAction,
   type TablePendingBundle,
 } from './pendingChanges';
 
@@ -254,5 +255,72 @@ describe('formatCellValue', () => {
     expect(isSetColumnDefault(SET_COLUMN_DEFAULT)).toBe(true);
     expect(isSetColumnDefault(null)).toBe(false);
     expect(formatCellValue(SET_COLUMN_DEFAULT)).toBe('DEFAULT');
+  });
+});
+
+describe('tableAction pending', () => {
+  test('hasPending and countPendingChanges treat truncate/drop as one change', () => {
+    const users = table('users');
+    expect(hasPending({ ...emptyPending(), tableAction: 'truncate' })).toBe(true);
+    expect(
+      countPendingChanges({
+        [users.id]: { ...emptyPending(), tableAction: 'drop' },
+      })
+    ).toBe(1);
+    expect(
+      changeKey({ kind: 'truncate', tableId: users.id })
+    ).toBe('truncate:public.users');
+    expect(changeKey({ kind: 'drop', tableId: users.id })).toBe('drop:public.users');
+  });
+
+  test('stageTableAction clears row DML and keeps a single table action', () => {
+    const staged = stageTableAction(
+      {
+        inserts: [{ tempId: 't1', data: { a: 1 } }],
+        updates: [{ rowId: 1, primaryKeyValue: 1, columnName: 'n', oldValue: 'a', newValue: 'b' }],
+        deletes: [{ rowId: 9, primaryKeyValue: 9, rowData: {} }],
+        tableAction: null,
+      },
+      'truncate'
+    );
+    expect(staged).toEqual({
+      inserts: [],
+      updates: [],
+      deletes: [],
+      tableAction: 'truncate',
+    });
+    expect(stageTableAction(staged, 'drop').tableAction).toBe('drop');
+  });
+
+  test('flattenPending includes tableAction and sql builders quote identifiers', () => {
+    const users = table('users');
+    const [found] = flattenPending(
+      { [users.id]: { ...emptyPending(), tableAction: 'truncate' } },
+      [users]
+    );
+    expect(found.tableAction).toBe('truncate');
+    expect(
+      sqlForChange(found, { kind: 'truncate', tableId: users.id })
+    ).toBe('TRUNCATE TABLE "public"."users";');
+    expect(
+      sqlForChange(found, { kind: 'drop', tableId: users.id })
+    ).toBeNull();
+
+    const dropBundle = bundle({ tableAction: 'drop', schema: 'shop', tableName: 'we"ird' });
+    expect(sqlForChange(dropBundle, { kind: 'drop', tableId: dropBundle.tableId })).toBe(
+      'DROP TABLE "shop"."we""ird";'
+    );
+    expect(sqlForBundle(dropBundle)).toBe('DROP TABLE "shop"."we""ird";');
+  });
+
+  test('removeChange clears tableAction', () => {
+    const pending = { ...emptyPending(), tableAction: 'drop' as const };
+    expect(removeChange(pending, { kind: 'drop', tableId: 't' }).tableAction).toBeNull();
+    expect(
+      removeChange(
+        { ...emptyPending(), tableAction: 'truncate' },
+        { kind: 'truncate', tableId: 't' }
+      ).tableAction
+    ).toBeNull();
   });
 });

@@ -398,6 +398,14 @@ export function buildDropColumnSql(table: TableRef, columnName: string): string 
   return `ALTER TABLE ${qualifyTable(table.schema, table.name)} DROP COLUMN ${quoteIdent(columnName)};`;
 }
 
+export function buildTruncateTableSql(table: TableRef): string {
+  return `TRUNCATE TABLE ${qualifyTable(table.schema, table.name)};`;
+}
+
+export function buildDropTableSql(table: TableRef): string {
+  return `DROP TABLE ${qualifyTable(table.schema, table.name)};`;
+}
+
 export function canConfirmDelete(typed: string, columnName: string): boolean {
   return typed.trim() === columnName;
 }

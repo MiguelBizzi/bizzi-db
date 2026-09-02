@@ -9,6 +9,7 @@ export interface ContextMenuItem {
   hint?: string;
   icon?: ReactNode;
   disabled?: boolean;
+  danger?: boolean;
   separator?: boolean;
   submenu?: ContextMenuItem[];
   onSelect?: () => void;
@@ -25,7 +26,10 @@ const PANEL =
   'min-w-44 bg-popover border border-border rounded-xl shadow-2xl p-1.5 text-xs text-popover-foreground';
 
 const ITEM =
-  'w-full flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-lg text-left font-sans text-foreground hover:bg-accent disabled:opacity-40 disabled:pointer-events-none disabled:hover:bg-transparent';
+  'w-full flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-lg text-left font-sans hover:bg-accent disabled:opacity-40 disabled:pointer-events-none disabled:hover:bg-transparent';
+
+const ITEM_DEFAULT = 'text-foreground';
+const ITEM_DANGER = 'text-rose-400 hover:bg-rose-500/10';
 
 export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
@@ -93,6 +97,8 @@ function MenuRow({ item, onClose }: { item: ContextMenuItem; onClose: () => void
     return <div role="separator" className="h-px bg-border my-1 mx-1" />;
   }
 
+  const itemClass = `${ITEM} ${item.danger ? ITEM_DANGER : ITEM_DEFAULT}`;
+
   const body = (
     <>
       <span className="flex items-center gap-2 min-w-0">
@@ -128,7 +134,7 @@ function MenuRow({ item, onClose }: { item: ContextMenuItem; onClose: () => void
           aria-haspopup="menu"
           aria-expanded={open}
           disabled={item.disabled}
-          className={ITEM}
+          className={itemClass}
           onClick={() => {
             if (!item.disabled) setOpen((current) => !current);
           }}
@@ -156,7 +162,7 @@ function MenuRow({ item, onClose }: { item: ContextMenuItem; onClose: () => void
       type="button"
       role="menuitem"
       disabled={item.disabled}
-      className={ITEM}
+      className={itemClass}
       onClick={() => {
         if (item.disabled) return;
         item.onSelect?.();

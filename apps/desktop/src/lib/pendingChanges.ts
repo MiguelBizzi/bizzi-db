@@ -6,15 +6,18 @@ import type {
   PendingRowInsert,
   TableSchema,
 } from '../types';
+import { buildDropTableSql, buildTruncateTableSql } from './schemaChange';
 
 const quoteIdent = DIALECTS.PostgreSQL.quoteIdent;
 
-export type PendingChangeKind = 'insert' | 'update' | 'delete';
+export type PendingChangeKind = 'insert' | 'update' | 'delete' | 'truncate' | 'drop';
 
 export type PendingChangeRef =
   | { kind: 'insert'; tableId: string; tempId: string }
   | { kind: 'update'; tableId: string; rowId: string }
-  | { kind: 'delete'; tableId: string; rowId: string };
+  | { kind: 'delete'; tableId: string; rowId: string }
+  | { kind: 'truncate'; tableId: string }
+  | { kind: 'drop'; tableId: string };
 
 export interface UpdateRowChange {
   rowId: string;
@@ -30,16 +33,31 @@ export interface TablePendingBundle {
   inserts: PendingRowInsert[];
   updateRows: UpdateRowChange[];
   deletes: PendingRowDelete[];
+  tableAction?: 'truncate' | 'drop' | null;
 }
 
 export const emptyPending = (): PendingModifications => ({
   updates: [],
   inserts: [],
   deletes: [],
+  tableAction: null,
 });
+
+export function stageTableAction(
+  _pending: PendingModifications,
+  action: 'truncate' | 'drop'
+): PendingModifications {
+  return {
+    updates: [],
+    inserts: [],
+    deletes: [],
+    tableAction: action,
+  };
+}
 
 export function changeKey(ref: PendingChangeRef): string {
   if (ref.kind === 'insert') return `insert:${ref.tableId}:${ref.tempId}`;
+  if (ref.kind === 'truncate' || ref.kind === 'drop') return `${ref.kind}:${ref.tableId}`;
   return `${ref.kind}:${ref.tableId}:${ref.rowId}`;
 }
 
@@ -48,7 +66,10 @@ export function primaryKeyColumn(table?: TableSchema): string {
 }
 
 export function hasPending(mods: PendingModifications): boolean {
-  return mods.updates.length + mods.inserts.length + mods.deletes.length > 0;
+  return (
+    mods.updates.length + mods.inserts.length + mods.deletes.length > 0 ||
+    Boolean(mods.tableAction)
+  );
 }
 
 export function groupUpdateRows(updates: PendingCellUpdate[]): UpdateRowChange[] {
@@ -85,6 +106,7 @@ export function flattenPending(
       inserts: mods.inserts,
       updateRows: groupUpdateRows(mods.updates),
       deletes: mods.deletes,
+      tableAction: mods.tableAction ?? null,
     });
   }
   return bundles;
@@ -94,7 +116,13 @@ export function countPendingChanges(
   pendingByTable: Record<string, PendingModifications>
 ): number {
   return Object.values(pendingByTable).reduce((total, mods) => {
-    return total + groupUpdateRows(mods.updates).length + mods.inserts.length + mods.deletes.length;
+    return (
+      total +
+      groupUpdateRows(mods.updates).length +
+      mods.inserts.length +
+      mods.deletes.length +
+      (mods.tableAction ? 1 : 0)
+    );
   }, 0);
 }
 
@@ -173,6 +201,11 @@ export function sqlForChange(bundle: TablePendingBundle, ref: PendingChangeRef):
     const row = bundle.updateRows.find((candidate) => candidate.rowId === ref.rowId);
     return row ? sqlForUpdateRow(bundle, row) : null;
   }
+  if (ref.kind === 'truncate' || ref.kind === 'drop') {
+    if (bundle.tableAction !== ref.kind) return null;
+    const table = { schema: bundle.schema, name: bundle.tableName };
+    return ref.kind === 'truncate' ? buildTruncateTableSql(table) : buildDropTableSql(table);
+  }
   const row = bundle.deletes.find((candidate) => String(candidate.primaryKeyValue) === ref.rowId);
   return row ? sqlForDelete(bundle, row) : null;
 }
@@ -183,6 +216,11 @@ export function sqlForBundle(bundle: TablePendingBundle): string {
     ...bundle.updateRows.map((row) => sqlForUpdateRow(bundle, row)),
     ...bundle.deletes.map((row) => sqlForDelete(bundle, row)),
   ];
+  if (bundle.tableAction === 'truncate') {
+    statements.push(buildTruncateTableSql({ schema: bundle.schema, name: bundle.tableName }));
+  } else if (bundle.tableAction === 'drop') {
+    statements.push(buildDropTableSql({ schema: bundle.schema, name: bundle.tableName }));
+  }
   return statements.join('\n');
 }
 
@@ -204,6 +242,9 @@ export function removeChange(
       ...pending,
       updates: pending.updates.filter((cell) => String(cell.primaryKeyValue) !== ref.rowId),
     };
+  }
+  if (ref.kind === 'truncate' || ref.kind === 'drop') {
+    return { ...pending, tableAction: null };
   }
   return {
     ...pending,

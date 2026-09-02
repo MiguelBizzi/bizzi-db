@@ -6,7 +6,9 @@ import {
   buildAddColumnSql,
   buildAlterColumnSql,
   buildDropColumnSql,
+  buildDropTableSql,
   buildTableDdlPreview,
+  buildTruncateTableSql,
   canConfirmDelete,
   draftFromColumn,
   emptyColumnDraft,
@@ -312,5 +314,19 @@ describe('buildTableDdlPreview', () => {
     expect(ddl).toContain('"id" bigint PRIMARY KEY NOT NULL');
     expect(ddl).toContain(`"email" text NOT NULL DEFAULT ''`);
     expect(ddl).toContain('CREATE UNIQUE INDEX "users_email_idx" ON "shop"."users" USING BTREE ("email")');
+  });
+});
+
+describe('buildTruncateTableSql / buildDropTableSql', () => {
+  test('quotes schema and table identifiers without CASCADE', () => {
+    const users = table('users', [column('id')]);
+    expect(buildTruncateTableSql(users)).toBe('TRUNCATE TABLE "shop"."users";');
+    expect(buildDropTableSql(users)).toBe('DROP TABLE "shop"."users";');
+  });
+
+  test('escapes quotes inside identifiers', () => {
+    const odd = table('we"ird', [column('id')], { schema: 'sch"ema' });
+    expect(buildTruncateTableSql(odd)).toBe('TRUNCATE TABLE "sch""ema"."we""ird";');
+    expect(buildDropTableSql(odd)).toBe('DROP TABLE "sch""ema"."we""ird";');
   });
 });

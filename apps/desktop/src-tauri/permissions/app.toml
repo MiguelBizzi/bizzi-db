@@ -13,6 +13,7 @@ commands.allow = [
   "folders_save",
   "folders_delete",
   "schema_introspect",
+  "schema_sync",
   "table_preview",
   "query_execute",
   "history_list",

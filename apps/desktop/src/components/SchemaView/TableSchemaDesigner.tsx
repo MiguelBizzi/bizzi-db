@@ -1,12 +1,16 @@
-import React, { useMemo, useState } from 'react';
-import { columnTypesFor } from '@db/database';
-import type { ColumnDefinition, DatabaseDialect, TableSchema } from '../../types';
-import { Edit3, Key, Pencil, Plus, Trash2 } from 'lucide-react';
-import { tableStatParts } from '../../lib/format';
-import { buildTableDdlPreview } from '../../lib/schemaChange';
-import { AddColumnDrawer } from './AddColumnDrawer';
-import { EditColumnModal } from './EditColumnModal';
-import { DeleteColumnModal } from './DeleteColumnModal';
+import React, { useMemo, useState } from "react";
+import { columnTypesFor } from "@db/database";
+import type {
+  ColumnDefinition,
+  DatabaseDialect,
+  TableSchema,
+} from "../../types";
+import { Edit3, Key, Pencil, Plus, Trash2 } from "lucide-react";
+import { tableStatParts } from "../../lib/format";
+import { buildTableDdlPreview } from "../../lib/schemaChange";
+import { AddColumnDrawer } from "./AddColumnDrawer";
+import { EditColumnModal } from "./EditColumnModal";
+import { DeleteColumnModal } from "./DeleteColumnModal";
 
 interface TableSchemaDesignerProps {
   table: TableSchema;
@@ -19,14 +23,18 @@ interface TableSchemaDesignerProps {
 export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
   table,
   tables,
-  dialect = 'PostgreSQL',
+  dialect = "PostgreSQL",
   disabled,
   onExecute,
 }) => {
-  const [activeTab, setActiveTab] = useState<'columns' | 'indexes' | 'ddl'>('columns');
+  const [activeTab, setActiveTab] = useState<"columns" | "indexes" | "ddl">(
+    "columns",
+  );
   const [addOpen, setAddOpen] = useState(false);
   const [editColumn, setEditColumn] = useState<ColumnDefinition | null>(null);
-  const [deleteColumn, setDeleteColumn] = useState<ColumnDefinition | null>(null);
+  const [deleteColumn, setDeleteColumn] = useState<ColumnDefinition | null>(
+    null,
+  );
   const types = useMemo(() => columnTypesFor(dialect) ?? [], [dialect]);
   const readOnly = Boolean(table.isView) || disabled || types.length === 0;
   const columns = table.columns;
@@ -35,8 +43,8 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
   const tabClass = (id: typeof activeTab) =>
     `flex-1 py-2.5 px-4 font-semibold border-b-2 transition-colors ${
       activeTab === id
-        ? 'border-primary text-primary'
-        : 'border-transparent text-muted-foreground hover:text-foreground'
+        ? "border-primary text-primary"
+        : "border-transparent text-muted-foreground hover:text-foreground"
     }`;
 
   return (
@@ -50,9 +58,9 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
             </div>
             <div className="text-xs text-muted-foreground">
               {[
-                table.isView ? 'View · read-only' : `${table.schema} schema`,
+                table.isView ? "View · read-only" : `${table.schema} schema`,
                 ...tableStatParts(table),
-              ].join(' • ')}
+              ].join(" • ")}
             </div>
           </div>
         </div>
@@ -68,19 +76,31 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
       </div>
 
       <div className="flex w-full border-b border-border bg-background font-mono text-xs">
-        <button type="button" onClick={() => setActiveTab('columns')} className={tabClass('columns')}>
+        <button
+          type="button"
+          onClick={() => setActiveTab("columns")}
+          className={tabClass("columns")}
+        >
           Columns ({columns.length})
         </button>
-        <button type="button" onClick={() => setActiveTab('indexes')} className={tabClass('indexes')}>
+        <button
+          type="button"
+          onClick={() => setActiveTab("indexes")}
+          className={tabClass("indexes")}
+        >
           Indexes ({indexes.length})
         </button>
-        <button type="button" onClick={() => setActiveTab('ddl')} className={tabClass('ddl')}>
+        <button
+          type="button"
+          onClick={() => setActiveTab("ddl")}
+          className={tabClass("ddl")}
+        >
           DDL Preview
         </button>
       </div>
 
-      <div className="flex-1 overflow-auto p-4 scrollbar-thin scrollbar-thumb-muted">
-        {activeTab === 'columns' && (
+      <div className="flex-1 overflow-auto p-4">
+        {activeTab === "columns" && (
           <div className="font-mono text-xs">
             <div className="border border-border rounded-xl overflow-hidden bg-card">
               <table className="w-full text-left border-collapse">
@@ -95,10 +115,15 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
                 </thead>
                 <tbody className="divide-y divide-border">
                   {columns.map((column) => (
-                    <tr key={column.name} className="hover:bg-accent/60 transition-colors">
+                    <tr
+                      key={column.name}
+                      className="hover:bg-accent/60 transition-colors"
+                    >
                       <td className="p-3 font-bold text-foreground">
                         <span className="inline-flex items-center gap-2">
-                          {column.isPrimary && <Key className="w-3.5 h-3.5 text-amber-400" />}
+                          {column.isPrimary && (
+                            <Key className="w-3.5 h-3.5 text-amber-400" />
+                          )}
                           <span>{column.name}</span>
                         </span>
                       </td>
@@ -126,7 +151,7 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
                         )}
                       </td>
                       <td className="p-3 text-muted-foreground font-mono">
-                        {column.defaultValue || '—'}
+                        {column.defaultValue || "—"}
                       </td>
                       <td className="p-3 text-right">
                         <div className="inline-flex items-center gap-1">
@@ -160,7 +185,7 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
           </div>
         )}
 
-        {activeTab === 'indexes' && (
+        {activeTab === "indexes" && (
           <div className="font-mono text-xs">
             <div className="border border-border rounded-xl overflow-hidden bg-card">
               <table className="w-full text-left border-collapse">
@@ -174,19 +199,28 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
                 </thead>
                 <tbody className="divide-y divide-border">
                   {indexes.map((index) => (
-                    <tr key={index.name} className="hover:bg-accent/60 transition-colors">
-                      <td className="p-3 font-bold text-foreground">{index.name}</td>
-                      <td className="p-3 text-primary">{index.columns.join(', ')}</td>
-                      <td className="p-3 text-muted-foreground">{index.type}</td>
+                    <tr
+                      key={index.name}
+                      className="hover:bg-accent/60 transition-colors"
+                    >
+                      <td className="p-3 font-bold text-foreground">
+                        {index.name}
+                      </td>
+                      <td className="p-3 text-primary">
+                        {index.columns.join(", ")}
+                      </td>
+                      <td className="p-3 text-muted-foreground">
+                        {index.type}
+                      </td>
                       <td className="p-3">
                         <span
                           className={`px-1.5 py-0.5 rounded text-[10px] ${
                             index.isUnique
-                              ? 'bg-emerald-500/10 text-emerald-400'
-                              : 'bg-muted text-muted-foreground'
+                              ? "bg-emerald-500/10 text-emerald-400"
+                              : "bg-muted text-muted-foreground"
                           }`}
                         >
-                          {index.isUnique ? 'YES' : 'NO'}
+                          {index.isUnique ? "YES" : "NO"}
                         </span>
                       </td>
                     </tr>
@@ -197,7 +231,7 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
           </div>
         )}
 
-        {activeTab === 'ddl' && (
+        {activeTab === "ddl" && (
           <div className="font-mono text-xs">
             <pre className="p-4 bg-card border border-border rounded-xl text-foreground overflow-x-auto leading-relaxed">
               {buildTableDdlPreview(table)}

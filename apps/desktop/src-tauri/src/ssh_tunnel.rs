@@ -107,12 +107,7 @@ fn authenticate(session: &Session, ssh: &SshTunnelConfig) -> Result<(), String> 
             .userauth_password(&ssh.user, password)
             .map_err(|e| format!("SSH password auth failed: {e}"))?,
         SshTunnelAuth::PrivateKey { path, passphrase } => session
-            .userauth_pubkey_file(
-                &ssh.user,
-                None,
-                Path::new(path),
-                passphrase.as_deref(),
-            )
+            .userauth_pubkey_file(&ssh.user, None, Path::new(path), passphrase.as_deref())
             .map_err(|e| format!("SSH key auth failed: {e}"))?,
     }
     if !session.authenticated() {
@@ -125,9 +120,7 @@ fn pump(mut local: TcpStream, mut channel: ssh2::Channel) {
     let mut incoming = [0u8; 16 * 1024];
     let mut outgoing = [0u8; 16 * 1024];
     local.set_nodelay(true).ok();
-    local
-        .set_read_timeout(Some(Duration::from_millis(50)))
-        .ok();
+    local.set_read_timeout(Some(Duration::from_millis(50))).ok();
     loop {
         match local.read(&mut incoming) {
             Ok(0) => {

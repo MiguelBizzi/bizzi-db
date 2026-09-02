@@ -26,6 +26,10 @@ import {
   type ConnectionFormValues,
   type ConnectionModalTab,
 } from "../../lib/connectionForm";
+import {
+  applyParsedConnection,
+  parseConnectionString,
+} from "../../lib/connectionString";
 import { invokeErrorMessage } from "../../lib/invokeError";
 
 interface ConnectionModalProps {
@@ -96,6 +100,8 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   const isEdit = Boolean(editingProfile);
   const copy = connectionModalCopy(isEdit);
   const [form, setForm] = useState<ConnectionFormValues>(defaultConnectionForm);
+  const [connectionString, setConnectionString] = useState("");
+  const [parseError, setParseError] = useState<string | null>(null);
   const [tab, setTab] = useState<ConnectionModalTab>("connection");
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -109,6 +115,8 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     setForm(formFromOpenState(editingProfile, defaultFolderId));
+    setConnectionString("");
+    setParseError(null);
     setTab("connection");
     setTouched({});
     setAttempted(false);
@@ -138,6 +146,21 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
     setTouched((current) => ({ ...current, [field]: true }));
   const patchForm = (patch: Partial<ConnectionFormValues>) =>
     setForm((current) => ({ ...current, ...patch }));
+
+  const handleConnectionStringChange = (raw: string) => {
+    setConnectionString(raw);
+    const result = parseConnectionString(raw);
+    if (!result.ok) {
+      setParseError(result.error);
+      return;
+    }
+    if (result.empty) {
+      setParseError(null);
+      return;
+    }
+    setParseError(null);
+    setForm((current) => applyParsedConnection(current, result.value));
+  };
 
   if (!isOpen) return null;
 
@@ -242,6 +265,35 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
           <div className="p-5 space-y-4 overflow-y-auto max-h-[min(70vh,32rem)]">
             {tab === "connection" && (
               <>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                    Connection string
+                  </label>
+                  <textarea
+                    value={connectionString}
+                    onChange={(e) => handleConnectionStringChange(e.target.value)}
+                    placeholder="Paste your connection string here..."
+                    rows={3}
+                    aria-invalid={Boolean(parseError)}
+                    className={`min-h-18 w-full px-3 py-2 bg-background border rounded-xl text-foreground font-mono text-xs resize-y focus:outline-none ${
+                      parseError
+                        ? "border-destructive focus:border-destructive"
+                        : "border-border focus:border-primary"
+                    }`}
+                  />
+                  {parseError && (
+                    <p className="text-[10px] text-destructive">{parseError}</p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="h-px flex-1 bg-border" />
+                  <span className="text-[10px] font-bold uppercase text-muted-foreground shrink-0">
+                    or fill in manually
+                  </span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold uppercase text-muted-foreground">
                     Database Engine

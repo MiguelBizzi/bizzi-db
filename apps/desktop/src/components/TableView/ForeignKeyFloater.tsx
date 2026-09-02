@@ -1,9 +1,12 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { ArrowRight, Key, Link, Loader2, X } from 'lucide-react';
-import type { TableSchema } from '../../types';
-import { formatCellValue } from '../../lib/pendingChanges';
-import { columnsForForeignRow, floaterPosition } from '../../lib/foreignKeyLookup';
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ArrowRight, Key, Link, Loader2, X } from "lucide-react";
+import type { TableSchema } from "../../types";
+import { formatCellValue } from "../../lib/pendingChanges";
+import {
+  columnsForForeignRow,
+  floaterPosition,
+} from "../../lib/foreignKeyLookup";
 
 const FLOATER_WIDTH = 320;
 
@@ -37,8 +40,8 @@ export const ForeignKeyFloater: React.FC<ForeignKeyFloaterProps> = ({
     floaterPosition(
       anchor,
       { width: FLOATER_WIDTH, height: 220 },
-      { width: window.innerWidth, height: window.innerHeight }
-    )
+      { width: window.innerWidth, height: window.innerHeight },
+    ),
   );
 
   useLayoutEffect(() => {
@@ -49,8 +52,8 @@ export const ForeignKeyFloater: React.FC<ForeignKeyFloaterProps> = ({
       floaterPosition(
         anchor,
         { width: rect.width, height: rect.height },
-        { width: window.innerWidth, height: window.innerHeight }
-      )
+        { width: window.innerWidth, height: window.innerHeight },
+      ),
     );
   }, [anchor, loading, error, row, table]);
 
@@ -59,7 +62,7 @@ export const ForeignKeyFloater: React.FC<ForeignKeyFloaterProps> = ({
       if (!panelRef.current?.contains(event.target as Node)) onClose();
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         event.stopPropagation();
         onClose();
       }
@@ -68,15 +71,15 @@ export const ForeignKeyFloater: React.FC<ForeignKeyFloaterProps> = ({
       if (panelRef.current?.contains(event.target as Node)) return;
       onClose();
     };
-    document.addEventListener('mousedown', onPointer);
-    document.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', onClose);
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onClose);
     return () => {
-      document.removeEventListener('mousedown', onPointer);
-      document.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', onClose);
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onClose);
     };
   }, [onClose]);
 
@@ -87,7 +90,9 @@ export const ForeignKeyFloater: React.FC<ForeignKeyFloaterProps> = ({
     : targetTableName;
   const columns = columnsForForeignRow(table, targetColumn, row);
   const pkNames = new Set(
-    table?.columns.filter((column) => column.isPrimary).map((column) => column.name) ?? []
+    table?.columns
+      .filter((column) => column.isPrimary)
+      .map((column) => column.name) ?? [],
   );
 
   return createPortal(
@@ -120,14 +125,16 @@ export const ForeignKeyFloater: React.FC<ForeignKeyFloaterProps> = ({
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin scrollbar-thumb-muted">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {loading ? (
           <div className="px-3 py-8 flex items-center justify-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
             Loading referenced row…
           </div>
         ) : error ? (
-          <div className="px-3 py-4 text-xs text-rose-400 font-mono leading-relaxed">{error}</div>
+          <div className="px-3 py-4 text-xs text-rose-400 font-mono leading-relaxed">
+            {error}
+          </div>
         ) : !row ? (
           <div className="px-3 py-8 text-center text-xs text-muted-foreground">
             No matching row in {qualified}.
@@ -143,7 +150,9 @@ export const ForeignKeyFloater: React.FC<ForeignKeyFloaterProps> = ({
                   className="grid grid-cols-[7.5rem_1fr] gap-2 px-3 py-1.5 items-start"
                 >
                   <dt className="flex items-center gap-1 min-w-0 text-[10px] font-mono text-muted-foreground">
-                    {isPk && <Key className="w-3 h-3 text-amber-400 shrink-0" />}
+                    {isPk && (
+                      <Key className="w-3 h-3 text-amber-400 shrink-0" />
+                    )}
                     <span className="truncate" title={name}>
                       {name}
                     </span>
@@ -178,6 +187,6 @@ export const ForeignKeyFloater: React.FC<ForeignKeyFloaterProps> = ({
         </div>
       )}
     </div>,
-    document.body
+    document.body,
   );
 };

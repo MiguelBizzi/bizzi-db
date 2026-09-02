@@ -6,6 +6,7 @@ import { TableDataGrid } from './components/TableView/TableDataGrid';
 import { SqlEditorTab } from './components/SqlEditor/SqlEditorTab';
 import { InteractiveErd } from './components/SchemaView/InteractiveErd';
 import { TableSchemaDesigner } from './components/SchemaView/TableSchemaDesigner';
+import { ConfirmTableActionModal } from './components/SchemaView/ConfirmTableActionModal';
 import { DatabaseMetrics } from './components/MetricsView/DatabaseMetrics';
 import { CommandPalette } from './components/CommandPalette';
 import { ActivityLogDrawer } from './components/ActivityLog/ActivityLogDrawer';
@@ -41,7 +42,7 @@ import {
   foldersSave,
   historyList,
   queryExecute,
-  schemaIntrospect,
+  schemaSync,
   settingsGet,
   settingsSave,
   sshPickPrivateKey,
@@ -67,6 +68,7 @@ import {
   removeChange,
   sqlForAll,
   sqlForChange,
+  stageTableAction,
   type PendingChangeRef,
 } from './lib/pendingChanges';
 import {
@@ -83,6 +85,7 @@ import {
   setPaneActiveTab,
   singlePane,
   splitPane,
+  tabPaneId,
   type LayoutNode,
   type SplitDirection,
   type SplitSide,
@@ -96,8 +99,14 @@ import {
 } from './lib/tabPaneActions';
 import { defaultQuerySql, nextUntitledQueryTitle } from './lib/sqlQuery';
 import { refreshConnectionSchemas } from './lib/refreshSchemas';
+import {
+  createSchemaSyncQueue,
+  mergeExplorerTags,
+  SCHEMA_CHECK_INTERVAL_MS,
+} from './lib/schemaSync';
 import { shouldConnectAfterSave } from './lib/connectionForm';
 import { toast } from './lib/toast';
+import { buildTableDdlPreview } from './lib/schemaChange';
 
 const ROOT_PANE_ID = 'pane_root';
 
@@ -132,12 +141,20 @@ export default function App() {
   const [applyingAllChanges, setApplyingAllChanges] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const [pendingError, setPendingError] = useState<string | null>(null);
+  const [tableActionConfirm, setTableActionConfirm] = useState<{
+    table: TableSchema;
+    action: 'truncate' | 'drop';
+  } | null>(null);
 
   const skipWorkspaceSave = useRef(true);
   const workspaceRef = useRef<WorkspaceState | null>(null);
   const tableFetchRef = useRef<Record<string, { limit: number; offset: number }>>({});
   const tableLoadInflight = useRef<Record<string, number>>({});
+  const fingerprintByConnection = useRef<Record<string, string>>({});
+  const currentDbIdRef = useRef<string | null>(null);
   const [tableLoading, setTableLoading] = useState<Record<string, boolean>>({});
+
+  currentDbIdRef.current = currentDbId;
 
   const currentDatabase = currentDbId
     ? databases.find((d) => d.id === currentDbId) || null
@@ -200,14 +217,57 @@ export default function App() {
     }
   }, []);
 
-  const loadSchema = useCallback(async (connectionId: string) => {
-    const schema = await schemaIntrospect(connectionId);
+  const applySyncedSchema = useCallback((schema: DatabaseSchema) => {
     setDatabases((prev) => {
-      const rest = prev.filter((d) => d.id !== schema.id);
-      return [...rest, schema];
+      const previous = prev.find((d) => d.id === schema.id);
+      const merged = mergeExplorerTags(previous, schema);
+      return [...prev.filter((d) => d.id !== schema.id), merged];
     });
-    return schema;
   }, []);
+
+  const loadSchema = useCallback(
+    async (connectionId: string) => {
+      const result = await schemaSync({
+        connectionId,
+        lastFingerprint: fingerprintByConnection.current[connectionId] ?? null,
+        force: true,
+      });
+      fingerprintByConnection.current[connectionId] = result.fingerprint;
+      if (!result.schema) {
+        throw new Error('Schema refresh returned no schema');
+      }
+      applySyncedSchema(result.schema);
+      return result.schema;
+    },
+    [applySyncedSchema]
+  );
+
+  const checkSchemaFreshness = useCallback(
+    async (connectionId: string) => {
+      const result = await schemaSync({
+        connectionId,
+        lastFingerprint: fingerprintByConnection.current[connectionId] ?? null,
+        force: false,
+      });
+      fingerprintByConnection.current[connectionId] = result.fingerprint;
+      if (result.schema) applySyncedSchema(result.schema);
+    },
+    [applySyncedSchema]
+  );
+
+  const enqueueSchemaCheck = useMemo(
+    () =>
+      createSchemaSyncQueue(async () => {
+        const id = currentDbIdRef.current;
+        if (!id) return;
+        try {
+          await checkSchemaFreshness(id);
+        } catch {
+          /* background freshness is best-effort */
+        }
+      }),
+    [checkSchemaFreshness]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -259,6 +319,23 @@ export default function App() {
     }, 400);
     return () => window.clearTimeout(handle);
   }, [bootstrapped, tabs, activeTabId, currentDbId, layout, focusedPaneId]);
+
+  useEffect(() => {
+    if (!currentDbId) return;
+    const run = () => {
+      if (document.visibilityState !== 'visible') return;
+      void enqueueSchemaCheck();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') run();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    const timer = window.setInterval(run, SCHEMA_CHECK_INTERVAL_MS);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.clearInterval(timer);
+    };
+  }, [currentDbId, enqueueSchemaCheck]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -371,6 +448,7 @@ export default function App() {
         databaseId: currentDatabase?.id,
       })
     );
+    void enqueueSchemaCheck();
   };
 
   const handleSelectTableSchema = (table: TableSchema) => {
@@ -385,6 +463,7 @@ export default function App() {
         databaseId: currentDatabase?.id,
       })
     );
+    void enqueueSchemaCheck();
   };
 
   const handleOpenNewQueryTab = (
@@ -405,6 +484,28 @@ export default function App() {
     });
   };
 
+  const handleOpenTableSql = (table: TableSchema) => {
+    handleOpenNewQueryTab(defaultQuerySql(table), activePaneId, `Query · ${table.name}`);
+  };
+
+  const handleCopyTableSchema = (table: TableSchema) => {
+    void navigator.clipboard
+      .writeText(buildTableDdlPreview(table))
+      .then(() => toast.success('Table schema copied'))
+      .catch(() => toast.error('Could not copy to clipboard'));
+  };
+
+  const handleConfirmTableAction = () => {
+    if (!tableActionConfirm) return;
+    const { table, action } = tableActionConfirm;
+    setPendingByTable((prev) => ({
+      ...prev,
+      [table.id]: stageTableAction(prev[table.id] || emptyPending(), action),
+    }));
+    setTableActionConfirm(null);
+    openPendingChanges();
+  };
+
   const syncFocus = (nextLayout: LayoutNode, preferredPaneId: string) => {
     setLayout(nextLayout);
     setFocusedPaneId(resolveFocusedPaneId(nextLayout, preferredPaneId));
@@ -415,6 +516,28 @@ export default function App() {
     setTabs((prev) => prev.filter((tab) => tab.id !== tabId));
     syncFocus(removeTabFromPane(layout, paneId, tabId), paneId);
   };
+
+  const closeTabsForTables = (tableIds: string[]) => {
+    const drop = new Set(tableIds);
+    const closeIds = tabs
+      .filter(
+        (tab) =>
+          Boolean(tab.tableId && drop.has(tab.tableId)) &&
+          (tab.type === 'table_data' || tab.type === 'schema_designer')
+      )
+      .map((tab) => tab.id);
+    if (closeIds.length === 0) return;
+    const closeSet = new Set(closeIds);
+    let nextLayout = layout;
+    for (const tabId of closeIds) {
+      const paneId = tabPaneId(nextLayout, tabId);
+      if (paneId) nextLayout = removeTabFromPane(nextLayout, paneId, tabId);
+    }
+    setTabs((prev) => prev.filter((tab) => !closeSet.has(tab.id)));
+    syncFocus(nextLayout, focusedPaneId);
+  };
+
+  const closeTabsForTable = (tableId: string) => closeTabsForTables([tableId]);
 
   const handleCloseTabs = (paneId: string, tabId: string, kind: CloseTabKind) => {
     const pane = paneById(layout, paneId);
@@ -567,7 +690,12 @@ export default function App() {
         }
         return { ...prev, [ref.tableId]: nextMods };
       });
-      if (bundle.table) await refreshTableRows(bundle.table);
+      if (ref.kind === 'drop') {
+        closeTabsForTable(ref.tableId);
+        await loadSchema(currentDatabase.id);
+      } else if (bundle.table) {
+        await refreshTableRows(bundle.table);
+      }
       await refreshHistory();
       setPendingStatus('Change applied');
     } catch (e: unknown) {
@@ -595,10 +723,17 @@ export default function App() {
         setPendingError(result.error);
         return;
       }
+      const droppedIds = bundles
+        .filter((bundle) => bundle.tableAction === 'drop')
+        .map((bundle) => bundle.tableId);
       setPendingByTable({});
+      if (droppedIds.length > 0) {
+        closeTabsForTables(droppedIds);
+        await loadSchema(currentDatabase.id);
+      }
       await Promise.all(
         bundles
-          .filter((bundle) => bundle.table)
+          .filter((bundle) => bundle.table && bundle.tableAction !== 'drop')
           .map((bundle) => refreshTableRows(bundle.table as TableSchema))
       );
       await refreshHistory();
@@ -621,6 +756,7 @@ export default function App() {
         databaseId: currentDatabase?.id,
       })
     );
+    void enqueueSchemaCheck();
   };
 
   const openMetrics = () => {
@@ -683,6 +819,7 @@ export default function App() {
       currentConnectionId: currentDbId,
     };
     if (currentDbId) {
+      delete fingerprintByConnection.current[currentDbId];
       await connectionsDisconnect(currentDbId).catch(() => undefined);
     }
     setCurrentDbId(null);
@@ -694,6 +831,7 @@ export default function App() {
       await connectionsDelete(id);
       setProfiles((prev) => prev.filter((p) => p.id !== id));
       setDatabases((prev) => prev.filter((d) => d.id !== id));
+      delete fingerprintByConnection.current[id];
       if (currentDbId === id) {
         setCurrentDbId(null);
       }
@@ -876,6 +1014,7 @@ export default function App() {
                 sql,
               });
               await refreshHistory();
+              void enqueueSchemaCheck();
               return res.results;
             }}
             onBookmarkQuery={async (title, sql, description, tags) => {
@@ -929,6 +1068,11 @@ export default function App() {
               await refreshHistory();
               return {};
             }}
+            onOpenTableData={handleSelectTableData}
+            onOpenTableSql={handleOpenTableSql}
+            onCopyTableSchema={handleCopyTableSchema}
+            onEmptyTable={(target) => setTableActionConfirm({ table: target, action: 'truncate' })}
+            onDeleteTable={(target) => setTableActionConfirm({ table: target, action: 'drop' })}
           />
         );
       }
@@ -1002,6 +1146,10 @@ export default function App() {
               onSelectTableData={handleSelectTableData}
               onOpenErd={openErd}
               onOpenSchemaDesigner={handleSelectTableSchema}
+              onOpenTableSql={handleOpenTableSql}
+              onCopyTableSchema={handleCopyTableSchema}
+              onEmptyTable={(table) => setTableActionConfirm({ table, action: 'truncate' })}
+              onDeleteTable={(table) => setTableActionConfirm({ table, action: 'drop' })}
               onOpenNewTableModal={() => {
                 openTabInPane(activePaneId, {
                   id: 'tab_schema_new_' + Date.now(),
@@ -1079,6 +1227,13 @@ export default function App() {
         logs={activityLogs}
         isOpen={isActivityLogOpen}
         onClose={() => setIsActivityLogOpen(false)}
+      />
+
+      <ConfirmTableActionModal
+        table={tableActionConfirm?.table ?? null}
+        action={tableActionConfirm?.action ?? null}
+        onClose={() => setTableActionConfirm(null)}
+        onConfirm={handleConfirmTableAction}
       />
 
       <PendingChangesDrawer

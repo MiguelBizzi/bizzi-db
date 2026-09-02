@@ -36,7 +36,6 @@ import {
 } from "../../lib/foreignKeyLookup";
 import { createDefaultFilter, applyTableView } from "../../lib/tableFilters";
 import { shortColumnType } from "../../lib/columnTypeDisplay";
-import { useTableScrollPort } from "../../lib/tableScroll";
 import {
   canSetDefault,
   canSetEmpty,
@@ -130,7 +129,6 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   onLookup,
   onOpenTable,
 }) => {
-  const bindTableScroll = useTableScrollPort();
   const [searchInput, setSearchInput] = useState("");
   const searchTerm = useDebouncedValue(searchInput);
   const [filters, setFilters] = useState<FilterClause[]>([]);
@@ -173,9 +171,11 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
 
   useEffect(() => {
     let cancelled = false;
-    void onLoadRowsRef.current(pageSize, (safePage - 1) * pageSize).finally(() => {
-      if (!cancelled) setPendingLoad(false);
-    });
+    void onLoadRowsRef
+      .current(pageSize, (safePage - 1) * pageSize)
+      .finally(() => {
+        if (!cancelled) setPendingLoad(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -207,8 +207,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
       ? filteredRows.filter((row) => selectedRowPks.includes(row[pkCol]))
       : filteredRows;
 
-  const rangeStart =
-    table.rowCount === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const rangeStart = table.rowCount === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const rangeEnd = Math.min(safePage * pageSize, table.rowCount);
 
   const handleRefresh = async () => {
@@ -277,7 +276,11 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     );
   };
 
-  const applyCellFilter = (columnName: string, op: CellFilterOp, value: unknown) => {
+  const applyCellFilter = (
+    columnName: string,
+    op: CellFilterOp,
+    value: unknown,
+  ) => {
     setFilters((prev) => [...prev, filterFromCell(columnName, op, value)]);
     setShowFilters(true);
   };
@@ -303,7 +306,10 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     });
   };
 
-  const openHeaderMenu = (event: React.MouseEvent, column: ColumnDefinition) => {
+  const openHeaderMenu = (
+    event: React.MouseEvent,
+    column: ColumnDefinition,
+  ) => {
     event.preventDefault();
     event.stopPropagation();
     setContextMenu({
@@ -317,7 +323,8 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   const contextMenuItems: ContextMenuItem[] = contextMenu
     ? contextMenu.kind === "header"
       ? headerMenuItems({
-          onSort: (direction) => setSort({ column: contextMenu.column.name, direction }),
+          onSort: (direction) =>
+            setSort({ column: contextMenu.column.name, direction }),
           onHide: () =>
             setHiddenColumns((prev) =>
               prev.includes(contextMenu.column.name)
@@ -455,8 +462,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
 
       {/* Spreadsheet Grid Canvas */}
       <div
-        ref={bindTableScroll}
-        className="flex-1 table-scroll-port scrollbar-thin scrollbar-thumb-muted"
+        className="flex-1 table-scroll-port"
         aria-busy={loading}
         aria-live="polite"
       >
@@ -480,7 +486,8 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
                   <th
                     key={col.name}
                     onClick={(event) => {
-                      if (event.ctrlKey || event.metaKey || event.button !== 0) return;
+                      if (event.ctrlKey || event.metaKey || event.button !== 0)
+                        return;
                       handleSortToggle(col.name);
                     }}
                     onContextMenu={(event) => openHeaderMenu(event, col)}
@@ -526,235 +533,251 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
               <TableSkeletonRows columns={visibleColumns} />
             ) : (
               <>
-            {filteredRows.map((row, idx) => {
-              const rowPkVal = row[pkCol];
-              const isSelected = selectedRowPks.includes(rowPkVal);
-              const isPendingDelete = pendingModifications.deletes.some(
-                (d) => String(d.primaryKeyValue) === String(rowPkVal),
-              );
+                {filteredRows.map((row, idx) => {
+                  const rowPkVal = row[pkCol];
+                  const isSelected = selectedRowPks.includes(rowPkVal);
+                  const isPendingDelete = pendingModifications.deletes.some(
+                    (d) => String(d.primaryKeyValue) === String(rowPkVal),
+                  );
 
-              return (
-                <tr
-                  key={rowPkVal ?? idx}
-                  className={`hover:bg-accent/50 transition-colors ${
-                    isPendingDelete
-                      ? "bg-rose-500/10"
-                      : isSelected
-                        ? "bg-primary/10"
-                        : ""
-                  }`}
-                >
-                  {/* Select Checkbox */}
-                  <td className="px-3 py-2 text-center border-r border-border">
-                    <Checkbox
-                      checked={isSelected}
-                      onCheckedChange={() => handleToggleRowSelect(rowPkVal)}
-                      aria-label="Select row"
-                    />
-                  </td>
-
-                  {/* Cells */}
-                  {visibleColumns.map((col) => {
-                    const rawVal = row[col.name];
-                    const pendingUpd = getCellPendingUpdate(rowPkVal, col.name);
-                    const isPending = !!pendingUpd;
-                    const displayVal = isPending ? pendingUpd.newValue : rawVal;
-
-                    const isEditing =
-                      editingCell?.rowPk === rowPkVal &&
-                      editingCell?.column === col.name;
-
-                    const isJson =
-                      typeof displayVal === "object" &&
-                      displayVal !== null &&
-                      !isSetColumnDefault(displayVal);
-                    const fk = col.foreignKey;
-
-                    return (
-                      <td
-                        key={col.name}
-                        onContextMenu={(event) =>
-                          openCellMenu(event, {
-                            column: col,
-                            rowPk: rowPkVal,
-                            rawValue: rawVal,
-                            displayValue: displayVal,
-                            row,
-                            isPendingDelete,
-                          })
-                        }
-                        onDoubleClick={() => {
-                          if (isPendingDelete) return;
-                          if (isJson) {
-                            setJsonModalState({
-                              isOpen: true,
-                              columnName: col.name,
-                              rowPk: rowPkVal,
-                              value: displayVal,
-                            });
-                          } else {
-                            setEditingCell({
-                              rowPk: rowPkVal,
-                              column: col.name,
-                              value: isSetColumnDefault(displayVal)
-                                ? ""
-                                : String(displayVal ?? ""),
-                            });
+                  return (
+                    <tr
+                      key={rowPkVal ?? idx}
+                      className={`hover:bg-accent/50 transition-colors ${
+                        isPendingDelete
+                          ? "bg-rose-500/10"
+                          : isSelected
+                            ? "bg-primary/10"
+                            : ""
+                      }`}
+                    >
+                      {/* Select Checkbox */}
+                      <td className="px-3 py-2 text-center border-r border-border">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() =>
+                            handleToggleRowSelect(rowPkVal)
                           }
-                        }}
-                        className={`border-r border-border whitespace-nowrap font-mono relative transition-colors ${
-                          isEditing ? "p-0 overflow-hidden" : "px-3 py-2"
-                        } ${
-                          isPendingDelete
-                            ? "text-rose-300/80 line-through"
-                            : isPending
-                              ? "bg-amber-500/10 text-amber-200 font-semibold"
-                              : "text-foreground"
-                        }`}
-                      >
-                        {/* Cell Contents */}
-                        {isEditing ? (
-                          <>
-                            <span className="invisible px-3 py-2 pointer-events-none">
-                              {editingCell.value || " "}
-                            </span>
-                            <input
-                              type="text"
-                              autoFocus
-                              value={editingCell.value}
-                              onChange={(e) =>
-                                setEditingCell({
-                                  ...editingCell,
-                                  value: e.target.value,
-                                })
-                              }
-                              onBlur={() =>
-                                handleCellEditSubmit(
-                                  rowPkVal,
-                                  col.name,
-                                  rawVal,
-                                  editingCell.value,
-                                )
-                              }
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  handleCellEditSubmit(
-                                    rowPkVal,
-                                    col.name,
-                                    rawVal,
-                                    editingCell.value,
-                                  );
-                                } else if (e.key === "Escape") {
-                                  setEditingCell(null);
-                                }
-                              }}
-                              className="absolute inset-0 box-border w-full h-full bg-background border-2 border-primary rounded-none px-3 py-2 text-xs text-foreground outline-none z-10"
-                            />
-                          </>
-                        ) : isJson ? (
-                          <button
-                            onClick={() =>
-                              setJsonModalState({
-                                isOpen: true,
-                                columnName: col.name,
+                          aria-label="Select row"
+                        />
+                      </td>
+
+                      {/* Cells */}
+                      {visibleColumns.map((col) => {
+                        const rawVal = row[col.name];
+                        const pendingUpd = getCellPendingUpdate(
+                          rowPkVal,
+                          col.name,
+                        );
+                        const isPending = !!pendingUpd;
+                        const displayVal = isPending
+                          ? pendingUpd.newValue
+                          : rawVal;
+
+                        const isEditing =
+                          editingCell?.rowPk === rowPkVal &&
+                          editingCell?.column === col.name;
+
+                        const isJson =
+                          typeof displayVal === "object" &&
+                          displayVal !== null &&
+                          !isSetColumnDefault(displayVal);
+                        const fk = col.foreignKey;
+
+                        return (
+                          <td
+                            key={col.name}
+                            onContextMenu={(event) =>
+                              openCellMenu(event, {
+                                column: col,
                                 rowPk: rowPkVal,
-                                value: displayVal,
+                                rawValue: rawVal,
+                                displayValue: displayVal,
+                                row,
+                                isPendingDelete,
                               })
                             }
-                            className="flex items-center gap-1 px-2 py-0.5 rounded bg-muted hover:bg-accent text-primary text-[11px] font-mono border border-border"
+                            onDoubleClick={() => {
+                              if (isPendingDelete) return;
+                              if (isJson) {
+                                setJsonModalState({
+                                  isOpen: true,
+                                  columnName: col.name,
+                                  rowPk: rowPkVal,
+                                  value: displayVal,
+                                });
+                              } else {
+                                setEditingCell({
+                                  rowPk: rowPkVal,
+                                  column: col.name,
+                                  value: isSetColumnDefault(displayVal)
+                                    ? ""
+                                    : String(displayVal ?? ""),
+                                });
+                              }
+                            }}
+                            className={`border-r border-border whitespace-nowrap font-mono relative transition-colors ${
+                              isEditing ? "p-0 overflow-hidden" : "px-3 py-2"
+                            } ${
+                              isPendingDelete
+                                ? "text-rose-300/80 line-through"
+                                : isPending
+                                  ? "bg-amber-500/10 text-amber-200 font-semibold"
+                                  : "text-foreground"
+                            }`}
                           >
-                            <Code className="w-3 h-3 text-primary" />
-                            <span>
-                              {JSON.stringify(displayVal).slice(0, 24)}...
-                            </span>
-                          </button>
-                        ) : displayVal === null || displayVal === undefined ? (
+                            {/* Cell Contents */}
+                            {isEditing ? (
+                              <>
+                                <span className="invisible px-3 py-2 pointer-events-none">
+                                  {editingCell.value || " "}
+                                </span>
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  value={editingCell.value}
+                                  onChange={(e) =>
+                                    setEditingCell({
+                                      ...editingCell,
+                                      value: e.target.value,
+                                    })
+                                  }
+                                  onBlur={() =>
+                                    handleCellEditSubmit(
+                                      rowPkVal,
+                                      col.name,
+                                      rawVal,
+                                      editingCell.value,
+                                    )
+                                  }
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      handleCellEditSubmit(
+                                        rowPkVal,
+                                        col.name,
+                                        rawVal,
+                                        editingCell.value,
+                                      );
+                                    } else if (e.key === "Escape") {
+                                      setEditingCell(null);
+                                    }
+                                  }}
+                                  className="absolute inset-0 box-border w-full h-full bg-background border-2 border-primary rounded-none px-3 py-2 text-xs text-foreground outline-none z-10"
+                                />
+                              </>
+                            ) : isJson ? (
+                              <button
+                                onClick={() =>
+                                  setJsonModalState({
+                                    isOpen: true,
+                                    columnName: col.name,
+                                    rowPk: rowPkVal,
+                                    value: displayVal,
+                                  })
+                                }
+                                className="flex items-center gap-1 px-2 py-0.5 rounded bg-muted hover:bg-accent text-primary text-[11px] font-mono border border-border"
+                              >
+                                <Code className="w-3 h-3 text-primary" />
+                                <span>
+                                  {JSON.stringify(displayVal).slice(0, 24)}...
+                                </span>
+                              </button>
+                            ) : displayVal === null ||
+                              displayVal === undefined ? (
+                              <span className="text-muted-foreground italic">
+                                NULL
+                              </span>
+                            ) : isSetColumnDefault(displayVal) ? (
+                              <span className="text-muted-foreground italic">
+                                DEFAULT
+                              </span>
+                            ) : typeof displayVal === "boolean" ? (
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                  displayVal
+                                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                                    : "bg-rose-500/10 text-rose-400 border border-rose-500/30"
+                                }`}
+                              >
+                                {displayVal ? "TRUE" : "FALSE"}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5">
+                                <span>{String(displayVal)}</span>
+                                {fk && (
+                                  <button
+                                    type="button"
+                                    title={`View ${fk.targetTable}.${fk.targetColumn}`}
+                                    aria-label={`Look up ${fk.targetTable} row`}
+                                    onClick={(event) =>
+                                      void handleOpenForeignKey(
+                                        event,
+                                        fk,
+                                        displayVal,
+                                      )
+                                    }
+                                    onDoubleClick={(event) =>
+                                      event.stopPropagation()
+                                    }
+                                    className="p-0.5 rounded hover:bg-primary/15 text-primary shrink-0"
+                                  >
+                                    <ExternalLink className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </span>
+                            )}
+
+                            {/* Pending Edit Badge indicator */}
+                            {isPending && (
+                              <span
+                                title={`Original: ${pendingUpd.oldValue}`}
+                                className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-400"
+                              />
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+
+                {pendingModifications.inserts.map((insert) => (
+                  <tr key={insert.tempId} className="bg-emerald-500/10">
+                    <td className="px-3 py-2 text-center border-r border-border">
+                      <span className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">
+                        <Plus className="w-3 h-3" />
+                        New
+                      </span>
+                    </td>
+                    {visibleColumns.map((col) => (
+                      <td
+                        key={col.name}
+                        className="px-3 py-2 border-r border-border whitespace-nowrap font-mono text-emerald-200"
+                      >
+                        {insert.data[col.name] === null ||
+                        insert.data[col.name] === undefined ? (
                           <span className="text-muted-foreground italic">
                             NULL
                           </span>
-                        ) : isSetColumnDefault(displayVal) ? (
-                          <span className="text-muted-foreground italic">
-                            DEFAULT
-                          </span>
-                        ) : typeof displayVal === "boolean" ? (
-                          <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                              displayVal
-                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                                : "bg-rose-500/10 text-rose-400 border border-rose-500/30"
-                            }`}
-                          >
-                            {displayVal ? "TRUE" : "FALSE"}
-                          </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5">
-                            <span>{String(displayVal)}</span>
-                            {fk && (
-                              <button
-                                type="button"
-                                title={`View ${fk.targetTable}.${fk.targetColumn}`}
-                                aria-label={`Look up ${fk.targetTable} row`}
-                                onClick={(event) =>
-                                  void handleOpenForeignKey(event, fk, displayVal)
-                                }
-                                onDoubleClick={(event) => event.stopPropagation()}
-                                className="p-0.5 rounded hover:bg-primary/15 text-primary shrink-0"
-                              >
-                                <ExternalLink className="w-3 h-3" />
-                              </button>
-                            )}
-                          </span>
-                        )}
-
-                        {/* Pending Edit Badge indicator */}
-                        {isPending && (
-                          <span
-                            title={`Original: ${pendingUpd.oldValue}`}
-                            className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-400"
-                          />
+                          formatCellValue(insert.data[col.name])
                         )}
                       </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-
-            {pendingModifications.inserts.map((insert) => (
-              <tr key={insert.tempId} className="bg-emerald-500/10">
-                <td className="px-3 py-2 text-center border-r border-border">
-                  <span className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">
-                    <Plus className="w-3 h-3" />
-                    New
-                  </span>
-                </td>
-                {visibleColumns.map((col) => (
-                  <td
-                    key={col.name}
-                    className="px-3 py-2 border-r border-border whitespace-nowrap font-mono text-emerald-200"
-                  >
-                    {insert.data[col.name] === null ||
-                    insert.data[col.name] === undefined ? (
-                      <span className="text-muted-foreground italic">NULL</span>
-                    ) : (
-                      formatCellValue(insert.data[col.name])
-                    )}
-                  </td>
+                    ))}
+                  </tr>
                 ))}
-              </tr>
-            ))}
 
-            {filteredRows.length === 0 &&
-              pendingModifications.inserts.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={visibleColumns.length + 1}
-                    className="py-12 text-center text-muted-foreground font-sans"
-                  >
-                    No records found matching filters or search queries.
-                  </td>
-                </tr>
-              )}
+                {filteredRows.length === 0 &&
+                  pendingModifications.inserts.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={visibleColumns.length + 1}
+                        className="py-12 text-center text-muted-foreground font-sans"
+                      >
+                        No records found matching filters or search queries.
+                      </td>
+                    </tr>
+                  )}
               </>
             )}
           </tbody>
@@ -902,7 +925,9 @@ function TableSkeletonRows({ columns }: { columns: ColumnDefinition[] }) {
             <td key={col.name} className="px-3 py-2.5 border-r border-border">
               <span
                 className={`table-skeleton-bar inline-block h-3 max-w-full ${
-                  SKELETON_BAR_WIDTHS[(row + colIdx) % SKELETON_BAR_WIDTHS.length]
+                  SKELETON_BAR_WIDTHS[
+                    (row + colIdx) % SKELETON_BAR_WIDTHS.length
+                  ]
                 }`}
               />
             </td>
@@ -996,7 +1021,8 @@ function cellMenuItems(opts: {
       id: "eq",
       label: "Equals",
       hint: quoted,
-      onSelect: () => opts.onFilter(opts.column.name, "equals", opts.displayValue),
+      onSelect: () =>
+        opts.onFilter(opts.column.name, "equals", opts.displayValue),
     },
     {
       id: "neq",
@@ -1020,13 +1046,15 @@ function cellMenuItems(opts: {
         id: "gt",
         label: "Greater than",
         hint: quoted,
-        onSelect: () => opts.onFilter(opts.column.name, "gt", opts.displayValue),
+        onSelect: () =>
+          opts.onFilter(opts.column.name, "gt", opts.displayValue),
       },
       {
         id: "lt",
         label: "Less than",
         hint: quoted,
-        onSelect: () => opts.onFilter(opts.column.name, "lt", opts.displayValue),
+        onSelect: () =>
+          opts.onFilter(opts.column.name, "lt", opts.displayValue),
       },
     );
   }

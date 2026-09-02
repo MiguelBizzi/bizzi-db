@@ -1,6 +1,6 @@
-import React from 'react';
-import { ActivityLogItem } from '../../types';
-import { Logs, CheckCircle, AlertTriangle, User, X } from 'lucide-react';
+import React from "react";
+import { ActivityLogItem } from "../../types";
+import { Logs, CheckCircle, AlertTriangle, User, X } from "lucide-react";
 
 interface ActivityLogDrawerProps {
   logs: ActivityLogItem[];
@@ -32,7 +32,7 @@ export const ActivityLogDrawer: React.FC<ActivityLogDrawerProps> = ({
       </div>
 
       {/* Log Stream Body */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2.5 font-mono text-xs scrollbar-thin scrollbar-thumb-muted">
+      <div className="flex-1 overflow-y-auto p-3 space-y-2.5 font-mono text-xs">
         {logs.map((log) => (
           <div
             key={log.id}
@@ -40,13 +40,15 @@ export const ActivityLogDrawer: React.FC<ActivityLogDrawerProps> = ({
           >
             <div className="flex items-center justify-between text-[11px]">
               <div className="flex items-center gap-1.5">
-                {log.status === 'SUCCESS' ? (
+                {log.status === "SUCCESS" ? (
                   <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
                 ) : (
                   <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
                 )}
                 <span className="font-bold text-primary">{log.type}</span>
-                <span className="text-muted-foreground">• {log.databaseName}</span>
+                <span className="text-muted-foreground">
+                  • {log.databaseName}
+                </span>
               </div>
 
               <span className="text-[10px] text-muted-foreground">
