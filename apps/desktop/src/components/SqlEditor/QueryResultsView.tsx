@@ -243,13 +243,13 @@ function SingleResultView({
               Query executed successfully in {result.executionTimeMs}ms. 0 rows returned.
             </div>
           ) : (
-            <table className="w-full text-left border-collapse text-xs">
-              <thead className="bg-card border-b border-border sticky top-0 z-10">
+            <table className="text-left text-xs">
+              <thead>
                 <tr>
                   {columns.map((col) => (
                     <th
                       key={col}
-                      className="px-3 py-2 border-r border-border text-foreground font-bold whitespace-nowrap bg-card"
+                      className="px-3 py-2 border-r border-b border-border text-foreground font-bold whitespace-nowrap bg-card"
                     >
                       {col}
                     </th>

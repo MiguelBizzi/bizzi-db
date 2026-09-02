@@ -203,6 +203,23 @@
   overscroll-behavior: none;
 }
 
+/* WebKit sizes a sticky <thead> against the scrollport when borders are
+   collapsed, so header cells ignore column widths until a hover relayout.
+   Separate borders + sticky <th> + intrinsic table width keep headers
+   on the same column track as the body. */
+.table-scroll-port table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: max-content;
+  min-width: 100%;
+}
+
+.table-scroll-port thead th {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
 .scrollbar-none {
   scrollbar-width: none;
   -ms-overflow-style: none;

@@ -21,6 +21,40 @@ describe('table scrollport', () => {
     expect(grid).toContain('table-scroll-port');
     expect(results).toContain('table-scroll-port');
   });
+
+  test('wide grids keep sticky headers on the same column track as cells', async () => {
+    const css = await Bun.file(new URL('../index.css', import.meta.url)).text();
+    expect(css).toMatch(
+      /\.table-scroll-port\s+table\s*\{[^}]*border-collapse:\s*separate/
+    );
+    expect(css).toMatch(
+      /\.table-scroll-port\s+table\s*\{[^}]*border-spacing:\s*0/
+    );
+    expect(css).toMatch(
+      /\.table-scroll-port\s+table\s*\{[^}]*width:\s*max-content/
+    );
+    expect(css).toMatch(
+      /\.table-scroll-port\s+table\s*\{[^}]*min-width:\s*100%/
+    );
+    expect(css).toMatch(
+      /\.table-scroll-port\s+thead\s+th\s*\{[^}]*position:\s*sticky/
+    );
+
+    const grid = await Bun.file(
+      new URL('../components/TableView/TableDataGrid.tsx', import.meta.url)
+    ).text();
+    const results = await Bun.file(
+      new URL('../components/SqlEditor/QueryResultsView.tsx', import.meta.url)
+    ).text();
+    for (const source of [grid, results]) {
+      const snippet = source.slice(
+        source.indexOf('table-scroll-port'),
+        source.indexOf('table-scroll-port') + 900
+      );
+      expect(snippet).not.toMatch(/border-collapse/);
+      expect(snippet).not.toMatch(/<thead[^>]*sticky/);
+    }
+  });
 });
 
 describe('clampedScrollAfterWheel', () => {

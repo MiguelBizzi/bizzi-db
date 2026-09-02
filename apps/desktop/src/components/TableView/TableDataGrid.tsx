@@ -460,12 +460,12 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
         aria-busy={loading}
         aria-live="polite"
       >
-        <table className="w-full text-left border-collapse text-xs font-mono">
+        <table className="text-left text-xs font-mono">
           {/* Header */}
-          <thead className="bg-card border-b border-border sticky top-0 z-20 shadow-sm">
+          <thead>
             <tr>
               {/* Checkbox column */}
-              <th className="w-10 px-3 py-2 text-center border-r border-border bg-card">
+              <th className="w-10 px-3 py-2 text-center border-r border-b border-border bg-card">
                 <Checkbox
                   checked={allSelected}
                   onCheckedChange={handleToggleSelectAll}
@@ -484,7 +484,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
                       handleSortToggle(col.name);
                     }}
                     onContextMenu={(event) => openHeaderMenu(event, col)}
-                    className="px-3 py-2.5 border-r border-border font-semibold text-foreground hover:bg-accent cursor-pointer transition-colors whitespace-nowrap"
+                    className="px-3 py-2.5 border-r border-b border-border bg-card font-semibold text-foreground hover:bg-accent cursor-pointer transition-colors whitespace-nowrap"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 min-w-0">
