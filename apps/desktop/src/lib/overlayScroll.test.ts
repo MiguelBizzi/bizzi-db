@@ -6,6 +6,7 @@ import {
   nextSmoothPosition,
   normalizedWheelDelta,
   overlayScrollIdleMs,
+  overlayThumbDragPosition,
   overlayThumbMetrics,
   shouldIgnoreWheel,
   showOverlayScrollbar,
@@ -58,6 +59,11 @@ describe("overlay scrollbars", () => {
       /\.overlay-scroll-thumb\s*\{[^}]*pointer-events:\s*none/,
     );
     expect(css).toMatch(
+      /\.overlay-scroll-thumb\.is-visible\s*\{[^}]*pointer-events:\s*auto/,
+    );
+    expect(css).toMatch(/\.overlay-scroll-thumb\.is-y[\s\S]*scaleX\(/);
+    expect(css).toMatch(/\.overlay-scroll-thumb\.is-x[\s\S]*scaleY\(/);
+    expect(css).toMatch(
       /\.scrollbar-none(?:\.is-scrolling)?::-webkit-scrollbar[\s\S]*width:\s*0/,
     );
   });
@@ -96,6 +102,13 @@ describe("overlay scrollbars", () => {
         "y",
       ),
     ).toBeNull();
+  });
+
+  test("maps thumb drags onto the scroll range", () => {
+    expect(overlayThumbDragPosition(100, 40, 800, 160)).toBe(300);
+    expect(overlayThumbDragPosition(100, -40, 800, 160)).toBe(0);
+    expect(overlayThumbDragPosition(700, 80, 800, 160)).toBe(800);
+    expect(overlayThumbDragPosition(100, 10, 800, 0)).toBe(100);
   });
 });
 

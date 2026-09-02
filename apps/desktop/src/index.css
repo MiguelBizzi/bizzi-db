@@ -224,7 +224,40 @@
   border-radius: 999px;
   background: color-mix(in oklch, var(--foreground) 38%, transparent);
   opacity: 0;
-  transition: opacity 160ms ease;
+  user-select: none;
+  transition:
+    opacity 160ms ease,
+    transform 120ms ease;
+}
+.overlay-scroll-thumb.is-visible {
+  pointer-events: auto;
+}
+.overlay-scroll-thumb.is-y {
+  transform-origin: right center;
+  cursor: ns-resize;
+}
+.overlay-scroll-thumb.is-x {
+  transform-origin: center bottom;
+  cursor: ew-resize;
+}
+.overlay-scroll-thumb.is-y.is-visible:hover,
+.overlay-scroll-thumb.is-y.is-dragging {
+  transform: scaleX(1.7);
+}
+.overlay-scroll-thumb.is-x.is-visible:hover,
+.overlay-scroll-thumb.is-x.is-dragging {
+  transform: scaleY(1.7);
+}
+.overlay-scroll-thumb.is-y::before,
+.overlay-scroll-thumb.is-x::before {
+  content: "";
+  position: absolute;
+}
+.overlay-scroll-thumb.is-y::before {
+  inset: 0 0 0 -8px;
+}
+.overlay-scroll-thumb.is-x::before {
+  inset: -8px 0 0 0;
 }
 
 .scrollbar-none,

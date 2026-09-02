@@ -12,3 +12,6 @@ src-tauri/gen
 apps/desktop/src-tauri/gen
 *.sqlite
 *.sqlite-journal
+*.key
+.tauri/
+apps/desktop/src-tauri/.keys/

@@ -107,6 +107,18 @@ import {
 import { shouldConnectAfterSave } from './lib/connectionForm';
 import { toast } from './lib/toast';
 import { buildTableDdlPreview } from './lib/schemaChange';
+import { getVersion } from '@tauri-apps/api/app';
+import { check } from '@tauri-apps/plugin-updater';
+import { relaunch } from '@tauri-apps/plugin-process';
+import {
+  IDLE_UPDATE_STATUS,
+  shouldStartInstall,
+  statusAfterCheck,
+  statusAfterCheckError,
+  statusAfterDownloadEvent,
+  type AppUpdateStatus,
+  type UpdateCheckKind,
+} from './lib/appUpdate';
 
 const ROOT_PANE_ID = 'pane_root';
 
@@ -133,6 +145,8 @@ export default function App() {
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
+  const [appVersion, setAppVersion] = useState('0.1.0');
+  const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus>(IDLE_UPDATE_STATUS);
   const [editingProfile, setEditingProfile] = useState<ConnectionProfile | null>(
     null
   );
@@ -305,6 +319,50 @@ export default function App() {
       cancelled = true;
     };
   }, []);
+
+  const checkForAppUpdate = useCallback(async (kind: UpdateCheckKind) => {
+    setUpdateStatus({ phase: 'checking' });
+    try {
+      const update = await check();
+      const next = statusAfterCheck(
+        update ? { version: update.version, body: update.body } : null,
+      );
+      setUpdateStatus(next);
+      if (kind === 'passive' && next.phase === 'available') {
+        toast(`Update ${next.version} is available in Settings`, 'default');
+      }
+    } catch (error: unknown) {
+      const next = statusAfterCheckError(kind, error);
+      setUpdateStatus(next ?? IDLE_UPDATE_STATUS);
+    }
+  }, []);
+
+  const installAppUpdate = useCallback(async () => {
+    if (!shouldStartInstall(updateStatus, true)) return;
+    try {
+      const update = await check();
+      if (!update) {
+        setUpdateStatus({ phase: 'upToDate' });
+        return;
+      }
+      await update.downloadAndInstall((event) => {
+        setUpdateStatus((current) => statusAfterDownloadEvent(current, event));
+      });
+      setUpdateStatus({ phase: 'installing' });
+      await relaunch();
+    } catch (error: unknown) {
+      setUpdateStatus({
+        phase: 'error',
+        message: invokeErrorMessage(error, 'Could not install update'),
+      });
+    }
+  }, [updateStatus]);
+
+  useEffect(() => {
+    if (!bootstrapped) return;
+    void getVersion().then(setAppVersion).catch(() => undefined);
+    void checkForAppUpdate('passive');
+  }, [bootstrapped, checkForAppUpdate]);
 
   useEffect(() => {
     if (!bootstrapped || skipWorkspaceSave.current) return;
@@ -1270,8 +1328,12 @@ export default function App() {
       <SettingsModal
         isOpen={isSettingsOpen}
         keychainEnabled={appSettings.keychainEnabled}
+        appVersion={appVersion}
+        updateStatus={updateStatus}
         onClose={() => setIsSettingsOpen(false)}
         onToggleKeychain={handleToggleKeychain}
+        onCheckForUpdates={() => checkForAppUpdate('manual')}
+        onInstallUpdate={installAppUpdate}
       />
       <Toaster />
     </div>

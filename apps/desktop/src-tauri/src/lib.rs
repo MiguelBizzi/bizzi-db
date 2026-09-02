@@ -575,12 +575,19 @@ fn secrets_path(db_path: &std::path::Path) -> PathBuf {
 mod macos;
 
 pub fn run() {
-    tauri::Builder::default()
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build());
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let builder = tauri::Builder::default();
+
+    builder
         .setup(|app| {
             let path = db_path(app.handle())?;
             let storage = Storage::open(&path).map_err(|e| e.to_string())?;
             let secrets = DualSecretStore::new(
-                KeychainSecrets::new("com.dbpro.studio"),
+                KeychainSecrets::new("com.bizzidb.app"),
                 FileSecrets::open(&secrets_path(&path)).map_err(|e| e.to_string())?,
             );
             app.manage(AppState {

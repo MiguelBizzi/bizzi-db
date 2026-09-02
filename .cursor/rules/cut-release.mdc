@@ -1,0 +1,17 @@
+---
+description: Cut a Bizzi DB GitHub Release — bump lockstep versions, commit, tag v*, push, watch release CI. Use when the user asks to release, ship a version, cut a tag, or publish an update.
+alwaysApply: false
+---
+
+# Cut a release
+
+Asking to cut a release is permission to commit the version bump and push the tag. Do not fold unrelated dirty files into that commit.
+
+1. Confirm `main` is clean and the intended work is already merged. Run `bun run test` if the bump commit includes more than version strings.
+2. Read `workspace.package.version` in `Cargo.toml` and the latest `v*` tag (`git tag -l 'v*' --sort=-v:refname`). Use the version the user named, otherwise bump **patch**.
+3. Set that **same** version in `Cargo.toml`, `apps/desktop/src-tauri/tauri.conf.json`, `package.json`, and `apps/desktop/package.json`. Do not bump `rust-version` or crate names.
+4. Commit only those files: `chore: release vX.Y.Z`.
+5. Annotated tag `vX.Y.Z`. Push the bump commit if needed (`git push origin HEAD`), then `git push origin vX.Y.Z`. The tag starts `.github/workflows/release.yml`. Pushing `main` without a tag does not ship.
+6. Watch the release workflow. Report the GitHub Release URL. Do not `tauri build` or sign locally.
+7. If they asked to **try first**, keep the GitHub Release as a prerelease (`gh release edit vX.Y.Z --prerelease`). Promote with `--prerelease=false` when they want Latest. Installed apps follow non-prerelease Latest only.
+8. **Never:** regenerate updater keys; change `com.bizzidb.app`; retag or `--force` push a tag; skip the version bump; put secrets in the commit.

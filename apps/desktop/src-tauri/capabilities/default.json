@@ -2,9 +2,11 @@
   "identifier": "default",
   "description": "Main window capabilities",
   "windows": ["main"],
-  "permissions": [
+    "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
-    "allow-app-commands"
+    "allow-app-commands",
+    "updater:default",
+    "process:allow-restart"
   ]
 }

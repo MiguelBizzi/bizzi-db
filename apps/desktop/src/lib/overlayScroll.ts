@@ -149,12 +149,27 @@ export function overlayThumbMetrics(
   };
 }
 
+export function overlayThumbDragPosition(
+  startScroll: number,
+  pointerDelta: number,
+  maxScroll: number,
+  travel: number,
+): number {
+  if (travel <= 0 || maxScroll <= 0) return startScroll;
+  return Math.min(
+    maxScroll,
+    Math.max(0, startScroll + (pointerDelta / travel) * maxScroll),
+  );
+}
+
 function applyThumbRect(el: HTMLElement, rect: OverlayThumbRect | null) {
   if (!rect) {
     el.style.opacity = "0";
+    el.classList.remove("is-visible");
     return;
   }
   el.style.opacity = "1";
+  el.classList.add("is-visible");
   el.style.top = `${rect.top}px`;
   el.style.left = `${rect.left}px`;
   el.style.width = `${rect.width}px`;
@@ -167,7 +182,7 @@ function ensureThumb(doc: Document, axis: "x" | "y"): HTMLElement {
   if (existing instanceof HTMLElement) return existing;
   const thumb = doc.createElement("div");
   thumb.id = id;
-  thumb.className = "overlay-scroll-thumb";
+  thumb.className = `overlay-scroll-thumb is-${axis}`;
   thumb.setAttribute("aria-hidden", "true");
   doc.body.appendChild(thumb);
   return thumb;
@@ -187,6 +202,17 @@ export function bindOverlayScroll(root: Document | HTMLElement = document): () =
   const doc = root instanceof Document ? root : root.ownerDocument ?? document;
   const thumbX = ensureThumb(doc, "x");
   const thumbY = ensureThumb(doc, "y");
+  let active: HTMLElement | null = null;
+  let hovering = false;
+  let drag: {
+    axis: "x" | "y";
+    el: HTMLElement;
+    pointerId: number;
+    startPointer: number;
+    startScroll: number;
+    maxScroll: number;
+    travel: number;
+  } | null = null;
 
   const paint = (el: HTMLElement) => {
     const viewport = el.getBoundingClientRect();
@@ -195,8 +221,19 @@ export function bindOverlayScroll(root: Document | HTMLElement = document): () =
   };
 
   const hideThumbs = () => {
+    if (hovering || drag) return;
     applyThumbRect(thumbX, null);
     applyThumbRect(thumbY, null);
+  };
+
+  const stopAnim = (el: HTMLElement) => {
+    const state = anims.get(el);
+    if (!state) return;
+    state.x = el.scrollLeft;
+    state.y = el.scrollTop;
+    state.tx = state.x;
+    state.ty = state.y;
+    state.raf = 0;
   };
 
   const reveal = (el: HTMLElement) => {
@@ -204,20 +241,27 @@ export function bindOverlayScroll(root: Document | HTMLElement = document): () =
       hideThumbs();
       return;
     }
+    active = el;
     paint(el);
     const prev = fadeTimers.get(el);
     if (prev) window.clearTimeout(prev);
     fadeTimers.set(
       el,
       window.setTimeout(() => {
+        if (hovering || drag) return;
         el.classList.remove(SCROLLING_CLASS);
         fadeTimers.delete(el);
+        if (active === el) active = null;
         hideThumbs();
       }, OVERLAY_SCROLL_FADE_MS),
     );
   };
 
   const tick = (el: HTMLElement, state: AnimState) => {
+    if (drag?.el === el) {
+      state.raf = 0;
+      return;
+    }
     const nx = nextSmoothPosition(state.x, state.tx);
     const ny = nextSmoothPosition(state.y, state.ty);
     state.x = nx.value;
@@ -301,11 +345,93 @@ export function bindOverlayScroll(root: Document | HTMLElement = document): () =
     reveal(el);
   };
 
+  const beginDrag = (axis: "x" | "y", event: PointerEvent) => {
+    const el = active;
+    if (!el) return;
+    const viewport = el.getBoundingClientRect();
+    const metrics = overlayThumbMetrics(el, viewport, axis);
+    if (!metrics) return;
+    event.preventDefault();
+    event.stopPropagation();
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    const maxScroll =
+      axis === "y"
+        ? el.scrollHeight - el.clientHeight
+        : el.scrollWidth - el.clientWidth;
+    const travel =
+      axis === "y"
+        ? viewport.height - metrics.height
+        : viewport.width - metrics.width;
+    drag = {
+      axis,
+      el,
+      pointerId: event.pointerId,
+      startPointer: axis === "y" ? event.clientY : event.clientX,
+      startScroll: axis === "y" ? el.scrollTop : el.scrollLeft,
+      maxScroll,
+      travel: Math.max(1, travel),
+    };
+    thumbX.classList.toggle("is-dragging", axis === "x");
+    thumbY.classList.toggle("is-dragging", axis === "y");
+    stopAnim(el);
+    reveal(el);
+  };
+
+  const onPointerMove = (event: PointerEvent) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const pointer = drag.axis === "y" ? event.clientY : event.clientX;
+    const next = overlayThumbDragPosition(
+      drag.startScroll,
+      pointer - drag.startPointer,
+      drag.maxScroll,
+      drag.travel,
+    );
+    if (drag.axis === "y") drag.el.scrollTop = next;
+    else drag.el.scrollLeft = next;
+    stopAnim(drag.el);
+    paint(drag.el);
+  };
+
+  const endDrag = (event: PointerEvent) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const el = drag.el;
+    drag = null;
+    thumbX.classList.remove("is-dragging");
+    thumbY.classList.remove("is-dragging");
+    reveal(el);
+  };
+
+  const onThumbEnter = () => {
+    hovering = true;
+    if (active) {
+      const prev = fadeTimers.get(active);
+      if (prev) window.clearTimeout(prev);
+    }
+  };
+
+  const onThumbLeave = () => {
+    hovering = false;
+    if (!drag && active) reveal(active);
+  };
+
+  thumbY.addEventListener("pointerdown", (event) => beginDrag("y", event));
+  thumbX.addEventListener("pointerdown", (event) => beginDrag("x", event));
+  doc.addEventListener("pointermove", onPointerMove);
+  doc.addEventListener("pointerup", endDrag);
+  doc.addEventListener("pointercancel", endDrag);
+  thumbY.addEventListener("pointerenter", onThumbEnter);
+  thumbX.addEventListener("pointerenter", onThumbEnter);
+  thumbY.addEventListener("pointerleave", onThumbLeave);
+  thumbX.addEventListener("pointerleave", onThumbLeave);
+
   root.addEventListener("wheel", onWheel, { capture: true, passive: false });
   root.addEventListener("scroll", onScroll, { capture: true, passive: true });
   return () => {
     root.removeEventListener("wheel", onWheel, true);
     root.removeEventListener("scroll", onScroll, true);
+    doc.removeEventListener("pointermove", onPointerMove);
+    doc.removeEventListener("pointerup", endDrag);
+    doc.removeEventListener("pointercancel", endDrag);
     thumbX.remove();
     thumbY.remove();
   };
