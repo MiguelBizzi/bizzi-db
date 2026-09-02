@@ -103,12 +103,16 @@ fn pg_config(cfg: &ConnectConfig) -> tokio_postgres::Config {
     tokio_cfg.user(&cfg.user);
     tokio_cfg.password(&cfg.password);
     tokio_cfg.dbname(&cfg.database);
-    tokio_cfg.ssl_mode(if cfg.ssl {
+    tokio_cfg.ssl_mode(tokio_ssl_mode(cfg.ssl_mode));
+    tokio_cfg
+}
+
+fn tokio_ssl_mode(mode: db_core::SslMode) -> SslMode {
+    if mode.uses_tls() {
         SslMode::Require
     } else {
         SslMode::Disable
-    });
-    tokio_cfg
+    }
 }
 
 fn create_pool(cfg: &ConnectConfig) -> Result<Pool, AdapterError> {
@@ -116,9 +120,14 @@ fn create_pool(cfg: &ConnectConfig) -> Result<Pool, AdapterError> {
         recycling_method: RecyclingMethod::Fast,
     };
     let size = clamp_pool_size(cfg.pool_size) as usize;
-    let manager = if cfg.ssl {
+    let manager = if cfg.ssl_mode.uses_tls() {
+        let mut builder = TlsConnector::builder();
+        if cfg.ssl_mode.danger_accept_invalid_certs() {
+            builder.danger_accept_invalid_certs(true);
+            builder.danger_accept_invalid_hostnames(true);
+        }
         let tls = MakeTlsConnector::new(
-            TlsConnector::builder()
+            builder
                 .build()
                 .map_err(|e| AdapterError::msg(e.to_string()))?,
         );
@@ -573,7 +582,9 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
 
 #[cfg(test)]
 mod tests {
-    use super::on_delete_from_confdeltype;
+    use super::{on_delete_from_confdeltype, tokio_ssl_mode};
+    use db_core::SslMode as AppSslMode;
+    use tokio_postgres::config::SslMode;
 
     #[test]
     fn maps_confdeltype_codes() {
@@ -590,5 +601,14 @@ mod tests {
         );
         assert_eq!(on_delete_from_confdeltype(""), None);
         assert_eq!(on_delete_from_confdeltype("x"), None);
+    }
+
+    #[test]
+    fn maps_app_ssl_mode_to_tokio() {
+        assert_eq!(tokio_ssl_mode(AppSslMode::Disabled), SslMode::Disable);
+        assert_eq!(tokio_ssl_mode(AppSslMode::Require), SslMode::Require);
+        assert_eq!(tokio_ssl_mode(AppSslMode::Enabled), SslMode::Require);
+        assert!(AppSslMode::Require.danger_accept_invalid_certs());
+        assert!(!AppSslMode::Enabled.danger_accept_invalid_certs());
     }
 }

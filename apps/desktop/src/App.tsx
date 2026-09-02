@@ -11,6 +11,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { ActivityLogDrawer } from './components/ActivityLog/ActivityLogDrawer';
 import { PendingChangesDrawer } from './components/PendingChanges/PendingChangesDrawer';
 import { ConnectionModal } from './components/Modals/ConnectionModal';
+import { SettingsModal } from './components/Modals/SettingsModal';
 import { ConnectionPicker } from './components/ConnectionPicker';
 import { Toaster } from './components/ui/Toaster';
 import {
@@ -22,19 +23,28 @@ import {
   PendingModifications,
   SaveConnectionInput,
   ConnectionProfile,
+  ConnectionFolder,
   WorkspaceState,
+  AppSettings,
 } from './types';
-import { DEFAULT_PREVIEW_LIMIT } from '@db/shared';
+import { DEFAULT_APP_SETTINGS, DEFAULT_PREVIEW_LIMIT } from '@db/shared';
 import {
   connectionsConnect,
   connectionsDelete,
   connectionsDisconnect,
   connectionsList,
+  connectionsMove,
   connectionsSave,
   connectionsTest,
+  foldersDelete,
+  foldersList,
+  foldersSave,
   historyList,
   queryExecute,
   schemaIntrospect,
+  settingsGet,
+  settingsSave,
+  sshPickPrivateKey,
   tablePreview,
   workspaceLoad,
   workspaceSave,
@@ -46,6 +56,7 @@ import {
   savedQueriesUpdateTags,
 } from '@db/storage';
 import { Database } from 'lucide-react';
+import { invokeErrorMessage } from './lib/invokeError';
 import {
   changeKey,
   countPendingChanges,
@@ -84,11 +95,15 @@ import {
   type CloseTabKind,
 } from './lib/tabPaneActions';
 import { defaultQuerySql, nextUntitledQueryTitle } from './lib/sqlQuery';
+import { refreshConnectionSchemas } from './lib/refreshSchemas';
+import { shouldConnectAfterSave } from './lib/connectionForm';
+import { toast } from './lib/toast';
 
 const ROOT_PANE_ID = 'pane_root';
 
 export default function App() {
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
+  const [folders, setFolders] = useState<ConnectionFolder[]>([]);
   const [databases, setDatabases] = useState<DatabaseSchema[]>([]);
   const [currentDbId, setCurrentDbId] = useState<string | null>(null);
   const [tabs, setTabs] = useState<WorkspaceTab[]>([]);
@@ -107,6 +122,12 @@ export default function App() {
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
   const [isPendingChangesOpen, setIsPendingChangesOpen] = useState(false);
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
+  const [editingProfile, setEditingProfile] = useState<ConnectionProfile | null>(
+    null
+  );
+  const [defaultFolderId, setDefaultFolderId] = useState<string | null>(null);
   const [applyingChangeKey, setApplyingChangeKey] = useState<string | null>(null);
   const [applyingAllChanges, setApplyingAllChanges] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
@@ -192,17 +213,21 @@ export default function App() {
     let cancelled = false;
     (async () => {
       try {
-        const [listed, workspace, saved, logs] = await Promise.all([
+        const [listed, listedFolders, workspace, saved, logs, settings] = await Promise.all([
           connectionsList(),
+          foldersList(),
           workspaceLoad(),
           savedQueriesList(),
           historyList(),
+          settingsGet(),
         ]);
         if (cancelled) return;
         workspaceRef.current = workspace;
         setProfiles(listed);
+        setFolders(listedFolders);
         setSavedQueries(saved);
         setActivityLogs(logs);
+        setAppSettings(settings);
         setCurrentDbId(null);
         setTabs([]);
         setLayout(singlePane([], '', ROOT_PANE_ID));
@@ -613,9 +638,15 @@ export default function App() {
 
   const handleOpenConnection = useCallback(
     async (id: string) => {
+      if (currentDbId === id) {
+        return;
+      }
       setConnectingId(id);
       setConnectError(null);
       try {
+        if (currentDbId) {
+          await connectionsDisconnect(currentDbId).catch(() => undefined);
+        }
         await connectionsConnect(id);
         const schema = await loadSchema(id);
         setCurrentDbId(schema.id);
@@ -637,12 +668,12 @@ export default function App() {
         }
         await refreshHistory();
       } catch (e: unknown) {
-        setConnectError(e instanceof Error ? e.message : 'Failed to connect');
+        setConnectError(invokeErrorMessage(e, 'Failed to connect'));
       } finally {
         setConnectingId(null);
       }
     },
-    [loadSchema, refreshHistory]
+    [currentDbId, loadSchema, refreshHistory]
   );
 
   const handleBackToConnections = useCallback(async () => {
@@ -670,10 +701,72 @@ export default function App() {
     [currentDbId]
   );
 
+  const openNewConnection = (folderId?: string | null) => {
+    setEditingProfile(null);
+    setDefaultFolderId(folderId ?? null);
+    setIsConnectionModalOpen(true);
+  };
+
+  const openEditConnection = (profile: ConnectionProfile) => {
+    setEditingProfile(profile);
+    setDefaultFolderId(null);
+    setIsConnectionModalOpen(true);
+  };
+
+  const closeConnectionModal = () => {
+    setIsConnectionModalOpen(false);
+    setEditingProfile(null);
+    setDefaultFolderId(null);
+  };
+
+  const handleToggleKeychain = async (enabled: boolean) => {
+    const saved = await settingsSave({ keychainEnabled: enabled });
+    setAppSettings(saved);
+  };
+
   const handleSaveConnection = async (input: SaveConnectionInput) => {
     const saved = await connectionsSave(input);
     setProfiles(await connectionsList());
+    if (!shouldConnectAfterSave(input)) {
+      toast.success('Connection updated');
+      return;
+    }
     await handleOpenConnection(saved.id);
+  };
+
+  const handleCreateFolder = async (name: string) => {
+    const created = await foldersSave({ name });
+    setFolders(await foldersList());
+    return created;
+  };
+
+  const handleRenameFolder = async (id: string, name: string) => {
+    await foldersSave({ id, name });
+    setFolders(await foldersList());
+  };
+
+  const handleDeleteFolder = async (id: string, deleteConnections: boolean) => {
+    const memberIds = profiles
+      .filter((profile) => profile.folderId === id)
+      .map((profile) => profile.id);
+    await foldersDelete(id, deleteConnections);
+    setFolders(await foldersList());
+    setProfiles(await connectionsList());
+    if (deleteConnections) {
+      setDatabases((prev) => prev.filter((database) => !memberIds.includes(database.id)));
+      if (currentDbId && memberIds.includes(currentDbId)) {
+        setCurrentDbId(null);
+      }
+    }
+  };
+
+  const handleMoveConnection = async (
+    id: string,
+    folderId: string | null,
+    beforeId?: string | null
+  ) => {
+    await connectionsMove(id, folderId, beforeId);
+    setProfiles(await connectionsList());
   };
 
   const renderTabContent = (tab: WorkspaceTab) => {
@@ -852,7 +945,8 @@ export default function App() {
     <div className="flex flex-col h-screen w-screen bg-background text-foreground font-sans select-none overflow-hidden">
       <Navbar
         variant={showPicker ? 'picker' : 'workspace'}
-        databases={databases}
+        profiles={profiles}
+        folders={folders}
         currentDatabase={currentDatabase}
         pendingCount={pendingCount}
         onSelectDatabase={(id) => {
@@ -864,8 +958,9 @@ export default function App() {
           setIsActivityLogOpen(true);
         }}
         onOpenPendingChanges={openPendingChanges}
-        onOpenNewConnection={() => setIsConnectionModalOpen(true)}
+        onOpenNewConnection={openNewConnection}
         onOpenMetrics={openMetrics}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         onBackToConnections={() => {
           void handleBackToConnections();
         }}
@@ -875,6 +970,7 @@ export default function App() {
         <ConnectionPicker
           ready={bootstrapped}
           profiles={profiles}
+          folders={folders}
           connectingId={connectingId}
           connectError={connectError}
           loadError={loadError}
@@ -884,7 +980,18 @@ export default function App() {
           onDelete={(id) => {
             void handleDeleteConnection(id);
           }}
-          onNewConnection={() => setIsConnectionModalOpen(true)}
+          onEdit={openEditConnection}
+          onNewConnection={openNewConnection}
+          onCreateFolder={handleCreateFolder}
+          onRenameFolder={(id, name) => {
+            void handleRenameFolder(id, name);
+          }}
+          onDeleteFolder={(id, deleteConnections) => {
+            void handleDeleteFolder(id, deleteConnections);
+          }}
+          onMoveConnection={(id, folderId, beforeId) => {
+            void handleMoveConnection(id, folderId, beforeId);
+          }}
         />
       ) : (
         <div className="flex-1 flex overflow-hidden relative">
@@ -902,6 +1009,13 @@ export default function App() {
                   title: 'New Table Schema',
                   databaseId: currentDatabase.id,
                 });
+              }}
+              onRefreshSchemas={async () => {
+                const error = await refreshConnectionSchemas(
+                  loadSchema,
+                  currentDatabase.id
+                );
+                if (error) toast.error(error);
               }}
               onAddTagToTable={(tableName, tag) => {
                 setDatabases((prev) =>
@@ -988,9 +1102,21 @@ export default function App() {
 
       <ConnectionModal
         isOpen={isConnectionModalOpen}
-        onClose={() => setIsConnectionModalOpen(false)}
+        editingProfile={editingProfile}
+        folders={folders}
+        defaultFolderId={defaultFolderId}
+        keychainEnabled={appSettings.keychainEnabled}
+        onClose={closeConnectionModal}
         onTest={async (input) => connectionsTest(input)}
         onSave={handleSaveConnection}
+        onEnableKeychain={() => handleToggleKeychain(true)}
+        onPickPrivateKey={sshPickPrivateKey}
+      />
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        keychainEnabled={appSettings.keychainEnabled}
+        onClose={() => setIsSettingsOpen(false)}
+        onToggleKeychain={handleToggleKeychain}
       />
       <Toaster />
     </div>

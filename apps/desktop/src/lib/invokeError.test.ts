@@ -18,5 +18,6 @@ describe('invokeErrorMessage', () => {
     expect(invokeErrorMessage(undefined)).toBe('Execution error');
     expect(invokeErrorMessage({ code: 1 })).toBe('Execution error');
     expect(invokeErrorMessage('')).toBe('Execution error');
+    expect(invokeErrorMessage('', 'Failed to connect')).toBe('Failed to connect');
   });
 });

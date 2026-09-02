@@ -27,6 +27,52 @@ pub enum ConnectionStatus {
     Error,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum SslMode {
+    #[default]
+    Disabled,
+    Require,
+    Enabled,
+}
+
+impl SslMode {
+    pub fn uses_tls(self) -> bool {
+        !matches!(self, Self::Disabled)
+    }
+
+    pub fn danger_accept_invalid_certs(self) -> bool {
+        matches!(self, Self::Require)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum SshAuthMethod {
+    #[default]
+    Password,
+    PrivateKey,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSettings {
+    #[serde(default)]
+    pub keychain_enabled: bool,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            keychain_enabled: false,
+        }
+    }
+}
+
+fn default_ssh_port() -> u16 {
+    22
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ForeignKeyRef {
@@ -221,6 +267,21 @@ pub struct ActivityLogItem {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+pub struct ConnectionFolder {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveFolderInput {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct ConnectionProfile {
     pub id: String,
     pub name: String,
@@ -229,10 +290,27 @@ pub struct ConnectionProfile {
     pub port: u16,
     pub database: String,
     pub user: String,
-    pub ssl: bool,
+    #[serde(default)]
+    pub ssl_mode: SslMode,
     pub pool_size: u32,
     pub environment: Environment,
     pub status: ConnectionStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder_id: Option<String>,
+    #[serde(default)]
+    pub sort_order: i64,
+    #[serde(default)]
+    pub ssh_enabled: bool,
+    #[serde(default)]
+    pub ssh_host: String,
+    #[serde(default = "default_ssh_port")]
+    pub ssh_port: u16,
+    #[serde(default)]
+    pub ssh_user: String,
+    #[serde(default)]
+    pub ssh_auth: SshAuthMethod,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_key_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -247,9 +325,28 @@ pub struct SaveConnectionInput {
     pub database: String,
     pub user: String,
     pub password: String,
-    pub ssl: bool,
+    #[serde(default)]
+    pub ssl_mode: SslMode,
     pub pool_size: u32,
     pub environment: Environment,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder_id: Option<String>,
+    #[serde(default)]
+    pub ssh_enabled: bool,
+    #[serde(default)]
+    pub ssh_host: String,
+    #[serde(default = "default_ssh_port")]
+    pub ssh_port: u16,
+    #[serde(default)]
+    pub ssh_user: String,
+    #[serde(default)]
+    pub ssh_auth: SshAuthMethod,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_key_path: Option<String>,
+    #[serde(default)]
+    pub ssh_password: String,
+    #[serde(default)]
+    pub ssh_passphrase: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -309,15 +406,39 @@ mod tests {
     fn connection_profile_camel_case() {
         let json = r#"{
             "id":"c1","name":"Local","dialect":"PostgreSQL","host":"127.0.0.1","port":5432,
-            "database":"app","user":"postgres","ssl":false,"poolSize":8,
+            "database":"app","user":"postgres","sslMode":"disabled","poolSize":8,
             "environment":"development","status":"disconnected"
         }"#;
         let profile: ConnectionProfile = serde_json::from_str(json).unwrap();
         assert_eq!(profile.pool_size, 8);
         assert_eq!(profile.database, "app");
+        assert_eq!(profile.ssl_mode, SslMode::Disabled);
         let encoded = serde_json::to_value(&profile).unwrap();
         assert_eq!(encoded["poolSize"], 8);
         assert_eq!(encoded["dialect"], "PostgreSQL");
+        assert_eq!(encoded["sslMode"], "disabled");
+        assert!(encoded.get("folderId").is_none());
+    }
+
+    #[test]
+    fn connection_folder_id_camel_case() {
+        let json = r#"{
+            "id":"c1","name":"Local","dialect":"PostgreSQL","host":"127.0.0.1","port":5432,
+            "database":"app","user":"postgres","sslMode":"require","poolSize":8,
+            "environment":"development","status":"disconnected","folderId":"folder_1"
+        }"#;
+        let profile: ConnectionProfile = serde_json::from_str(json).unwrap();
+        assert_eq!(profile.folder_id.as_deref(), Some("folder_1"));
+        let encoded = serde_json::to_value(&profile).unwrap();
+        assert_eq!(encoded["folderId"], "folder_1");
+
+        let folder: ConnectionFolder =
+            serde_json::from_str(r#"{"id":"folder_1","name":"Prod"}"#).unwrap();
+        assert_eq!(folder.name, "Prod");
+        let input: SaveFolderInput =
+            serde_json::from_str(r#"{"name":" Staging "}"#).unwrap();
+        assert!(input.id.is_none());
+        assert_eq!(input.name, " Staging ");
     }
 
     #[test]
@@ -333,18 +454,38 @@ mod tests {
     fn save_connection_and_execute_request_camel_case() {
         let json = r#"{
             "name":"Local","dialect":"PostgreSQL","host":"127.0.0.1","port":5432,
-            "database":"app","user":"postgres","password":"secret","ssl":false,
+            "database":"app","user":"postgres","password":"secret","sslMode":"enabled",
             "poolSize":8,"environment":"development"
         }"#;
         let input: SaveConnectionInput = serde_json::from_str(json).unwrap();
         assert_eq!(input.pool_size, 8);
+        assert_eq!(input.ssl_mode, SslMode::Enabled);
         assert!(input.id.is_none());
         let encoded = serde_json::to_value(&input).unwrap();
         assert_eq!(encoded["poolSize"], 8);
+        assert_eq!(encoded["sslMode"], "enabled");
 
         let req: ExecuteQueryRequest =
             serde_json::from_str(r#"{"connectionId":"c1","sql":"SELECT 1"}"#).unwrap();
         assert!(req.record_history);
         assert_eq!(req.connection_id, "c1");
+    }
+
+    #[test]
+    fn ssl_mode_tls_strategy() {
+        assert!(!SslMode::Disabled.uses_tls());
+        assert!(SslMode::Require.uses_tls());
+        assert!(SslMode::Enabled.uses_tls());
+        assert!(SslMode::Require.danger_accept_invalid_certs());
+        assert!(!SslMode::Enabled.danger_accept_invalid_certs());
+        assert!(!SslMode::Disabled.danger_accept_invalid_certs());
+    }
+
+    #[test]
+    fn app_settings_default_disables_keychain() {
+        let settings: AppSettings = serde_json::from_str("{}").unwrap();
+        assert!(!settings.keychain_enabled);
+        let encoded = serde_json::to_value(&AppSettings::default()).unwrap();
+        assert_eq!(encoded["keychainEnabled"], false);
     }
 }

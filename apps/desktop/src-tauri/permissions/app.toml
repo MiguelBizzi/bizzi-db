@@ -5,9 +5,13 @@ commands.allow = [
   "connections_list",
   "connections_save",
   "connections_delete",
+  "connections_move",
   "connections_test",
   "connections_connect",
   "connections_disconnect",
+  "folders_list",
+  "folders_save",
+  "folders_delete",
   "schema_introspect",
   "table_preview",
   "query_execute",
@@ -17,5 +21,8 @@ commands.allow = [
   "saved_queries_delete",
   "saved_queries_update_tags",
   "workspace_load",
-  "workspace_save"
+  "workspace_save",
+  "settings_get",
+  "settings_save",
+  "ssh_pick_private_key"
 ]

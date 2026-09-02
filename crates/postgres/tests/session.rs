@@ -12,7 +12,7 @@ fn pg_config() -> ConnectConfig {
         database: std::env::var("TEST_PG_DB").unwrap_or_else(|_| "postgres".into()),
         user: std::env::var("TEST_PG_USER").unwrap_or_else(|_| "postgres".into()),
         password: std::env::var("TEST_PG_PASSWORD").unwrap_or_else(|_| "postgres".into()),
-        ssl: false,
+        ssl_mode: db_core::SslMode::Disabled,
         pool_size: 2,
     }
 }

@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::types::{DatabaseSchema, QueryExecutionResult};
+use crate::types::{DatabaseSchema, QueryExecutionResult, SslMode};
 
 #[derive(Clone)]
 pub struct ConnectConfig {
@@ -9,7 +9,7 @@ pub struct ConnectConfig {
     pub database: String,
     pub user: String,
     pub password: String,
-    pub ssl: bool,
+    pub ssl_mode: SslMode,
     pub pool_size: u32,
 }
 
@@ -21,9 +21,50 @@ impl std::fmt::Debug for ConnectConfig {
             .field("database", &self.database)
             .field("user", &self.user)
             .field("password", &"***")
-            .field("ssl", &self.ssl)
+            .field("ssl_mode", &self.ssl_mode)
             .field("pool_size", &self.pool_size)
             .finish()
+    }
+}
+
+#[derive(Clone)]
+pub struct SshTunnelConfig {
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    pub auth: SshTunnelAuth,
+}
+
+#[derive(Clone)]
+pub enum SshTunnelAuth {
+    Password { password: String },
+    PrivateKey { path: String, passphrase: Option<String> },
+}
+
+impl std::fmt::Debug for SshTunnelConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SshTunnelConfig")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("user", &self.user)
+            .field("auth", &self.auth)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for SshTunnelAuth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Password { .. } => f
+                .debug_struct("Password")
+                .field("password", &"***")
+                .finish(),
+            Self::PrivateKey { path, passphrase } => f
+                .debug_struct("PrivateKey")
+                .field("path", path)
+                .field("passphrase", &passphrase.as_ref().map(|_| "***"))
+                .finish(),
+        }
     }
 }
 
@@ -64,7 +105,8 @@ impl AdapterError {
 
 #[cfg(test)]
 mod tests {
-    use super::ConnectConfig;
+    use super::{ConnectConfig, SshTunnelAuth, SshTunnelConfig};
+    use crate::types::SslMode;
 
     fn sample() -> ConnectConfig {
         ConnectConfig {
@@ -73,7 +115,7 @@ mod tests {
             database: "app".into(),
             user: "postgres".into(),
             password: "s3cret-value".into(),
-            ssl: true,
+            ssl_mode: SslMode::Require,
             pool_size: 8,
         }
     }
@@ -84,5 +126,34 @@ mod tests {
         assert!(!rendered.contains("s3cret-value"));
         assert!(rendered.contains("***"));
         assert!(rendered.contains("db.example.com"));
+    }
+
+    #[test]
+    fn debug_redacts_ssh_secrets() {
+        let password = SshTunnelConfig {
+            host: "bastion".into(),
+            port: 22,
+            user: "jump".into(),
+            auth: SshTunnelAuth::Password {
+                password: "ssh-s3cret".into(),
+            },
+        };
+        let password_debug = format!("{password:?}");
+        assert!(!password_debug.contains("ssh-s3cret"));
+        assert!(password_debug.contains("***"));
+
+        let key = SshTunnelConfig {
+            host: "bastion".into(),
+            port: 22,
+            user: "jump".into(),
+            auth: SshTunnelAuth::PrivateKey {
+                path: "/tmp/id_ed25519".into(),
+                passphrase: Some("key-phrase".into()),
+            },
+        };
+        let key_debug = format!("{key:?}");
+        assert!(!key_debug.contains("key-phrase"));
+        assert!(key_debug.contains("/tmp/id_ed25519"));
+        assert!(key_debug.contains("***"));
     }
 }

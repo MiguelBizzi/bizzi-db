@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { Filter, Plus, Trash2, Search, RefreshCw } from 'lucide-react';
 import { TableSchema, FilterClause } from '../../types';
 import { Select, SelectOption } from '../ui/Select';
+import { Checkbox } from '../ui/Checkbox';
 import { DataExportMenu } from '../DataExport/DataExportMenu';
 import { ColumnVisibilityMenu } from './ColumnVisibilityMenu';
-import { filterNeedsValue } from '../../lib/tableFilters';
+import { FilterExpressionInput } from './FilterExpressionInput';
+import { filterNeedsValue, filterRuleFieldsClass } from '../../lib/tableFilters';
+import { commitFilterExpression, valueHintsFromRows } from '../../lib/filterExpression';
 
 const REFRESH_SHORTCUT = /Mac|iPhone|iPad|iPod/i.test(
   typeof navigator === 'undefined' ? '' : navigator.userAgent,
@@ -20,6 +23,7 @@ interface TableToolbarProps {
   onAddFilter: () => void;
   onRemoveFilter: (id: string) => void;
   onUpdateFilter: (id: string, field: keyof FilterClause, val: any) => void;
+  onSetFilters: (filters: FilterClause[]) => void;
   showFilters: boolean;
   onShowFiltersChange: (show: boolean) => void;
   hiddenColumns: string[];
@@ -40,6 +44,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
   onAddFilter,
   onRemoveFilter,
   onUpdateFilter,
+  onSetFilters,
   showFilters,
   onShowFiltersChange,
   hiddenColumns,
@@ -52,6 +57,31 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
   isLoading = false,
 }) => {
   const loadingHint = 'Unavailable while table data is loading';
+  const [draft, setDraft] = useState('');
+  const [expressionError, setExpressionError] = useState<string | null>(null);
+  const columnNames = table.columns.map((column) => column.name);
+  const valueHints = useMemo(
+    () => valueHintsFromRows(table.columns, exportRows),
+    [table.columns, exportRows]
+  );
+
+  const submitExpression = (text: string): boolean => {
+    const result = commitFilterExpression(text, filters, columnNames, {
+      nextId: (index) => `f_expr_${Date.now()}_${index}`,
+    });
+    if (result.kind === 'commit') {
+      onSetFilters(result.filters);
+      setDraft('');
+      setExpressionError(null);
+      return true;
+    }
+    if (result.kind === 'invalid') {
+      setExpressionError(result.message);
+      return false;
+    }
+    setExpressionError(null);
+    return false;
+  };
 
   const openFilters = () => {
     onShowFiltersChange(true);
@@ -67,6 +97,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
     { value: '<=', label: '<=' },
     { value: 'LIKE', label: 'LIKE' },
     { value: 'ILIKE', label: 'ILIKE' },
+    { value: 'IN', label: 'IN' },
     { value: 'IS NULL', label: 'IS NULL' },
     { value: 'IS NOT NULL', label: 'IS NOT NULL' },
   ];
@@ -172,6 +203,18 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
             </button>
           </div>
 
+          <FilterExpressionInput
+            value={draft}
+            onChange={(text) => {
+              setDraft(text);
+              setExpressionError(null);
+            }}
+            onSubmit={submitExpression}
+            columns={table.columns}
+            valueHints={valueHints}
+            error={expressionError}
+          />
+
           {filters.length === 0 && (
             <div className="text-muted-foreground text-xs italic py-1">
               No filter conditions active. Click "Add Filter" to filter rows.
@@ -180,37 +223,48 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
 
           {filters.map((f) => (
             <div key={f.id} className="flex items-center gap-2 font-mono text-xs">
-              <Select
-                size="sm"
-                className="w-40"
-                value={f.column}
-                options={table.columns.map((c) => ({ value: c.name, label: c.name }))}
-                onChange={(value) => onUpdateFilter(f.id, 'column', value)}
-                aria-label="Filter column"
+              <Checkbox
+                checked={f.enabled}
+                onCheckedChange={(checked) => onUpdateFilter(f.id, 'enabled', checked)}
+                aria-label={f.enabled ? 'Disable filter' : 'Enable filter'}
               />
 
-              <Select
-                size="sm"
-                className="w-[8.5rem]"
-                value={f.operator}
-                options={operatorOptions}
-                onChange={(value) => onUpdateFilter(f.id, 'operator', value)}
-                aria-label="Filter operator"
-              />
-
-              {filterNeedsValue(f.operator) && (
-                <input
-                  type="text"
-                  value={f.value}
-                  onChange={(e) => onUpdateFilter(f.id, 'value', e.target.value)}
-                  placeholder="Filter value..."
-                  className="bg-card border border-border rounded px-2 py-1 text-foreground focus:outline-none focus:border-primary w-40"
+              <div className={filterRuleFieldsClass(f.enabled)}>
+                <Select
+                  size="sm"
+                  className="w-40"
+                  searchable
+                  value={f.column}
+                  options={table.columns.map((c) => ({ value: c.name, label: c.name }))}
+                  onChange={(value) => onUpdateFilter(f.id, 'column', value)}
+                  aria-label="Filter column"
                 />
-              )}
+
+                <Select
+                  size="sm"
+                  className="w-[8.5rem]"
+                  value={f.operator}
+                  options={operatorOptions}
+                  onChange={(value) => onUpdateFilter(f.id, 'operator', value)}
+                  aria-label="Filter operator"
+                />
+
+                {filterNeedsValue(f.operator) && (
+                  <input
+                    type="text"
+                    value={f.value}
+                    onChange={(e) => onUpdateFilter(f.id, 'value', e.target.value)}
+                    placeholder="Filter value..."
+                    className="bg-card border border-border rounded px-2 py-1 text-foreground focus:outline-none focus:border-primary w-40"
+                  />
+                )}
+              </div>
 
               <button
+                type="button"
                 onClick={() => onRemoveFilter(f.id)}
                 className="p-1 text-muted-foreground hover:text-destructive transition-colors"
+                aria-label="Remove filter"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>

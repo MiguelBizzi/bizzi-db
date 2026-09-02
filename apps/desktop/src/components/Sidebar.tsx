@@ -4,14 +4,36 @@ import {
   Eye,
   Search,
   Plus,
+  RefreshCw,
   Network,
   FolderTree,
   Edit3,
 } from 'lucide-react';
 import { DatabaseSchema, TableSchema } from '../types';
 import { tableStatParts } from '../lib/format';
+import { explorerListMode } from '../lib/explorerList';
 import { Select } from './ui/Select';
 import { PostgresLogo } from './icons/PostgresLogo';
+
+const EXPLORER_SKELETON_COUNT = 7;
+const EXPLORER_SKELETON_NAME_WIDTHS = [
+  'w-[62%]',
+  'w-[48%]',
+  'w-[70%]',
+  'w-[54%]',
+  'w-[40%]',
+  'w-[58%]',
+  'w-[66%]',
+];
+const EXPLORER_SKELETON_STAT_WIDTHS = [
+  'w-[36%]',
+  'w-[28%]',
+  'w-[44%]',
+  'w-[32%]',
+  'w-[24%]',
+  'w-[40%]',
+  'w-[30%]',
+];
 
 interface SidebarProps {
   currentDatabase: DatabaseSchema;
@@ -20,6 +42,7 @@ interface SidebarProps {
   onOpenErd: () => void;
   onOpenSchemaDesigner?: (table: TableSchema) => void;
   onOpenNewTableModal?: () => void;
+  onRefreshSchemas?: () => void | Promise<void>;
   onAddTagToTable?: (tableName: string, tag: string) => void;
 }
 
@@ -30,9 +53,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenErd,
   onOpenSchemaDesigner,
   onOpenNewTableModal,
+  onRefreshSchemas,
   onAddTagToTable,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [refreshingSchemas, setRefreshingSchemas] = useState(false);
   const [selectedTag, setSelectedTag] = useState<string>('ALL');
   const [selectedSchema, setSelectedSchema] = useState<string>('ALL');
   const [tagInputTable, setTagInputTable] = useState<string | null>(null);
@@ -59,6 +84,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       selectedSchema === 'ALL' || table.schema === selectedSchema;
     return matchesSearch && matchesTag && matchesSchema;
   });
+  const listMode = explorerListMode(refreshingSchemas, filteredTables.length);
 
   const handleAddTagSubmit = (e: React.FormEvent, tableName: string) => {
     e.preventDefault();
@@ -79,13 +105,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span>Database Explorer</span>
           </div>
 
-          <button
-            onClick={onOpenNewTableModal}
-            title="Create New Table"
-            className="p-1 rounded-md bg-muted hover:bg-accent text-primary border border-sidebar-border transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                if (refreshingSchemas) return;
+                setRefreshingSchemas(true);
+                void Promise.resolve(onRefreshSchemas?.()).finally(() => {
+                  setRefreshingSchemas(false);
+                });
+              }}
+              disabled={refreshingSchemas}
+              title="Refresh schemas"
+              aria-label="Refresh schemas"
+              className="p-1 rounded-md bg-muted hover:bg-accent text-primary border border-sidebar-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-muted"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshingSchemas ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+              type="button"
+              onClick={onOpenNewTableModal}
+              title="Create New Table"
+              className="p-1 rounded-md bg-muted hover:bg-accent text-primary border border-sidebar-border transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         {/* Search input */}
@@ -145,73 +190,88 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Main Table Tree List */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin scrollbar-thumb-muted">
+      <div
+        className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin scrollbar-thumb-muted"
+        aria-busy={listMode === 'skeleton'}
+        aria-label={listMode === 'skeleton' ? 'Loading tables and views' : undefined}
+      >
         <div className="px-2 py-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-muted-foreground font-mono">
-          <span>Tables & Views ({filteredTables.length})</span>
+          <span className="flex items-center gap-1.5">
+            Tables & Views
+            {listMode === 'skeleton' ? (
+              <span className="table-skeleton-bar inline-block h-2.5 w-5" />
+            ) : (
+              <span>({filteredTables.length})</span>
+            )}
+          </span>
           <PostgresLogo className="w-3.5 h-3.5" />
         </div>
 
-        {filteredTables.map((table) => {
-          const isActive = table.id === activeTableId;
-          const stats = tableStatParts(table);
-          return (
-            <div
-              key={table.id}
-              className={`group relative rounded-lg border transition-all ${
-                isActive
-                  ? 'bg-primary/20 border-primary/50 text-primary font-medium'
-                  : 'bg-card/40 border-sidebar-border hover:bg-accent/60 text-card-foreground'
-              }`}
-            >
+        {listMode === 'skeleton' ? (
+          <ExplorerListSkeleton />
+        ) : (
+          filteredTables.map((table) => {
+            const isActive = table.id === activeTableId;
+            const stats = tableStatParts(table);
+            return (
               <div
-                onClick={() => onSelectTableData(table)}
-                className="p-2 cursor-pointer flex items-center justify-between"
+                key={table.id}
+                className={`group relative rounded-lg border transition-all ${
+                  isActive
+                    ? 'bg-primary/20 border-primary/50 text-primary font-medium'
+                    : 'bg-card/40 border-sidebar-border hover:bg-accent/60 text-card-foreground'
+                }`}
               >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  {table.isView ? (
-                    <Eye className="w-4 h-4 shrink-0 text-amber-400" />
-                  ) : (
-                    <TableIcon className="w-4 h-4 shrink-0 text-primary" />
-                  )}
+                <div
+                  onClick={() => onSelectTableData(table)}
+                  className="p-2 cursor-pointer flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {table.isView ? (
+                      <Eye className="w-4 h-4 shrink-0 text-amber-400" />
+                    ) : (
+                      <TableIcon className="w-4 h-4 shrink-0 text-primary" />
+                    )}
 
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-mono text-xs font-medium truncate text-foreground">
-                        {table.name}
-                      </span>
-                      {table.isView && (
-                        <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 uppercase font-bold">
-                          VIEW
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-xs font-medium truncate text-foreground">
+                          {table.name}
                         </span>
+                        {table.isView && (
+                          <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 uppercase font-bold">
+                            VIEW
+                          </span>
+                        )}
+                      </div>
+                      {stats.length > 0 && (
+                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono">
+                          {stats.join(' • ')}
+                        </div>
                       )}
                     </div>
-                    {stats.length > 0 && (
-                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono">
-                        {stats.join(' • ')}
-                      </div>
-                    )}
+                  </div>
+
+                  {/* Contextual Action Overlay */}
+                  <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenSchemaDesigner?.(table);
+                      }}
+                      title="Edit Schema Columns"
+                      className="p-1 rounded bg-muted hover:bg-accent text-amber-400"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                    </button>
                   </div>
                 </div>
-
-                {/* Contextual Action Overlay */}
-                <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenSchemaDesigner?.(table);
-                    }}
-                    title="Edit Schema Columns"
-                    className="p-1 rounded bg-muted hover:bg-accent text-amber-400"
-                  >
-                    <Edit3 className="w-3 h-3" />
-                  </button>
-                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
 
-        {filteredTables.length === 0 && (
+        {listMode === 'empty' && (
           <div className="text-center py-8 px-4 text-xs text-muted-foreground">
             No tables matching "{searchTerm}"
           </div>
@@ -231,3 +291,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </aside>
   );
 };
+
+function ExplorerListSkeleton() {
+  return (
+    <div className="space-y-1" aria-hidden>
+      {Array.from({ length: EXPLORER_SKELETON_COUNT }, (_, i) => (
+        <div
+          key={i}
+          className="rounded-lg border border-sidebar-border bg-card/40 p-2 flex items-center gap-2.5"
+        >
+          <span className="table-skeleton-bar block h-4 w-4 rounded shrink-0" />
+          <div className="min-w-0 flex-1 space-y-1.5 py-0.5">
+            <span
+              className={`table-skeleton-bar block h-3 ${EXPLORER_SKELETON_NAME_WIDTHS[i]}`}
+            />
+            <span
+              className={`table-skeleton-bar block h-2 ${EXPLORER_SKELETON_STAT_WIDTHS[i]}`}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

@@ -1,22 +1,46 @@
-import React, { useMemo, useState } from "react";
-import { Environment, SaveConnectionInput } from "../../types";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ConnectionFolder,
+  ConnectionProfile,
+  Environment,
+  SaveConnectionInput,
+  SshAuthMethod,
+  SslMode,
+} from "../../types";
 import { SUPPORTED_DIALECTS } from "@db/database";
-import { ShieldCheck, X, AlertCircle, AlertTriangle } from "lucide-react";
+import { ShieldCheck, X, AlertCircle, AlertTriangle, FolderOpen } from "lucide-react";
 import { Select, SelectOption } from "../ui/Select";
-import { Switch } from "../ui/Switch";
 import { PostgresLogo } from "../icons/PostgresLogo";
 import {
   defaultSslForHost,
   warnInsecureConnection,
 } from "../../lib/connectionSecurity";
+import {
+  connectionFormErrors,
+  connectionFormFromProfile,
+  connectionFormToInput,
+  connectionModalCopy,
+  defaultConnectionForm,
+  firstTabWithErrors,
+  type ConnectionFormField,
+  type ConnectionFormValues,
+  type ConnectionModalTab,
+} from "../../lib/connectionForm";
+import { invokeErrorMessage } from "../../lib/invokeError";
 
 interface ConnectionModalProps {
   isOpen: boolean;
+  editingProfile?: ConnectionProfile | null;
+  folders: ConnectionFolder[];
+  defaultFolderId?: string | null;
+  keychainEnabled: boolean;
   onClose: () => void;
   onSave: (input: SaveConnectionInput) => Promise<void>;
   onTest: (
     input: SaveConnectionInput,
   ) => Promise<{ ok: boolean; message: string }>;
+  onEnableKeychain: () => Promise<void>;
+  onPickPrivateKey: () => Promise<string | null>;
 }
 
 const ENVIRONMENT_OPTIONS: SelectOption<Environment>[] = [
@@ -25,86 +49,112 @@ const ENVIRONMENT_OPTIONS: SelectOption<Environment>[] = [
   { value: "production", label: "Production", dotClassName: "bg-emerald-400" },
 ];
 
+const SSL_OPTIONS: SelectOption<SslMode>[] = [
+  { value: "disabled", label: "Disabled" },
+  { value: "require", label: "Require" },
+  { value: "enabled", label: "Enabled" },
+];
+
+const SSH_MODE_OPTIONS: SelectOption<"off" | "on">[] = [
+  { value: "off", label: "Off" },
+  { value: "on", label: "Over SSH" },
+];
+
+const SSH_AUTH_OPTIONS: SelectOption<SshAuthMethod>[] = [
+  { value: "password", label: "Password" },
+  { value: "privateKey", label: "Private Key" },
+];
+
 const fieldClass =
   "h-9 w-full px-3 bg-background border border-border rounded-xl text-foreground focus:outline-none focus:border-primary";
-
-type FieldName =
-  | "name"
-  | "host"
-  | "port"
-  | "databaseName"
-  | "username"
-  | "password"
-  | "poolSize";
 
 function RequiredMark() {
   return <span className="text-destructive"> *</span>;
 }
 
+function formFromOpenState(
+  profile: ConnectionProfile | null | undefined,
+  defaultFolderId?: string | null,
+): ConnectionFormValues {
+  if (profile) return connectionFormFromProfile(profile);
+  const form = defaultConnectionForm();
+  return defaultFolderId ? { ...form, folderId: defaultFolderId } : form;
+}
+
 export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   isOpen,
+  editingProfile,
+  folders,
+  defaultFolderId,
+  keychainEnabled,
   onClose,
   onSave,
   onTest,
+  onEnableKeychain,
+  onPickPrivateKey,
 }) => {
-  const [name, setName] = useState("Local PostgreSQL");
-  const [host, setHost] = useState("127.0.0.1");
-  const [port, setPort] = useState(5432);
-  const [username, setUsername] = useState("postgres");
-  const [databaseName, setDatabaseName] = useState("postgres");
-  const [password, setPassword] = useState("");
-  const [ssl, setSsl] = useState(() => defaultSslForHost("127.0.0.1"));
-  const [poolSize, setPoolSize] = useState(8);
-  const [environment, setEnvironment] = useState<Environment>("development");
+  const isEdit = Boolean(editingProfile);
+  const copy = connectionModalCopy(isEdit);
+  const [form, setForm] = useState<ConnectionFormValues>(defaultConnectionForm);
+  const [tab, setTab] = useState<ConnectionModalTab>("connection");
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [testOk, setTestOk] = useState<boolean | null>(null);
   const [testResult, setTestResult] = useState<string | null>(null);
-  const [touched, setTouched] = useState<Partial<Record<FieldName, boolean>>>(
-    {},
-  );
+  const [touched, setTouched] = useState<
+    Partial<Record<ConnectionFormField, boolean>>
+  >({});
   const [attempted, setAttempted] = useState(false);
 
-  const errors = useMemo(() => {
-    const next: Partial<Record<FieldName, string>> = {};
-    if (!name.trim()) next.name = "Required";
-    if (!host.trim()) next.host = "Required";
-    if (!Number.isFinite(port) || port < 1 || port > 65535)
-      next.port = "Enter a port from 1 to 65535";
-    if (!databaseName.trim()) next.databaseName = "Required";
-    if (!username.trim()) next.username = "Required";
-    if (!password) next.password = "Required";
-    if (!Number.isFinite(poolSize) || poolSize < 1 || poolSize > 32) {
-      next.poolSize = "Enter a pool size from 1 to 32";
-    }
-    return next;
-  }, [name, host, port, databaseName, username, password, poolSize]);
+  useEffect(() => {
+    if (!isOpen) return;
+    setForm(formFromOpenState(editingProfile, defaultFolderId));
+    setTab("connection");
+    setTouched({});
+    setAttempted(false);
+    setTestOk(null);
+    setTestResult(null);
+    setIsTesting(false);
+    setIsSaving(false);
+  }, [isOpen, editingProfile, defaultFolderId]);
 
+  const errors = useMemo(
+    () =>
+      connectionFormErrors(form, {
+        passwordRequired: !isEdit,
+        keychainEnabled,
+      }),
+    [form, isEdit, keychainEnabled],
+  );
   const isValid = Object.keys(errors).length === 0;
-  const sslWarning = warnInsecureConnection(host, ssl, environment);
-  const showError = (field: FieldName) =>
+  const sslWarning = warnInsecureConnection(
+    form.host,
+    form.sslMode,
+    form.environment,
+  );
+  const showError = (field: ConnectionFormField) =>
     (touched[field] || attempted) && errors[field];
-  const markTouched = (field: FieldName) =>
+  const markTouched = (field: ConnectionFormField) =>
     setTouched((current) => ({ ...current, [field]: true }));
+  const patchForm = (patch: Partial<ConnectionFormValues>) =>
+    setForm((current) => ({ ...current, ...patch }));
 
   if (!isOpen) return null;
 
-  const input = (): SaveConnectionInput => ({
-    name: name.trim(),
-    dialect: "PostgreSQL",
-    host: host.trim(),
-    port,
-    database: databaseName.trim(),
-    user: username.trim(),
-    password,
-    ssl,
-    poolSize,
-    environment,
-  });
+  const input = (): SaveConnectionInput =>
+    connectionFormToInput(form, editingProfile?.id);
+
+  const revealInvalidTab = () => {
+    const next = firstTabWithErrors(errors);
+    if (next) setTab(next);
+  };
 
   const handleTestConnection = async () => {
     setAttempted(true);
-    if (!isValid) return;
+    if (!isValid) {
+      revealInvalidTab();
+      return;
+    }
     setIsTesting(true);
     setTestResult(null);
     setTestOk(null);
@@ -114,7 +164,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
       setTestResult(res.message);
     } catch (e: unknown) {
       setTestOk(false);
-      setTestResult(e instanceof Error ? e.message : "Test failed");
+      setTestResult(invokeErrorMessage(e, "Test failed"));
     } finally {
       setIsTesting(false);
     }
@@ -123,29 +173,40 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setAttempted(true);
-    if (!isValid) return;
+    if (!isValid) {
+      revealInvalidTab();
+      return;
+    }
     setIsSaving(true);
     try {
       await onSave(input());
       onClose();
     } catch (err: unknown) {
       setTestOk(false);
-      setTestResult(
-        err instanceof Error ? err.message : "Failed to save connection",
-      );
+      setTestResult(invokeErrorMessage(err, "Failed to save connection"));
     } finally {
       setIsSaving(false);
     }
   };
 
+  const tabClass = (id: ConnectionModalTab) =>
+    `flex-1 py-2.5 px-4 font-semibold border-b-2 transition-colors ${
+      tab === id
+        ? "border-primary text-primary"
+        : "border-transparent text-muted-foreground hover:text-foreground"
+    }`;
+
+  const fieldErrorClass = (field: ConnectionFormField) =>
+    `${fieldClass} ${showError(field) ? "border-destructive focus:border-destructive" : ""}`;
+
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 font-sans select-none text-foreground">
-      <div className="w-full max-w-lg bg-popover border border-border rounded-2xl shadow-2xl flex flex-col text-popover-foreground">
+    <div className="connection-modal fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 font-sans select-none text-foreground">
+      <div className="w-full max-w-xl bg-popover border border-border rounded-2xl shadow-2xl flex flex-col text-popover-foreground max-h-[90vh]">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between bg-background/60 rounded-t-2xl">
           <div className="flex items-center gap-2.5 font-mono">
             <PostgresLogo className="w-5 h-5" />
             <span className="text-sm font-bold text-foreground">
-              New Database Connection Profile
+              {copy.title}
             </span>
           </div>
           <button
@@ -156,253 +217,521 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
           </button>
         </div>
 
+        <div className="flex w-full border-b border-border bg-background font-mono text-xs">
+          <button
+            type="button"
+            onClick={() => setTab("connection")}
+            className={tabClass("connection")}
+          >
+            Connection
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("security")}
+            className={tabClass("security")}
+          >
+            SSH / SSL
+          </button>
+        </div>
+
         <form
           onSubmit={handleSave}
-          className="p-5 space-y-4 font-mono text-xs"
+          className="flex flex-col min-h-0 font-mono text-xs"
           noValidate
         >
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase text-muted-foreground">
-              Database Engine
-            </label>
-            <div className="grid grid-cols-1 gap-2">
-              {SUPPORTED_DIALECTS.map((d) => (
-                <button
-                  key={d.id}
-                  type="button"
-                  aria-label={d.label}
-                  title={d.label}
-                  className="p-2.5 rounded-xl border font-bold bg-primary/20 border-primary text-primary flex items-center justify-center gap-2"
-                >
-                  <PostgresLogo className="w-5 h-5" />
-                </button>
-              ))}
-            </div>
-          </div>
+          <div className="p-5 space-y-4 overflow-y-auto max-h-[min(70vh,32rem)]">
+            {tab === "connection" && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                    Database Engine
+                  </label>
+                  <div className="grid grid-cols-1 gap-2">
+                    {SUPPORTED_DIALECTS.map((d) => (
+                      <button
+                        key={d.id}
+                        type="button"
+                        aria-label={d.label}
+                        title={d.label}
+                        className="p-2.5 rounded-xl border font-bold bg-primary/20 border-primary text-primary flex items-center justify-center gap-2"
+                      >
+                        <PostgresLogo className="w-5 h-5" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase text-muted-foreground">
-              Connection Display Name
-              <RequiredMark />
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                markTouched("name");
-              }}
-              onBlur={() => markTouched("name")}
-              aria-invalid={Boolean(showError("name"))}
-              className={`${fieldClass} ${showError("name") ? "border-destructive focus:border-destructive" : ""}`}
-            />
-            {showError("name") && (
-              <p className="text-[10px] text-destructive">{errors.name}</p>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                    Connection Display Name
+                    <RequiredMark />
+                  </label>
+                  <input
+                    type="text"
+                    value={form.name}
+                    onChange={(e) => {
+                      patchForm({ name: e.target.value });
+                      markTouched("name");
+                    }}
+                    onBlur={() => markTouched("name")}
+                    aria-invalid={Boolean(showError("name"))}
+                    className={fieldErrorClass("name")}
+                  />
+                  {showError("name") && (
+                    <p className="text-[10px] text-destructive">{errors.name}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                    Folder
+                  </label>
+                  <Select
+                    value={form.folderId}
+                    options={[
+                      { value: "", label: "Ungrouped" },
+                      ...folders.map((folder) => ({
+                        value: folder.id,
+                        label: folder.name,
+                      })),
+                    ]}
+                    onChange={(folderId) => patchForm({ folderId })}
+                    placement="bottom"
+                    aria-label="Folder"
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2 space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                      Host / Endpoint
+                      <RequiredMark />
+                    </label>
+                    <input
+                      type="text"
+                      value={form.host}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        patchForm({
+                          host: next,
+                          sslMode: defaultSslForHost(next),
+                        });
+                        markTouched("host");
+                      }}
+                      onBlur={() => markTouched("host")}
+                      aria-invalid={Boolean(showError("host"))}
+                      className={fieldErrorClass("host")}
+                    />
+                    {showError("host") && (
+                      <p className="text-[10px] text-destructive">{errors.host}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                      Port
+                      <RequiredMark />
+                    </label>
+                    <input
+                      type="number"
+                      value={Number.isFinite(form.port) ? form.port : ""}
+                      onChange={(e) => {
+                        patchForm({
+                          port:
+                            e.target.value === ""
+                              ? Number.NaN
+                              : Number(e.target.value),
+                        });
+                        markTouched("port");
+                      }}
+                      onBlur={() => markTouched("port")}
+                      aria-invalid={Boolean(showError("port"))}
+                      className={fieldErrorClass("port")}
+                    />
+                    {showError("port") && (
+                      <p className="text-[10px] text-destructive">{errors.port}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                      Database Name
+                      <RequiredMark />
+                    </label>
+                    <input
+                      type="text"
+                      value={form.databaseName}
+                      onChange={(e) => {
+                        patchForm({ databaseName: e.target.value });
+                        markTouched("databaseName");
+                      }}
+                      onBlur={() => markTouched("databaseName")}
+                      aria-invalid={Boolean(showError("databaseName"))}
+                      className={fieldErrorClass("databaseName")}
+                    />
+                    {showError("databaseName") && (
+                      <p className="text-[10px] text-destructive">
+                        {errors.databaseName}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                      Username
+                      <RequiredMark />
+                    </label>
+                    <input
+                      type="text"
+                      value={form.username}
+                      onChange={(e) => {
+                        patchForm({ username: e.target.value });
+                        markTouched("username");
+                      }}
+                      onBlur={() => markTouched("username")}
+                      aria-invalid={Boolean(showError("username"))}
+                      className={fieldErrorClass("username")}
+                    />
+                    {showError("username") && (
+                      <p className="text-[10px] text-destructive">
+                        {errors.username}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                    Password
+                    {!isEdit && <RequiredMark />}
+                  </label>
+                  <input
+                    type="password"
+                    value={form.password}
+                    placeholder={copy.passwordHint}
+                    onChange={(e) => {
+                      patchForm({ password: e.target.value });
+                      markTouched("password");
+                    }}
+                    onBlur={() => markTouched("password")}
+                    aria-invalid={Boolean(showError("password"))}
+                    className={fieldErrorClass("password")}
+                  />
+                  {showError("password") && (
+                    <p className="text-[10px] text-destructive">
+                      {errors.password}
+                    </p>
+                  )}
+                  {isEdit && copy.passwordHint && !showError("password") && (
+                    <p className="text-[10px] text-muted-foreground">
+                      {copy.passwordHint}
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5 min-w-0">
+                    <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                      Environment
+                    </label>
+                    <Select
+                      value={form.environment}
+                      options={ENVIRONMENT_OPTIONS}
+                      onChange={(environment) => patchForm({ environment })}
+                      placement="top"
+                      aria-label="Environment"
+                    />
+                  </div>
+                  <div className="space-y-1.5 min-w-0">
+                    <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                      Pool Size
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={32}
+                      value={Number.isFinite(form.poolSize) ? form.poolSize : ""}
+                      onChange={(e) => {
+                        patchForm({
+                          poolSize:
+                            e.target.value === ""
+                              ? Number.NaN
+                              : Number(e.target.value),
+                        });
+                        markTouched("poolSize");
+                      }}
+                      onBlur={() => markTouched("poolSize")}
+                      aria-invalid={Boolean(showError("poolSize"))}
+                      className={fieldErrorClass("poolSize")}
+                    />
+                    {showError("poolSize") && (
+                      <p className="text-[10px] text-destructive">
+                        {errors.poolSize}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </>
             )}
-          </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2 space-y-1.5">
-              <label className="text-[10px] font-bold uppercase text-muted-foreground">
-                Host / Endpoint
-                <RequiredMark />
-              </label>
-              <input
-                type="text"
-                value={host}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  setHost(next);
-                  setSsl(defaultSslForHost(next));
-                  markTouched("host");
-                }}
-                onBlur={() => markTouched("host")}
-                aria-invalid={Boolean(showError("host"))}
-                className={`${fieldClass} ${showError("host") ? "border-destructive focus:border-destructive" : ""}`}
-              />
-              {showError("host") && (
-                <p className="text-[10px] text-destructive">{errors.host}</p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase text-muted-foreground">
-                Port
-                <RequiredMark />
-              </label>
-              <input
-                type="number"
-                value={Number.isFinite(port) ? port : ""}
-                onChange={(e) => {
-                  setPort(
-                    e.target.value === "" ? Number.NaN : Number(e.target.value),
-                  );
-                  markTouched("port");
-                }}
-                onBlur={() => markTouched("port")}
-                aria-invalid={Boolean(showError("port"))}
-                className={`${fieldClass} ${showError("port") ? "border-destructive focus:border-destructive" : ""}`}
-              />
-              {showError("port") && (
-                <p className="text-[10px] text-destructive">{errors.port}</p>
-              )}
-            </div>
-          </div>
+            {tab === "security" && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                    SSL mode
+                  </label>
+                  <Select
+                    value={form.sslMode}
+                    options={SSL_OPTIONS}
+                    onChange={(sslMode) => patchForm({ sslMode })}
+                    aria-label="SSL mode"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Disabled skips encryption. Require encrypts and accepts any
+                    certificate. Enabled encrypts and verifies the certificate
+                    chain.
+                  </p>
+                </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase text-muted-foreground">
-                Database Name
-                <RequiredMark />
-              </label>
-              <input
-                type="text"
-                value={databaseName}
-                onChange={(e) => {
-                  setDatabaseName(e.target.value);
-                  markTouched("databaseName");
-                }}
-                onBlur={() => markTouched("databaseName")}
-                aria-invalid={Boolean(showError("databaseName"))}
-                className={`${fieldClass} ${showError("databaseName") ? "border-destructive focus:border-destructive" : ""}`}
-              />
-              {showError("databaseName") && (
-                <p className="text-[10px] text-destructive">
-                  {errors.databaseName}
-                </p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase text-muted-foreground">
-                Username
-                <RequiredMark />
-              </label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => {
-                  setUsername(e.target.value);
-                  markTouched("username");
-                }}
-                onBlur={() => markTouched("username")}
-                aria-invalid={Boolean(showError("username"))}
-                className={`${fieldClass} ${showError("username") ? "border-destructive focus:border-destructive" : ""}`}
-              />
-              {showError("username") && (
-                <p className="text-[10px] text-destructive">
-                  {errors.username}
-                </p>
-              )}
-            </div>
-          </div>
+                {sslWarning && (
+                  <div className="p-2.5 rounded-xl border text-xs flex items-center gap-2 bg-amber-500/10 border-amber-500/30 text-amber-200">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>{sslWarning}</span>
+                  </div>
+                )}
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase text-muted-foreground">
-              Password
-              <RequiredMark />
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                markTouched("password");
-              }}
-              onBlur={() => markTouched("password")}
-              aria-invalid={Boolean(showError("password"))}
-              className={`${fieldClass} ${showError("password") ? "border-destructive focus:border-destructive" : ""}`}
-            />
-            {showError("password") && (
-              <p className="text-[10px] text-destructive">{errors.password}</p>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                    SSH tunnel
+                  </label>
+                  <Select
+                    value={form.sshEnabled ? "on" : "off"}
+                    options={SSH_MODE_OPTIONS}
+                    onChange={(mode) => patchForm({ sshEnabled: mode === "on" })}
+                    aria-label="SSH tunnel"
+                  />
+                </div>
+
+                {form.sshEnabled && (
+                  <>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="col-span-2 space-y-1.5">
+                        <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                          SSH Server
+                          <RequiredMark />
+                        </label>
+                        <input
+                          type="text"
+                          value={form.sshHost}
+                          onChange={(e) => {
+                            patchForm({ sshHost: e.target.value });
+                            markTouched("sshHost");
+                          }}
+                          onBlur={() => markTouched("sshHost")}
+                          aria-invalid={Boolean(showError("sshHost"))}
+                          className={fieldErrorClass("sshHost")}
+                        />
+                        {showError("sshHost") && (
+                          <p className="text-[10px] text-destructive">
+                            {errors.sshHost}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                          Port
+                          <RequiredMark />
+                        </label>
+                        <input
+                          type="number"
+                          value={Number.isFinite(form.sshPort) ? form.sshPort : ""}
+                          onChange={(e) => {
+                            patchForm({
+                              sshPort:
+                                e.target.value === ""
+                                  ? Number.NaN
+                                  : Number(e.target.value),
+                            });
+                            markTouched("sshPort");
+                          }}
+                          onBlur={() => markTouched("sshPort")}
+                          aria-invalid={Boolean(showError("sshPort"))}
+                          className={fieldErrorClass("sshPort")}
+                        />
+                        {showError("sshPort") && (
+                          <p className="text-[10px] text-destructive">
+                            {errors.sshPort}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                        Username
+                        <RequiredMark />
+                      </label>
+                      <input
+                        type="text"
+                        value={form.sshUser}
+                        onChange={(e) => {
+                          patchForm({ sshUser: e.target.value });
+                          markTouched("sshUser");
+                        }}
+                        onBlur={() => markTouched("sshUser")}
+                        aria-invalid={Boolean(showError("sshUser"))}
+                        className={fieldErrorClass("sshUser")}
+                      />
+                      {showError("sshUser") && (
+                        <p className="text-[10px] text-destructive">
+                          {errors.sshUser}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                        Authentication
+                      </label>
+                      <Select
+                        value={form.sshAuth}
+                        options={SSH_AUTH_OPTIONS}
+                        onChange={(sshAuth) => patchForm({ sshAuth })}
+                        aria-label="SSH authentication"
+                      />
+                    </div>
+
+                    {form.sshAuth === "password" ? (
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                          SSH Password
+                          {!isEdit && <RequiredMark />}
+                        </label>
+                        <input
+                          type="password"
+                          value={form.sshPassword}
+                          placeholder={
+                            isEdit
+                              ? "Leave blank to keep the current password"
+                              : undefined
+                          }
+                          onChange={(e) => {
+                            patchForm({ sshPassword: e.target.value });
+                            markTouched("sshPassword");
+                          }}
+                          onBlur={() => markTouched("sshPassword")}
+                          aria-invalid={Boolean(showError("sshPassword"))}
+                          className={fieldErrorClass("sshPassword")}
+                        />
+                        {showError("sshPassword") && (
+                          <p className="text-[10px] text-destructive">
+                            {errors.sshPassword}
+                          </p>
+                        )}
+                        {!keychainEnabled && (
+                          <div className="p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 bg-amber-500/10 border-amber-500/30 text-amber-200">
+                            <span>
+                              SSH password authentication requires the system
+                              keychain.
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void onEnableKeychain();
+                              }}
+                              className="px-2 py-1 rounded-lg bg-primary text-primary-foreground font-bold shrink-0"
+                            >
+                              Enable keychain
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                            Private Key
+                            <RequiredMark />
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={form.sshKeyPath}
+                              onChange={(e) => {
+                                patchForm({ sshKeyPath: e.target.value });
+                                markTouched("sshKeyPath");
+                              }}
+                              onBlur={() => markTouched("sshKeyPath")}
+                              aria-invalid={Boolean(showError("sshKeyPath"))}
+                              className={fieldErrorClass("sshKeyPath")}
+                            />
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const path = await onPickPrivateKey();
+                                if (path) {
+                                  patchForm({ sshKeyPath: path });
+                                  markTouched("sshKeyPath");
+                                }
+                              }}
+                              className="h-9 px-3 rounded-xl bg-muted hover:bg-accent text-foreground font-bold border border-border shrink-0 inline-flex items-center gap-1.5"
+                            >
+                              <FolderOpen className="w-3.5 h-3.5" />
+                              Import
+                            </button>
+                          </div>
+                          {showError("sshKeyPath") && (
+                            <p className="text-[10px] text-destructive">
+                              {errors.sshKeyPath}
+                            </p>
+                          )}
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                            Passphrase
+                          </label>
+                          <input
+                            type="password"
+                            value={form.sshPassphrase}
+                            placeholder={
+                              isEdit
+                                ? "Leave blank to keep the current passphrase"
+                                : undefined
+                            }
+                            onChange={(e) => {
+                              patchForm({ sshPassphrase: e.target.value });
+                              markTouched("sshPassphrase");
+                            }}
+                            onBlur={() => markTouched("sshPassphrase")}
+                            className={fieldClass}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+              </>
             )}
-          </div>
 
-          <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,0.85fr)_auto] gap-3">
-            <div className="space-y-1.5 min-w-0">
-              <label className="text-[10px] font-bold uppercase text-muted-foreground">
-                Environment
-              </label>
-              <Select
-                value={environment}
-                options={ENVIRONMENT_OPTIONS}
-                onChange={setEnvironment}
-                placement="top"
-                aria-label="Environment"
-              />
-            </div>
-            <div className="space-y-1.5 min-w-0">
-              <label className="text-[10px] font-bold uppercase text-muted-foreground">
-                Pool Size
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={32}
-                value={Number.isFinite(poolSize) ? poolSize : ""}
-                onChange={(e) => {
-                  setPoolSize(
-                    e.target.value === "" ? Number.NaN : Number(e.target.value),
-                  );
-                  markTouched("poolSize");
-                }}
-                onBlur={() => markTouched("poolSize")}
-                aria-invalid={Boolean(showError("poolSize"))}
-                className={`${fieldClass} ${showError("poolSize") ? "border-destructive focus:border-destructive" : ""}`}
-              />
-              {showError("poolSize") && (
-                <p className="text-[10px] text-destructive">
-                  {errors.poolSize}
-                </p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <label
-                htmlFor="connection-ssl"
-                className="text-[10px] font-bold uppercase text-muted-foreground"
+            {testResult && (
+              <div
+                className={`p-2.5 rounded-xl border text-xs flex items-center gap-2 ${
+                  testOk
+                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                    : "bg-destructive/10 border-destructive/30 text-destructive"
+                }`}
               >
-                SSL
-              </label>
-              <div className="h-9 px-3 flex items-center gap-2 bg-background border border-border rounded-xl">
-                <Switch
-                  id="connection-ssl"
-                  checked={ssl}
-                  onCheckedChange={setSsl}
-                />
-                <span
-                  className={`font-bold uppercase text-[10px] ${
-                    ssl ? "text-primary" : "text-muted-foreground"
-                  }`}
-                >
-                  {ssl ? "On" : "Off"}
-                </span>
+                {testOk ? (
+                  <ShieldCheck className="w-4 h-4 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                )}
+                <span>{testResult}</span>
               </div>
-            </div>
+            )}
           </div>
 
-          {sslWarning && (
-            <div className="p-2.5 rounded-xl border text-xs flex items-center gap-2 bg-amber-500/10 border-amber-500/30 text-amber-200">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>{sslWarning}</span>
-            </div>
-          )}
-
-          {testResult && (
-            <div
-              className={`p-2.5 rounded-xl border text-xs flex items-center gap-2 ${
-                testOk
-                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-                  : "bg-destructive/10 border-destructive/30 text-destructive"
-              }`}
-            >
-              {testOk ? (
-                <ShieldCheck className="w-4 h-4 shrink-0" />
-              ) : (
-                <AlertCircle className="w-4 h-4 shrink-0" />
-              )}
-              <span>{testResult}</span>
-            </div>
-          )}
-
-          <div className="pt-2 flex items-center justify-between">
+          <div className="px-5 py-4 border-t border-border flex items-center justify-between">
             <button
               type="button"
               onClick={handleTestConnection}
@@ -426,7 +755,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                 title={!isValid ? "Fill in all required fields" : undefined}
                 className="px-4 py-2 rounded-xl bg-primary hover:opacity-90 text-primary-foreground font-bold shadow-md transition-colors disabled:opacity-40 disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:cursor-not-allowed"
               >
-                {isSaving ? "Connecting..." : "Connect Database"}
+                {isSaving ? copy.submitting : copy.submit}
               </button>
             </div>
           </div>

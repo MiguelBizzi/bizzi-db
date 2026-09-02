@@ -114,3 +114,17 @@ export function applyTableView<T extends Record<string, unknown>>(
   const filtered = applyFilters(searched, options.filters ?? []);
   return applySort(filtered, options.sort ?? null);
 }
+
+export function setFilterEnabled(
+  filters: FilterClause[],
+  id: string,
+  enabled: boolean
+): FilterClause[] {
+  return filters.map((filter) => (filter.id === id ? { ...filter, enabled } : filter));
+}
+
+export function filterRuleFieldsClass(enabled: boolean): string {
+  return enabled
+    ? 'flex items-center gap-2 min-w-0'
+    : 'flex items-center gap-2 min-w-0 opacity-50';
+}

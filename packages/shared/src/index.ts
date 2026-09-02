@@ -4,6 +4,18 @@ export type Environment = 'production' | 'staging' | 'development';
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'error';
 
+export type SslMode = 'disabled' | 'require' | 'enabled';
+
+export type SshAuthMethod = 'password' | 'privateKey';
+
+export interface AppSettings {
+  keychainEnabled: boolean;
+}
+
+export const DEFAULT_APP_SETTINGS: AppSettings = {
+  keychainEnabled: false,
+};
+
 export interface ColumnDefinition {
   name: string;
   type: string;
@@ -188,6 +200,16 @@ export interface ActivityLogItem {
   user: string;
 }
 
+export interface ConnectionFolder {
+  id: string;
+  name: string;
+}
+
+export interface SaveFolderInput {
+  id?: string;
+  name: string;
+}
+
 export interface ConnectionProfile {
   id: string;
   name: string;
@@ -196,10 +218,18 @@ export interface ConnectionProfile {
   port: number;
   database: string;
   user: string;
-  ssl: boolean;
+  sslMode: SslMode;
   poolSize: number;
   environment: Environment;
   status: ConnectionStatus;
+  folderId?: string | null;
+  sortOrder?: number;
+  sshEnabled: boolean;
+  sshHost: string;
+  sshPort: number;
+  sshUser: string;
+  sshAuth: SshAuthMethod;
+  sshKeyPath?: string | null;
 }
 
 export interface SaveConnectionInput {
@@ -211,9 +241,18 @@ export interface SaveConnectionInput {
   database: string;
   user: string;
   password: string;
-  ssl: boolean;
+  sslMode: SslMode;
   poolSize: number;
   environment: Environment;
+  folderId?: string | null;
+  sshEnabled: boolean;
+  sshHost: string;
+  sshPort: number;
+  sshUser: string;
+  sshAuth: SshAuthMethod;
+  sshKeyPath?: string | null;
+  sshPassword: string;
+  sshPassphrase: string;
 }
 
 export interface TestConnectionResult {

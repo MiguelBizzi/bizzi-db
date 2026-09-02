@@ -23,6 +23,8 @@ uuid.workspace = true
 chrono.workspace = true
 url = "=2.5.0"
 indexmap = "=2.6.0"
+ssh2 = "=0.9.4"
+rfd = "=0.14.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.5"

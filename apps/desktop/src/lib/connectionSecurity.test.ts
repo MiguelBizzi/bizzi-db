@@ -22,27 +22,28 @@ describe('isLoopbackHost', () => {
 });
 
 describe('defaultSslForHost', () => {
-  test('disables SSL on loopback and enables it for remote hosts', () => {
-    expect(defaultSslForHost('127.0.0.1')).toBe(false);
-    expect(defaultSslForHost('localhost')).toBe(false);
-    expect(defaultSslForHost('db.example.com')).toBe(true);
-    expect(defaultSslForHost('')).toBe(false);
+  test('disables SSL on loopback and requires it for remote hosts', () => {
+    expect(defaultSslForHost('127.0.0.1')).toBe('disabled');
+    expect(defaultSslForHost('localhost')).toBe('disabled');
+    expect(defaultSslForHost('db.example.com')).toBe('require');
+    expect(defaultSslForHost('')).toBe('disabled');
   });
 });
 
 describe('warnInsecureConnection', () => {
-  test('is silent when SSL is on or the host is local', () => {
-    expect(warnInsecureConnection('db.example.com', true)).toBeNull();
-    expect(warnInsecureConnection('127.0.0.1', false)).toBeNull();
-    expect(warnInsecureConnection('localhost', false, 'production')).toBeNull();
+  test('is silent when SSL is not disabled or the host is local', () => {
+    expect(warnInsecureConnection('db.example.com', 'require')).toBeNull();
+    expect(warnInsecureConnection('db.example.com', 'enabled')).toBeNull();
+    expect(warnInsecureConnection('127.0.0.1', 'disabled')).toBeNull();
+    expect(warnInsecureConnection('localhost', 'disabled', 'production')).toBeNull();
   });
 
   test('warns for remote hosts without SSL, stronger in production', () => {
-    expect(warnInsecureConnection('db.example.com', false)).toContain(
+    expect(warnInsecureConnection('db.example.com', 'disabled')).toContain(
       'Enable SSL',
     );
     expect(
-      warnInsecureConnection('db.example.com', false, 'production'),
+      warnInsecureConnection('db.example.com', 'disabled', 'production'),
     ).toContain('Production');
   });
 });

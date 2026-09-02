@@ -432,6 +432,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
             filters.map((f) => (f.id === id ? { ...f, [field]: val } : f)),
           )
         }
+        onSetFilters={setFilters}
         showFilters={showFilters}
         onShowFiltersChange={setShowFilters}
         hiddenColumns={hiddenColumns}

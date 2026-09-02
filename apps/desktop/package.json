@@ -33,6 +33,7 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "recharts": "^3.10.1",
+    "html-to-image": "^1.11.13",
     "sql-formatter": "^15.8.2",
     "vite": "^6.2.3"
   },

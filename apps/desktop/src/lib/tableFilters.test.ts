@@ -7,6 +7,8 @@ import {
   applyTableView,
   createDefaultFilter,
   DEFAULT_FILTER_OPERATOR,
+  filterRuleFieldsClass,
+  setFilterEnabled,
 } from './tableFilters';
 import { SEARCH_DEBOUNCE_MS } from './useDebouncedValue';
 
@@ -90,12 +92,46 @@ describe('applyFilters', () => {
     expect(
       applyFilters(rows, [filter({ column: 'name', operator: '=', value: 'Ada', enabled: false })]).map((r) => r.id)
     ).toEqual([1, 2, 3]);
+    const mixed = [
+      filter({ id: 'on', column: 'role', operator: '=', value: 'admin' }),
+      filter({ id: 'off', column: 'name', operator: '=', value: 'Ada', enabled: false }),
+    ];
+    expect(applyFilters(rows, mixed).map((r) => r.id)).toEqual([1]);
+    expect(applyFilters(rows, setFilterEnabled(mixed, 'off', true)).map((r) => r.id)).toEqual([1]);
+    expect(applyFilters(rows, setFilterEnabled(mixed, 'on', false)).map((r) => r.id)).toEqual([1, 2, 3]);
     expect(
       applyFilters(rows, [filter({ column: 'name', operator: '=', value: '' })]).map((r) => r.id)
     ).toEqual([1, 2, 3]);
     expect(
       applyFilters(rows, [filter({ column: 'name', operator: '>', value: 'abc' })]).map((r) => r.id)
     ).toEqual([]);
+  });
+});
+
+describe('setFilterEnabled', () => {
+  test('toggles a rule without dropping it or changing its condition', () => {
+    const clauses = [
+      filter({ id: 'keep', column: 'name', operator: '=', value: 'Ada' }),
+      filter({ id: 'pause', column: 'role', operator: '=', value: 'staff' }),
+    ];
+    const paused = setFilterEnabled(clauses, 'pause', false);
+    expect(paused).toHaveLength(2);
+    expect(paused[1]).toEqual({
+      id: 'pause',
+      column: 'role',
+      operator: '=',
+      value: 'staff',
+      enabled: false,
+    });
+    expect(paused[0].enabled).toBe(true);
+    expect(setFilterEnabled(paused, 'pause', true)[1].enabled).toBe(true);
+  });
+});
+
+describe('filterRuleFieldsClass', () => {
+  test('dims deactivated rules and leaves active rules at full opacity', () => {
+    expect(filterRuleFieldsClass(true)).not.toContain('opacity-50');
+    expect(filterRuleFieldsClass(false)).toContain('opacity-50');
   });
 });
 

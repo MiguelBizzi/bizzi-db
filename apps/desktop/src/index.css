@@ -214,7 +214,8 @@
 [data-tauri-drag-region] input,
 [data-tauri-drag-region] select,
 [data-tauri-drag-region] textarea,
-[data-tauri-drag-region] [role="button"] {
+[data-tauri-drag-region] [role="button"],
+[data-tauri-drag-region] [data-no-drag] {
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
@@ -266,6 +267,18 @@
 .pending-changes-drawer,
 .insert-row-drawer {
   animation: pending-drawer-in 180ms ease-out;
+}
+
+/* Number fields are typed, not stepped — hide increment/decrement chevrons. */
+.connection-modal input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.connection-modal input[type="number"]::-webkit-inner-spin-button,
+.connection-modal input[type="number"]::-webkit-outer-spin-button {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 @keyframes table-skeleton-shimmer {

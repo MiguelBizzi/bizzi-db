@@ -1,6 +1,8 @@
 export type {
   ActivityLogItem,
+  AppSettings,
   ColumnDefinition,
+  ConnectionFolder,
   ConnectionProfile,
   ConnectionStatus,
   DatabaseDialect,
@@ -17,8 +19,11 @@ export type {
   QueryExecuteResponse,
   QueryExecutionResult,
   SaveConnectionInput,
+  SaveFolderInput,
   SavedQuery,
   SortClause,
+  SshAuthMethod,
+  SslMode,
   TablePreviewRequest,
   TableSchema,
   TabType,
@@ -28,6 +33,7 @@ export type {
 } from '@db/shared';
 
 export {
+  DEFAULT_APP_SETTINGS,
   DEFAULT_PREVIEW_LIMIT,
   DEFAULT_ROW_CAP,
 } from '@db/shared';
