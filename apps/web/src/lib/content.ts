@@ -94,7 +94,7 @@ export const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'How do I install it?',
-    a: 'Download the installer for your OS from the latest GitHub Release: universal DMG for macOS, NSIS for Windows, AppImage for Linux.',
+    a: 'Download the universal macOS DMG from the latest GitHub Release. Windows and Linux installers are not published yet.',
   },
   {
     q: 'Why Rust and Tauri?',

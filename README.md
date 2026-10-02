@@ -4,7 +4,7 @@ A desktop Postgres client. Fast, local-only, and built with Tauri.
 
 ## Download
 
-Installers for macOS (universal), Windows, and Linux are on the latest GitHub Release:
+Installers for macOS (universal DMG) are on the latest GitHub Release:
 
 **[Download Bizzi DB](https://github.com/MiguelBizzi/bizzi-db/releases/latest)**
 
@@ -20,7 +20,7 @@ Ship from `main` with a version bump and a `v*` tag. Cursor follows [`.cursor/ru
    git tag -a v0.1.1 -m "v0.1.1"
    git push origin v0.1.1
    ```
-3. [`.github/workflows/release.yml`](.github/workflows/release.yml) builds, signs, and uploads DMG, NSIS, AppImage, and `latest.json`.
+3. [`.github/workflows/release.yml`](.github/workflows/release.yml) builds, signs, and uploads a universal macOS DMG and `latest.json`.
 
 Pushing `main` without a tag does not ship. Do not retag. Do not regenerate the updater signing key. Do not change the bundle id `com.bizzidb.app` after the first public install.
 

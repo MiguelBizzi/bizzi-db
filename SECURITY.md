@@ -43,7 +43,8 @@ GitHub Actions secrets for a signed release:
 
 - `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 - Apple notarization: `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`
-- Windows Authenticode (optional until a cert exists; unsigned NSIS still installs with SmartScreen warnings): `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD`
+
+Release CI currently builds a universal macOS DMG only. Windows Authenticode secrets are unused until that target is restored.
 
 Bundle id `com.bizzidb.app` is locked after the first public install (app-data path, keychain service, updater identity).
 
@@ -57,8 +58,8 @@ Please open a private report (or a GitHub security advisory if the repository is
 
 ## Distribution checklist (when shipping)
 
-- Signed and notarized macOS builds; Authenticode on Windows
+- Signed and notarized macOS builds
 - Tauri updater with signed artifacts; public key in app config
-- Release CI matrix; never expose `TAURI_SIGNING_*` to the Vite frontend (`envPrefix` is `VITE_` only)
+- Release CI (macOS universal); never expose `TAURI_SIGNING_*` to the Vite frontend (`envPrefix` is `VITE_` only)
 - Raise MSRV to 1.88+ and align the Rust `tauri` crate with `@tauri-apps/api` (~2.11). The crate bump needs edition 2024 transitives and cannot land on rustc 1.80. Updater currently pins `reqwest` 0.12.4 and `zeroize` 1.8.1 so this repo still builds on 1.80.
 - Optional later: SQLCipher for `workspace.sqlite`, custom CA / mTLS, hostname verification beyond `SslMode::Require`

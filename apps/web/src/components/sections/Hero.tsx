@@ -35,8 +35,7 @@ export function Hero() {
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Installers from GitHub Releases · macOS universal DMG · Windows NSIS ·
-          Linux AppImage
+          Installers from GitHub Releases · macOS universal DMG
         </p>
       </div>
     </section>

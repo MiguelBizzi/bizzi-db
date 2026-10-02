@@ -26,6 +26,8 @@ const BANNED = [
   'duckdb',
   'gemini',
   '1.4.2',
+  'nsis',
+  'appimage',
 ];
 
 function publishedCopy(): string {
