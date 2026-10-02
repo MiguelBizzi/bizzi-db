@@ -61,5 +61,5 @@ Please open a private report (or a GitHub security advisory if the repository is
 - Signed and notarized macOS builds
 - Tauri updater with signed artifacts; public key in app config
 - Release CI (macOS universal); never expose `TAURI_SIGNING_*` to the Vite frontend (`envPrefix` is `VITE_` only)
-- Raise MSRV to 1.88+ and align the Rust `tauri` crate with `@tauri-apps/api` (~2.11). The crate bump needs edition 2024 transitives and cannot land on rustc 1.80. Updater currently pins `reqwest` 0.12.4 and `zeroize` 1.8.1 so this repo still builds on 1.80.
+- MSRV is 1.88. Aligning the Rust `tauri` crate with `@tauri-apps/api` (~2.11) is still optional.
 - Optional later: SQLCipher for `workspace.sqlite`, custom CA / mTLS, hostname verification beyond `SslMode::Require`

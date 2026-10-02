@@ -21,7 +21,7 @@ tauri-utils = "=2.2.0"
 tokio.workspace = true
 uuid.workspace = true
 chrono.workspace = true
-url = "=2.5.0"
+url = "=2.5.8"
 indexmap = "=2.6.0"
 ssh2 = "=0.9.4"
 rfd = "=0.14.1"
@@ -29,9 +29,6 @@ rfd = "=0.14.1"
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "=2.2.0"
 tauri-plugin-process = "=2.2.0"
-# Newer reqwest/zeroize pull edition 2024 crates that rustc 1.80 cannot parse.
-reqwest = { version = "=0.12.4", default-features = false, features = ["json", "stream", "rustls-tls"] }
-zeroize = "=1.8.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.5"
