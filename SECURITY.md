@@ -33,7 +33,7 @@ TLS is optional. New connections default SSL **on** for non-loopback hosts and *
 
 ## Distribution
 
-Installers and `latest.json` are published to public GitHub Releases by `.github/workflows/release.yml` on `v*` tags. The app checks `https://github.com/MiguelBizzi/db-manager/releases/latest/download/latest.json` over HTTPS, verifies the minisign signature, then installs only after the user confirms in Settings. A failed verify or install leaves the running version in place.
+Installers and `latest.json` are published to public GitHub Releases by `.github/workflows/release.yml` on `v*` tags. The app checks `https://github.com/MiguelBizzi/bizzi-db/releases/latest/download/latest.json` over HTTPS, verifies the minisign signature, then installs only after the user confirms in Settings. A failed verify or install leaves the running version in place.
 
 Passive (startup) update checks that fail (403, 404, network, geo-blocks) stay silent. A manual check in Settings shows the error.
 

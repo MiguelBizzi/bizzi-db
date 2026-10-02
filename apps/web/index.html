@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bizzi DB — Native Postgres client, built with Rust and Tauri</title>
+    <meta
+      name="description"
+      content="A local-first PostgreSQL desktop client. Connections, queries, and SSH run in Rust. The UI is Tauri 2 — a system WebView, not Electron."
+    />
+    <meta name="theme-color" content="#d89a3c" />
+    <meta name="application-name" content="Bizzi DB" />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:title"
+      content="Bizzi DB — Native Postgres client, built with Rust and Tauri"
+    />
+    <meta
+      property="og:description"
+      content="A local-first PostgreSQL desktop client. Connections, queries, and SSH run in Rust. The UI is Tauri 2 — a system WebView, not Electron."
+    />
+    <meta name="twitter:card" content="summary" />
+    <meta
+      name="twitter:title"
+      content="Bizzi DB — Native Postgres client, built with Rust and Tauri"
+    />
+    <meta
+      name="twitter:description"
+      content="A local-first PostgreSQL desktop client. Connections, queries, and SSH run in Rust. The UI is Tauri 2 — a system WebView, not Electron."
+    />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap"
+      rel="stylesheet"
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Bizzi DB",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "macOS, Windows, Linux",
+        "softwareVersion": "0.1.0",
+        "description": "A local-first PostgreSQL desktop client. Connections, queries, and SSH run in Rust. The UI is Tauri 2 — a system WebView, not Electron.",
+        "downloadUrl": "https://github.com/MiguelBizzi/bizzi-db/releases/latest",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        }
+      }
+    </script>
+  </head>
+  <body class="bg-background text-foreground font-sans">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

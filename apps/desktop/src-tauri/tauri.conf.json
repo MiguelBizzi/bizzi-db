@@ -41,7 +41,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJBNUU2RkRBREVFMTc3ODkKUldTSmQrSGUybTlldWxyQmlRQUVrNXZUUFpwSlZmWnZxZ0JydlJvMGw5QU11cTd1UmpITFB3UEgK",
       "endpoints": [
-        "https://github.com/MiguelBizzi/db-manager/releases/latest/download/latest.json"
+        "https://github.com/MiguelBizzi/bizzi-db/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

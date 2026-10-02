@@ -6,7 +6,7 @@ A desktop Postgres client. Fast, local-only, and built with Tauri.
 
 Installers for macOS (universal), Windows, and Linux are on the latest GitHub Release:
 
-**[Download Bizzi DB](https://github.com/MiguelBizzi/db-manager/releases/latest)**
+**[Download Bizzi DB](https://github.com/MiguelBizzi/bizzi-db/releases/latest)**
 
 The in-app updater uses that same release (`latest.json`). The first install is always manual; later versions can be installed from Settings.
 

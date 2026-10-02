@@ -48,6 +48,25 @@
         "typescript": "~5.8.2",
       },
     },
+    "apps/web": {
+      "name": "web",
+      "version": "0.1.0",
+      "dependencies": {
+        "@tailwindcss/vite": "^4.1.14",
+        "@vitejs/plugin-react": "^5.0.4",
+        "lucide-react": "^0.546.0",
+        "react": "^19.0.1",
+        "react-dom": "^19.0.1",
+        "vite": "^6.2.3",
+      },
+      "devDependencies": {
+        "@types/node": "^22.14.0",
+        "@types/react": "^19.0.10",
+        "@types/react-dom": "^19.0.4",
+        "tailwindcss": "^4.1.14",
+        "typescript": "~5.8.2",
+      },
+    },
     "packages/core": {
       "name": "@db/core",
       "version": "0.0.1",
@@ -593,6 +612,8 @@
     "vite": ["vite@6.4.3", "", { "dependencies": { "esbuild": "^0.25.0", "fdir": "^6.4.4", "picomatch": "^4.0.2", "postcss": "^8.5.3", "rollup": "^4.34.9", "tinyglobby": "^0.2.13" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^18.0.0 || ^20.0.0 || >=22.0.0", "jiti": ">=1.21.0", "less": "*", "lightningcss": "^1.21.0", "sass": "*", "sass-embedded": "*", "stylus": "*", "sugarss": "*", "terser": "^5.16.0", "tsx": "^4.8.1", "yaml": "^2.4.2" }, "optionalPeers": ["@types/node", "jiti", "less", "lightningcss", "sass", "sass-embedded", "stylus", "sugarss", "terser", "tsx", "yaml"], "bin": { "vite": "bin/vite.js" } }, "sha512-NTKlcQjlAK7MlQoyb6LgaqHc8sso/pVyUJYWMws3jg21uTJw/LddqIFPcPqP6PzpgbIcZyKI85sFE4HBrQDA8A=="],
 
     "w3c-keyname": ["w3c-keyname@2.2.8", "", {}, "sha512-dpojBhNsCNN7T82Tm7k26A6G9ML3NkhDsnw9n/eoxSRlVBB4CEtIQ/KTCLI2Fwf3ataSXRhYFkQi3SlnFwPvPQ=="],
+
+    "web": ["web@workspace:apps/web"],
 
     "yallist": ["yallist@3.1.1", "", {}, "sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g=="],
 
