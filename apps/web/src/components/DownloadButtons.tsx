@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Apple, Download, HardDrive, Monitor } from 'lucide-react';
+import { Apple, Download } from 'lucide-react';
 import {
   DOWNLOAD_PLATFORMS,
   detectPreferredPlatform,
@@ -8,8 +8,6 @@ import {
 
 const ICONS: Record<DownloadPlatformId, typeof Apple> = {
   macos: Apple,
-  windows: Monitor,
-  linux: HardDrive,
 };
 
 export function DownloadButtons({
