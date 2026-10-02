@@ -23,7 +23,9 @@ uuid.workspace = true
 chrono.workspace = true
 url = "=2.5.8"
 indexmap = "=2.6.0"
-ssh2 = "=0.9.4"
+# Vendored OpenSSL so the universal macOS build can cross-compile
+# x86_64 without a second system OpenSSL.
+ssh2 = { version = "=0.9.4", features = ["vendored-openssl"] }
 rfd = "=0.14.1"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
