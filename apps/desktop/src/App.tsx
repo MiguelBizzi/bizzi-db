@@ -1126,11 +1126,6 @@ export default function App() {
               await refreshHistory();
               return {};
             }}
-            onOpenTableData={handleSelectTableData}
-            onOpenTableSql={handleOpenTableSql}
-            onCopyTableSchema={handleCopyTableSchema}
-            onEmptyTable={(target) => setTableActionConfirm({ table: target, action: 'truncate' })}
-            onDeleteTable={(target) => setTableActionConfirm({ table: target, action: 'drop' })}
           />
         );
       }

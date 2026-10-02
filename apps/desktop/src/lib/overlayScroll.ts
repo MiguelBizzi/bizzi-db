@@ -300,7 +300,8 @@ export function bindOverlayScroll(root: Document | HTMLElement = document): () =
   const onWheel = (event: Event) => {
     if (!(event instanceof WheelEvent)) return;
     if (shouldIgnoreWheel(event)) return;
-    if (isNativeWheelTarget(event.target)) return;
+    const wheelTarget = event.target instanceof Element ? event.target : null;
+    if (isNativeWheelTarget(wheelTarget)) return;
 
     let node: Element | null =
       event.target instanceof Element ? event.target : null;
