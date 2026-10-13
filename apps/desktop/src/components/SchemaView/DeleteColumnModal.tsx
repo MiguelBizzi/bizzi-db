@@ -93,7 +93,7 @@ const DeleteColumnModalBody: React.FC<DeleteColumnModalProps> = ({
 
         <form onSubmit={handleSubmit} className="p-4 space-y-3">
           {submitError && (
-            <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px] font-mono flex items-start gap-2">
+            <div className="field-message p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px] font-mono flex items-start gap-2">
               <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               <span className="break-all">{submitError}</span>
             </div>
@@ -143,14 +143,14 @@ const DeleteColumnModalBody: React.FC<DeleteColumnModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 rounded-lg hover:bg-accent text-muted-foreground text-xs transition-colors"
+              className="pressable px-3 py-1.5 rounded-lg hover:bg-accent text-muted-foreground text-xs transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!matched || submitting || disabled}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md transition-colors disabled:opacity-50"
+              className="pressable flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md transition-colors disabled:opacity-50"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>{submitting ? 'Deleting…' : 'Delete column'}</span>

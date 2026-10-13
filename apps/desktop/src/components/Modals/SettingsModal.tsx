@@ -193,7 +193,7 @@ const SettingsModalBody: React.FC<SettingsModalProps> = ({
                 onClick={() => {
                   void onCheckForUpdates();
                 }}
-                className="h-9 px-3 rounded-xl border border-border bg-background font-bold uppercase text-[10px] hover:bg-accent disabled:opacity-50"
+                className="pressable h-9 px-3 rounded-xl border border-border bg-background font-bold uppercase text-[10px] hover:bg-accent disabled:opacity-50"
               >
                 {updateStatus.phase === "error" ? "Retry" : "Check for updates"}
               </button>
@@ -203,7 +203,7 @@ const SettingsModalBody: React.FC<SettingsModalProps> = ({
                 onClick={() => {
                   void onRestartToUpdate();
                 }}
-                className="h-9 px-3 rounded-xl border border-border bg-primary text-primary-foreground font-bold uppercase text-[10px] hover:opacity-90 disabled:opacity-50 disabled:bg-background disabled:text-muted-foreground"
+                className="pressable h-9 px-3 rounded-xl border border-border bg-primary text-primary-foreground font-bold uppercase text-[10px] hover:opacity-90 disabled:opacity-50 disabled:bg-background disabled:text-muted-foreground"
               >
                 Restart to update
               </button>

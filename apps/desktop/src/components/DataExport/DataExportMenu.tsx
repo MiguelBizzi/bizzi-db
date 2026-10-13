@@ -168,7 +168,7 @@ function FormatDropdown({
         disabled={disabled}
         title={title}
         onClick={onToggle}
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-background border border-border hover:bg-accent text-foreground text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-background"
+        className="pressable flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-background border border-border hover:bg-accent text-foreground text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-background"
       >
         <Icon className={`w-3.5 h-3.5 ${iconClass ?? ''}`} />
         <span>{label}</span>

@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { motion } from 'motion/react';
+import { fade } from '../../lib/motion';
 import { QueryExecutionResult } from '../../types';
 import { ExplainPlanView } from './ExplainPlanView';
 import { AlertCircle, Table, Network } from 'lucide-react';
@@ -24,10 +26,16 @@ export const QueryResultsView: React.FC<QueryResultsViewProps> = ({
 
   if (isLoading && results.length === 0) {
     return (
-      <div className="flex-1 flex flex-col bg-background overflow-hidden h-full min-h-0">
+      <motion.div
+        key="loading"
+        variants={fade}
+        initial="initial"
+        animate="animate"
+        className="flex-1 flex flex-col bg-background overflow-hidden h-full min-h-0"
+      >
         <ResultsToolbar disabled rows={0} />
         <ResultsSkeleton />
-      </div>
+      </motion.div>
     );
   }
 
@@ -94,7 +102,7 @@ function ResultsToolbar({
           type="button"
           disabled={disabled}
           onClick={() => onSubTab?.('grid')}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
+          className={`pressable flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
             (activeSubTab ?? 'grid') === 'grid'
               ? 'bg-primary/20 text-primary border border-primary/30'
               : 'text-muted-foreground hover:text-foreground'
@@ -109,7 +117,7 @@ function ResultsToolbar({
             type="button"
             disabled={disabled}
             onClick={() => onSubTab?.('explain')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
+            className={`pressable flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
               activeSubTab === 'explain'
                 ? 'bg-primary/20 text-primary border border-primary/30'
                 : 'text-muted-foreground hover:text-foreground'
@@ -189,7 +197,13 @@ function SingleResultView({
 
   if (result.error && !isLoading) {
     return (
-      <div className="p-4 bg-background flex-1 overflow-auto">
+      <motion.div
+        key="error"
+        variants={fade}
+        initial="initial"
+        animate="animate"
+        className="p-4 bg-background flex-1 overflow-auto"
+      >
         <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/40 text-red-400 space-y-3 font-mono text-xs shadow-lg">
           <div className="flex items-center gap-2 font-bold text-red-400">
             <AlertCircle className="w-5 h-5 shrink-0" />
@@ -206,7 +220,7 @@ function SingleResultView({
             </span>
           </div>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
@@ -228,7 +242,13 @@ function SingleResultView({
       {isLoading ? (
         <ResultsSkeleton />
       ) : (
-        <div className="flex-1 table-scroll-port">
+        <motion.div
+          key="rows"
+          variants={fade}
+          initial="initial"
+          animate="animate"
+          className="flex-1 table-scroll-port"
+        >
           {activeSubTab === 'explain' && result.explainPlan ? (
             <div className="p-2">
               <ExplainPlanView planNode={result.explainPlan} />
@@ -253,7 +273,7 @@ function SingleResultView({
               </thead>
               <tbody className="divide-y divide-border">
                 {rows.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-accent/60">
+                  <tr key={idx} className="hover:bg-accent/60 transition-colors">
                     {columns.map((col) => {
                       const val = row[col];
                       return (
@@ -273,7 +293,7 @@ function SingleResultView({
               </tbody>
             </table>
           )}
-        </div>
+        </motion.div>
       )}
     </div>
   );

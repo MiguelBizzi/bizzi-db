@@ -125,7 +125,7 @@ const AddColumnDrawerBody: React.FC<AddColumnDrawerProps> = ({
         </header>
 
         {submitError && (
-          <div className="px-4 py-2 text-[11px] font-mono border-b bg-rose-500/10 text-rose-300 border-rose-500/20 flex items-start gap-2">
+          <div className="field-message px-4 py-2 text-[11px] font-mono border-b bg-rose-500/10 text-rose-300 border-rose-500/20 flex items-start gap-2">
             <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
             <span className="break-all">{submitError}</span>
           </div>
@@ -166,7 +166,7 @@ const AddColumnDrawerBody: React.FC<AddColumnDrawerProps> = ({
               <button
                 type="submit"
                 disabled={submitting || disabled || !valid}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary hover:opacity-90 text-primary-foreground text-xs font-bold shadow-md transition-colors disabled:opacity-50"
+                className="pressable flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary hover:opacity-90 text-primary-foreground text-xs font-bold shadow-md transition-colors disabled:opacity-50"
               >
                 <Check className="w-3.5 h-3.5" />
                 <span>{submitting ? "Adding…" : "Add column"}</span>

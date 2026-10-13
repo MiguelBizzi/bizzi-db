@@ -284,7 +284,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
                     }`}
                   />
                   {parseError && (
-                    <p className="text-[10px] text-destructive">{parseError}</p>
+                    <p className="field-message text-[10px] text-destructive">{parseError}</p>
                   )}
                 </div>
 
@@ -728,7 +728,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
                                   markTouched("sshKeyPath");
                                 }
                               }}
-                              className="h-9 px-3 rounded-xl bg-muted hover:bg-accent text-foreground font-bold border border-border shrink-0 inline-flex items-center gap-1.5"
+                              className="pressable h-9 px-3 rounded-xl bg-muted hover:bg-accent text-foreground font-bold border border-border shrink-0 inline-flex items-center gap-1.5"
                             >
                               <FolderOpen className="w-3.5 h-3.5" />
                               Import
@@ -791,7 +791,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
               onClick={handleTestConnection}
               disabled={isTesting || !isValid}
               title={!isValid ? "Fill in all required fields" : undefined}
-              className="px-3 py-2 rounded-xl bg-muted hover:bg-accent text-foreground font-bold border border-border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="pressable px-3 py-2 rounded-xl bg-muted hover:bg-accent text-foreground font-bold border border-border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {isTesting ? "Testing..." : "Test Connection"}
             </button>
@@ -799,7 +799,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-3 py-2 rounded-xl hover:bg-accent text-muted-foreground hover:text-foreground font-bold transition-colors"
+                className="pressable px-3 py-2 rounded-xl hover:bg-accent text-muted-foreground hover:text-foreground font-bold transition-colors"
               >
                 Cancel
               </button>
@@ -807,7 +807,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
                 type="submit"
                 disabled={isSaving || !isValid}
                 title={!isValid ? "Fill in all required fields" : undefined}
-                className="px-4 py-2 rounded-xl bg-primary hover:opacity-90 text-primary-foreground font-bold shadow-md transition-colors disabled:opacity-40 disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:cursor-not-allowed"
+                className="pressable px-4 py-2 rounded-xl bg-primary hover:opacity-90 text-primary-foreground font-bold shadow-md transition-colors disabled:opacity-40 disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:cursor-not-allowed"
               >
                 {isSaving ? copy.submitting : copy.submit}
               </button>

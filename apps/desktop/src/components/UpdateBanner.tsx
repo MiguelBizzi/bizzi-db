@@ -13,7 +13,7 @@ interface UpdateBannerProps {
 }
 
 const BUTTON =
-  'h-7 px-2.5 rounded-lg border border-border font-bold uppercase text-[10px] hover:bg-accent';
+  'pressable h-7 px-2.5 rounded-lg border border-border font-bold uppercase text-[10px] hover:bg-accent';
 
 export const UpdateBanner: React.FC<UpdateBannerProps> = ({
   status,

@@ -271,7 +271,7 @@ function Field({ error, children }: { error?: string; children: ReactNode }) {
   return (
     <div>
       {children}
-      {error && <p className="mt-1 text-[11px] text-rose-300 font-mono">{error}</p>}
+      {error && <p className="field-message mt-1 text-[11px] text-rose-300 font-mono">{error}</p>}
     </div>
   );
 }

@@ -180,7 +180,7 @@ const InsertRowDrawerBody: React.FC<InsertRowDrawerProps> = ({
         </header>
 
         {submitError && (
-          <div className="px-4 py-2 text-[11px] font-mono border-b bg-rose-500/10 text-rose-300 border-rose-500/20 flex items-start gap-2">
+          <div className="field-message px-4 py-2 text-[11px] font-mono border-b bg-rose-500/10 text-rose-300 border-rose-500/20 flex items-start gap-2">
             <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
             <span className="break-all">{submitError}</span>
           </div>
@@ -233,7 +233,7 @@ const InsertRowDrawerBody: React.FC<InsertRowDrawerProps> = ({
                 <button
                   type="submit"
                   disabled={submitting}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shadow-md transition-colors disabled:opacity-50 ${
+                  className={`pressable flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shadow-md transition-colors disabled:opacity-50 ${
                     armed
                       ? "bg-emerald-400 text-emerald-950"
                       : "bg-emerald-600 hover:bg-emerald-500 text-white"
@@ -422,7 +422,7 @@ function ColumnField({
         />
       )}
 
-      {error && <p className="text-[11px] text-rose-300 font-mono">{error}</p>}
+      {error && <p className="field-message text-[11px] text-rose-300 font-mono">{error}</p>}
     </div>
   );
 }

@@ -176,7 +176,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <button
                 type="button"
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted hover:bg-accent border border-border cursor-pointer transition-colors text-xs font-medium text-foreground"
+                className="pressable flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted hover:bg-accent border border-border cursor-pointer transition-colors text-xs font-medium text-foreground"
               >
                 <PostgresLogo className="w-4 h-4 shrink-0" />
                 <span className="max-w-[160px] truncate font-mono">
@@ -262,7 +262,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           type="button"
           onClick={onOpenCommandPalette}
           title={`Open command palette (${PALETTE_SHORTCUT})`}
-          className="hidden md:flex items-center justify-between w-80 px-3 py-1.5 rounded-lg bg-background hover:bg-muted border border-border text-muted-foreground hover:text-foreground transition-all text-xs cursor-pointer group shadow-inner"
+          className="pressable hidden md:flex items-center justify-between w-80 px-3 py-1.5 rounded-lg bg-background hover:bg-muted border border-border text-muted-foreground hover:text-foreground transition-all text-xs cursor-pointer group shadow-inner"
         >
           <div className="flex items-center gap-2">
             <Search className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />

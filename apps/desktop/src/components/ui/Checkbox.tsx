@@ -24,7 +24,7 @@ export function Checkbox({
         className="peer h-4 w-4 cursor-pointer appearance-none rounded-[5px] border border-border bg-background transition-colors checked:border-primary checked:bg-primary hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
       />
       <Check
-        className="pointer-events-none absolute inset-0 m-auto h-3 w-3 text-primary-foreground opacity-0 peer-checked:opacity-100"
+        className="pointer-events-none absolute inset-0 m-auto h-3 w-3 text-primary-foreground opacity-0 scale-75 transition-[opacity,scale] peer-checked:opacity-100 peer-checked:scale-100"
         strokeWidth={3}
       />
     </span>

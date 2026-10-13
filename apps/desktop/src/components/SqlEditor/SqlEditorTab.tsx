@@ -183,7 +183,7 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
             <button
               onClick={() => handleRunQuery()}
               disabled={isRunning}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold font-sans text-xs shadow-md transition-colors cursor-pointer"
+              className="pressable flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold font-sans text-xs shadow-md transition-colors cursor-pointer"
             >
               <Play className="w-3.5 h-3.5 fill-white" />
               <span>{isRunning ? 'Running...' : 'Run Query (⌘↵)'}</span>
@@ -191,7 +191,7 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
 
             <button
               onClick={handleFormatQuery}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted hover:bg-accent text-foreground text-xs transition-colors border border-border"
+              className="pressable flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted hover:bg-accent text-foreground text-xs transition-colors border border-border"
             >
               <Code className="w-3.5 h-3.5 text-primary" />
               <span>Format SQL</span>
@@ -199,7 +199,7 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
 
             <button
               onClick={handleOpenSaveModal}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted hover:bg-accent text-foreground text-xs transition-colors font-medium border border-border"
+              className="pressable flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted hover:bg-accent text-foreground text-xs transition-colors font-medium border border-border"
             >
               <Save className="w-3.5 h-3.5 text-amber-400" />
               <span>Save</span>
@@ -207,7 +207,7 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
 
             <button
               onClick={() => setShowSavedQueries(!showSavedQueries)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+              className={`pressable flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
                 showSavedQueries
                   ? 'bg-primary/20 text-primary border-primary/40 font-semibold'
                   : 'bg-muted text-foreground border-border hover:bg-accent'
@@ -489,7 +489,7 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
                         key={tag}
                         type="button"
                         onClick={() => toggleSaveTag(tag)}
-                        className={`px-2 py-1 rounded-md text-[11px] font-mono border transition-colors ${
+                        className={`pressable px-2 py-1 rounded-md text-[11px] font-mono border transition-colors ${
                           isSelected
                             ? 'bg-purple-600 text-white border-purple-500 font-semibold'
                             : 'bg-background text-muted-foreground border-border hover:border-primary/50'
@@ -519,7 +519,7 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
                   <button
                     type="button"
                     onClick={handleAddSaveTag}
-                    className="px-3 py-1.5 rounded-lg bg-muted hover:bg-accent text-foreground border border-border font-mono text-xs"
+                    className="pressable px-3 py-1.5 rounded-lg bg-muted hover:bg-accent text-foreground border border-border font-mono text-xs"
                   >
                     Add
                   </button>
@@ -541,13 +541,13 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsSaveModalOpen(false)}
-                  className="px-4 py-2 rounded-lg bg-muted hover:bg-accent text-foreground transition-colors font-mono border border-border"
+                  className="pressable px-4 py-2 rounded-lg bg-muted hover:bg-accent text-foreground transition-colors font-mono border border-border"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-lg bg-primary hover:opacity-90 text-primary-foreground font-semibold shadow-lg transition-colors font-mono flex items-center gap-1.5"
+                  className="pressable px-4 py-2 rounded-lg bg-primary hover:opacity-90 text-primary-foreground font-semibold shadow-lg transition-colors font-mono flex items-center gap-1.5"
                 >
                   <Save className="w-3.5 h-3.5" />
                   <span>Save Query</span>

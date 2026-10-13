@@ -68,7 +68,7 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
           type="button"
           disabled={readOnly}
           onClick={() => setAddOpen(true)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary hover:opacity-90 text-primary-foreground font-bold text-xs shadow-md transition-colors disabled:opacity-50 shrink-0"
+          className="pressable flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary hover:opacity-90 text-primary-foreground font-bold text-xs shadow-md transition-colors disabled:opacity-50 shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>Add column</span>

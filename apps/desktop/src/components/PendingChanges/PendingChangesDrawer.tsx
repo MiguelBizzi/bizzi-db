@@ -364,7 +364,7 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
                 type="button"
                 disabled={busy}
                 onClick={() => armOrRun('approve-all', onApproveAll)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shadow-md transition-colors disabled:opacity-50 ${
+                className={`pressable flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shadow-md transition-colors disabled:opacity-50 ${
                   armed === 'approve-all'
                     ? 'bg-amber-400 text-amber-950'
                     : 'bg-amber-500 hover:bg-amber-400 text-amber-950'
