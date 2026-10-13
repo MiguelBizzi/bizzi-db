@@ -18,7 +18,8 @@ import {
   PanelBottom,
   PanelTop,
 } from 'lucide-react';
-import { motion, useReducedMotion } from 'motion/react';
+import { motion } from 'motion/react';
+import { useMotionPreference } from '../lib/motionPreference';
 import { WorkspaceTab } from '../types';
 import { ContextMenu, type ContextMenuItem } from './ui/ContextMenu';
 import { canClosePaneTabs, type CloseTabKind } from '../lib/tabPaneActions';
@@ -91,7 +92,7 @@ export const TabsBar: React.FC<TabsBarProps> = ({
   const [menu, setMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  const reduceMotion = useReducedMotion();
+  const { reduced: reduceMotion } = useMotionPreference();
 
   const getTabIcon = (type: WorkspaceTab['type']) => {
     switch (type) {

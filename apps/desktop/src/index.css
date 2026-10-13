@@ -453,3 +453,16 @@
   );
   animation: table-skeleton-shimmer 1.2s ease-in-out infinite;
 }
+
+[data-motion="reduced"] *,
+[data-motion="reduced"] *::before,
+[data-motion="reduced"] *::after {
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+}
+/* Spinners convey loading, so they keep turning. */
+[data-motion="reduced"] .animate-spin {
+  animation-duration: 1s !important;
+  animation-iteration-count: infinite !important;
+}

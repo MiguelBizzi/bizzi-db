@@ -126,6 +126,8 @@ import {
   type AppUpdateStatus,
 } from './lib/appUpdate';
 import { UpdateBanner } from './components/UpdateBanner';
+import { MotionConfig } from 'motion/react';
+import { useMotionPreference } from './lib/motionPreference';
 
 const ROOT_PANE_ID = 'pane_root';
 
@@ -151,6 +153,17 @@ export default function App() {
   const [isPendingChangesOpen, setIsPendingChangesOpen] = useState(false);
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const {
+    preference: motionPreference,
+    reduced: reducedMotion,
+    setPreference: setMotionPreference,
+  } = useMotionPreference();
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (reducedMotion) root.dataset.motion = 'reduced';
+    else delete root.dataset.motion;
+  }, [reducedMotion]);
   const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [appVersion, setAppVersion] = useState('0.1.0');
   const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus>(IDLE_UPDATE_STATUS);
@@ -1173,6 +1186,7 @@ export default function App() {
   const showPicker = !currentDbId;
 
   return (
+    <MotionConfig reducedMotion={reducedMotion ? 'always' : 'never'}>
     <div className="flex flex-col h-screen w-screen bg-background text-foreground font-sans select-none overflow-hidden">
       <Navbar
         variant={showPicker ? 'picker' : 'workspace'}
@@ -1359,6 +1373,8 @@ export default function App() {
         keychainEnabled={appSettings.keychainEnabled}
         appVersion={appVersion}
         updateStatus={updateStatus}
+        motionPreference={motionPreference}
+        onChangeMotionPreference={setMotionPreference}
         onClose={() => setIsSettingsOpen(false)}
         onToggleKeychain={handleToggleKeychain}
         onCheckForUpdates={checkForAppUpdateManually}
@@ -1381,5 +1397,6 @@ export default function App() {
       ) : null}
       <Toaster />
     </div>
+    </MotionConfig>
   );
 }

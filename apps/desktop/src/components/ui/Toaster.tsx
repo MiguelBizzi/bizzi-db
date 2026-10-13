@@ -1,17 +1,16 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { Check, CircleAlert } from 'lucide-react';
 import { dismissToast, subscribeToasts, type Toast } from '../../lib/toast';
+import { DURATION, enterTransition } from '../../lib/motion';
+import { useMotionPreference } from '../../lib/motionPreference';
 
-const ENTER_EXIT = {
-  duration: 0.22,
-  ease: [0.16, 1, 0.3, 1] as const,
-};
+const ENTER_EXIT = enterTransition(DURATION.base);
 
 export function Toaster() {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const reduceMotion = useReducedMotion();
+  const { reduced: reduceMotion } = useMotionPreference();
 
   useEffect(() => subscribeToasts(setToasts), []);
 

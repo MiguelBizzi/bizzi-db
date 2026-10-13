@@ -1,6 +1,8 @@
 import React from "react";
 import { Settings, X, AlertTriangle } from "lucide-react";
 import { Switch } from "../ui/Switch";
+import { Select, type SelectOption } from "../ui/Select";
+import type { MotionPreference } from "../../lib/motionPreference";
 import {
   canRestartToUpdate,
   downloadPercent,
@@ -12,11 +14,19 @@ interface SettingsModalProps {
   keychainEnabled: boolean;
   appVersion: string;
   updateStatus: AppUpdateStatus;
+  motionPreference: MotionPreference;
+  onChangeMotionPreference: (pref: MotionPreference) => void;
   onClose: () => void;
   onToggleKeychain: (enabled: boolean) => Promise<void> | void;
   onCheckForUpdates: () => Promise<void> | void;
   onRestartToUpdate: () => Promise<void> | void;
 }
+
+const MOTION_OPTIONS: SelectOption<MotionPreference>[] = [
+  { value: "on", label: "On" },
+  { value: "system", label: "Match system" },
+  { value: "reduced", label: "Reduced" },
+];
 
 function updateStatusCopy(status: AppUpdateStatus): string {
   switch (status.phase) {
@@ -54,6 +64,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   keychainEnabled,
   appVersion,
   updateStatus,
+  motionPreference,
+  onChangeMotionPreference,
   onClose,
   onToggleKeychain,
   onCheckForUpdates,
@@ -126,6 +138,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </span>
             </div>
           )}
+
+          <div className="space-y-1.5">
+            <label
+              htmlFor="settings-motion"
+              className="text-[10px] font-bold uppercase text-muted-foreground"
+            >
+              Motion
+            </label>
+            <Select
+              id="settings-motion"
+              size="sm"
+              value={motionPreference}
+              options={MOTION_OPTIONS}
+              onChange={onChangeMotionPreference}
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Animations are on by default. Choose Match system to follow your
+              operating system's reduce-motion setting, or Reduced to turn most
+              animation off.
+            </p>
+          </div>
 
           <div className="space-y-1.5 pt-1">
             <span className="text-[10px] font-bold uppercase text-muted-foreground">
