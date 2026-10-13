@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/svg/lockup-horizontal-on-dark.svg">
+    <img alt="Bizzi DB" src="assets/brand/svg/lockup-horizontal-on-light.svg" height="72">
+  </picture>
+</p>
+
 # Bizzi DB
 
 A desktop Postgres client. Fast, local-only, and built with Tauri.

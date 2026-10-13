@@ -44,3 +44,14 @@ jobs:
           prerelease: false
           args: --target universal-apple-darwin
           includeUpdaterJson: true
+
+      # Best effort: if this step fails, the plain DMG stays published.
+      - name: Brand the DMG
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          dmg="$(ls target/universal-apple-darwin/release/bundle/dmg/*.dmg | head -n 1)"
+          assets/brand/dmg/brand-dmg.sh "$dmg"
+          gh release upload "${{ github.ref_name }}" "$dmg" --clobber

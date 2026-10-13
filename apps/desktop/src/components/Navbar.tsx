@@ -1,5 +1,4 @@
 import {
-  Database,
   Search,
   Activity,
   Plus,
@@ -14,6 +13,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { handleTitlebarMouseDown } from "../lib/windowDrag";
 import { ConnectionFolder, ConnectionProfile, DatabaseSchema } from "../types";
 import { PostgresLogo } from "./icons/PostgresLogo";
+import { BrandMark } from "./icons/BrandMark";
 import {
   connectionSwitcherEntries,
   groupConnections,
@@ -156,10 +156,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           title={isPicker ? undefined : "All connections"}
           className="flex items-center gap-2 font-semibold text-sm tracking-tight text-foreground pr-3 border-r border-border"
         >
-          <div className="p-1.5 rounded-lg bg-primary/15 text-primary border border-primary/30">
-            <Database className="w-4 h-4" />
-          </div>
-          <span>Bizzi DB</span>
+          <BrandMark size="sm" />
+          <span>
+            Bizzi <span className="text-primary">DB</span>
+          </span>
         </button>
 
         {!isPicker && (

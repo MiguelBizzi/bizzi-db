@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "dmg:preview": "tauri build --bundles dmg --config '{\"bundle\":{\"createUpdaterArtifacts\":false}}' && ../../assets/brand/dmg/brand-dmg.sh \"$(ls ../../target/release/bundle/dmg/*.dmg | head -n 1)\"",
     "lint": "tsc --noEmit",
     "test": "bun test"
   },

@@ -1,6 +1,7 @@
 import { Download } from 'lucide-react';
 import { BrandMark } from '../BrandMark';
-import { PRODUCT_NAME, RELEASES_URL, VERSION } from '../../lib/site';
+import { Wordmark } from '../Wordmark';
+import { RELEASES_URL, VERSION } from '../../lib/site';
 
 const NAV = [
   { href: '#showcase', label: 'Showcase' },
@@ -18,7 +19,7 @@ export function Header() {
         <a href="#top" className="flex items-center gap-3 shrink-0 lg:justify-self-start">
           <BrandMark />
           <span className="font-bold text-lg tracking-tight text-foreground">
-            {PRODUCT_NAME}
+            <Wordmark />
           </span>
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-mono font-semibold hidden sm:inline-block">
             v{VERSION}

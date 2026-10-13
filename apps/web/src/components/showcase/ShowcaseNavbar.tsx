@@ -7,8 +7,8 @@ import {
   Settings,
 } from 'lucide-react';
 import { BrandMark } from '../BrandMark';
+import { Wordmark } from '../Wordmark';
 import { PostgresLogo } from '../PostgresLogo';
-import { PRODUCT_NAME } from '../../lib/site';
 
 export function ShowcaseNavbar() {
   return (
@@ -22,7 +22,9 @@ export function ShowcaseNavbar() {
 
         <div className="flex items-center gap-2 font-semibold text-sm tracking-tight text-foreground pr-3 border-r border-border">
           <BrandMark size="sm" />
-          <span>{PRODUCT_NAME}</span>
+          <span>
+            <Wordmark />
+          </span>
         </div>
 
         <button

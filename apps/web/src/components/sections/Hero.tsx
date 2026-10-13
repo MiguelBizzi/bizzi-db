@@ -7,6 +7,14 @@ export function Hero() {
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[450px] bg-gradient-to-b from-primary/15 to-transparent blur-3xl -z-10 pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-8">
+        <img
+          src="/app-icon.svg"
+          alt={`${PRODUCT_NAME} app icon`}
+          width={112}
+          height={112}
+          className="mx-auto size-28 drop-shadow-[0_12px_32px_rgba(216,121,67,0.25)]"
+        />
+
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-card border border-border shadow-sm text-xs text-muted-foreground">
           <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
           <span className="text-foreground font-semibold">

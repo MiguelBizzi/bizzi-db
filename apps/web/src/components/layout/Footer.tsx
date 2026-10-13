@@ -1,4 +1,5 @@
 import { BrandMark } from '../BrandMark';
+import { Wordmark } from '../Wordmark';
 import { PRODUCT_NAME, RELEASES_URL, REPO_URL } from '../../lib/site';
 
 export function Footer() {
@@ -7,7 +8,7 @@ export function Footer() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 sm:grid-cols-3 items-center gap-4">
         <div className="flex items-center gap-2 justify-center sm:justify-start">
           <BrandMark size="sm" />
-          <span className="font-semibold text-foreground">{PRODUCT_NAME}</span>
+          <span className="font-semibold text-foreground"><Wordmark /></span>
         </div>
 
         <div className="flex items-center justify-center gap-6">
