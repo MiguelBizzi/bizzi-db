@@ -108,17 +108,22 @@ import { shouldConnectAfterSave } from './lib/connectionForm';
 import { toast } from './lib/toast';
 import { buildTableDdlPreview } from './lib/schemaChange';
 import { getVersion } from '@tauri-apps/api/app';
-import { check } from '@tauri-apps/plugin-updater';
+import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import {
   IDLE_UPDATE_STATUS,
-  shouldStartInstall,
+  UPDATE_CHECK_INTERVAL_MS,
+  canRestartToUpdate,
+  canStartUpdateCheck,
+  shouldShowUpdateBanner,
   statusAfterCheck,
   statusAfterCheckError,
   statusAfterDownloadEvent,
+  statusAfterDownloadFailure,
+  statusAfterInstallFailure,
   type AppUpdateStatus,
-  type UpdateCheckKind,
 } from './lib/appUpdate';
+import { UpdateBanner } from './components/UpdateBanner';
 
 const ROOT_PANE_ID = 'pane_root';
 
@@ -147,6 +152,9 @@ export default function App() {
   const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [appVersion, setAppVersion] = useState('0.1.0');
   const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus>(IDLE_UPDATE_STATUS);
+  const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
+  const updateStatusRef = useRef<AppUpdateStatus>(IDLE_UPDATE_STATUS);
+  const pendingUpdateRef = useRef<Update | null>(null);
   const [editingProfile, setEditingProfile] = useState<ConnectionProfile | null>(
     null
   );
@@ -169,6 +177,7 @@ export default function App() {
   const [tableLoading, setTableLoading] = useState<Record<string, boolean>>({});
 
   currentDbIdRef.current = currentDbId;
+  updateStatusRef.current = updateStatus;
 
   const currentDatabase = currentDbId
     ? databases.find((d) => d.id === currentDbId) || null
@@ -320,48 +329,61 @@ export default function App() {
     };
   }, []);
 
-  const checkForAppUpdate = useCallback(async (kind: UpdateCheckKind) => {
-    setUpdateStatus({ phase: 'checking' });
+  const downloadAppUpdate = useCallback(async (update: Update) => {
     try {
-      const update = await check();
-      const next = statusAfterCheck(
-        update ? { version: update.version, body: update.body } : null,
-      );
-      setUpdateStatus(next);
-      if (kind === 'passive' && next.phase === 'available') {
-        toast(`Update ${next.version} is available in Settings`, 'default');
-      }
+      await update.download((event) => {
+        setUpdateStatus((current) => statusAfterDownloadEvent(current, event));
+      });
     } catch (error: unknown) {
-      const next = statusAfterCheckError(kind, error);
-      setUpdateStatus(next ?? IDLE_UPDATE_STATUS);
+      console.error('Update download failed', error);
+      setUpdateStatus(statusAfterDownloadFailure(error));
     }
   }, []);
 
-  const installAppUpdate = useCallback(async () => {
-    if (!shouldStartInstall(updateStatus, true)) return;
-    try {
-      const update = await check();
-      if (!update) {
-        setUpdateStatus({ phase: 'upToDate' });
-        return;
+  const checkForAppUpdate = useCallback(
+    async () => {
+      const current = updateStatusRef.current;
+      if (!canStartUpdateCheck(current)) return;
+      setUpdateStatus({ phase: 'checking' });
+      try {
+        const update = await check();
+        if (!update) {
+          pendingUpdateRef.current = null;
+          setUpdateStatus(statusAfterCheck(null));
+          return;
+        }
+        pendingUpdateRef.current = update;
+        setUpdateStatus(statusAfterCheck({ version: update.version, body: update.body }));
+        await downloadAppUpdate(update);
+      } catch (error: unknown) {
+        console.error('Update check failed', error);
+        setUpdateStatus(statusAfterCheckError(error));
       }
-      await update.downloadAndInstall((event) => {
-        setUpdateStatus((current) => statusAfterDownloadEvent(current, event));
-      });
-      setUpdateStatus({ phase: 'installing' });
+    },
+    [downloadAppUpdate],
+  );
+
+  const restartToUpdate = useCallback(async () => {
+    const update = pendingUpdateRef.current;
+    if (!canRestartToUpdate(updateStatusRef.current) || !update) return;
+    setUpdateStatus({ phase: 'installing' });
+    try {
+      await update.install();
       await relaunch();
     } catch (error: unknown) {
-      setUpdateStatus({
-        phase: 'error',
-        message: invokeErrorMessage(error, 'Could not install update'),
-      });
+      console.error('Update install failed', error);
+      setUpdateStatus(statusAfterInstallFailure(error));
     }
-  }, [updateStatus]);
+  }, []);
 
   useEffect(() => {
     if (!bootstrapped) return;
     void getVersion().then(setAppVersion).catch(() => undefined);
-    void checkForAppUpdate('passive');
+    void checkForAppUpdate();
+    const timer = window.setInterval(() => {
+      void checkForAppUpdate();
+    }, UPDATE_CHECK_INTERVAL_MS);
+    return () => window.clearInterval(timer);
   }, [bootstrapped, checkForAppUpdate]);
 
   useEffect(() => {
@@ -1327,9 +1349,24 @@ export default function App() {
         updateStatus={updateStatus}
         onClose={() => setIsSettingsOpen(false)}
         onToggleKeychain={handleToggleKeychain}
-        onCheckForUpdates={() => checkForAppUpdate('manual')}
-        onInstallUpdate={installAppUpdate}
+        onCheckForUpdates={() => checkForAppUpdate()}
+        onRestartToUpdate={restartToUpdate}
       />
+      {shouldShowUpdateBanner(updateStatus, dismissedUpdateVersion) ? (
+        <UpdateBanner
+          status={updateStatus}
+          hasUnsavedChanges={Object.values(pendingByTable).some(hasPending)}
+          onRestart={restartToUpdate}
+          onRetry={() => checkForAppUpdate()}
+          onLater={() => {
+            if (updateStatus.phase === 'ready') {
+              setDismissedUpdateVersion(updateStatus.version);
+            } else {
+              setUpdateStatus(IDLE_UPDATE_STATUS);
+            }
+          }}
+        />
+      ) : null}
       <Toaster />
     </div>
   );

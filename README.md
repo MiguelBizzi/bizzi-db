@@ -15,7 +15,7 @@ Installers for macOS (universal DMG) are on the latest GitHub Release:
 
 **[Download Bizzi DB](https://github.com/MiguelBizzi/bizzi-db/releases/latest)**
 
-The in-app updater uses that same release (`latest.json`). The first install is always manual; later versions can be installed from Settings.
+The in-app updater uses that same release (`latest.json`). The first install is always manual. After that the app checks on launch and every 6 hours, downloads updates in the background, and asks you to restart when one is ready. The release workflow fails if `latest.json` is missing or invalid, so a release can never ship without update support.
 
 ## Releasing
 

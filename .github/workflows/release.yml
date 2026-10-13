@@ -45,6 +45,10 @@ jobs:
           args: --target universal-apple-darwin
           includeUpdaterJson: true
 
+      # Hard gate: a release without a valid latest.json strands every installed app.
+      - name: Verify updater manifest
+        run: bun apps/desktop/scripts/verify-updater-manifest.ts "${{ github.ref_name }}" "${{ github.repository }}"
+
       # Best effort: if this step fails, the plain DMG stays published.
       - name: Brand the DMG
         continue-on-error: true

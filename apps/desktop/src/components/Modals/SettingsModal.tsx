@@ -2,7 +2,7 @@ import React from "react";
 import { Settings, X, AlertTriangle } from "lucide-react";
 import { Switch } from "../ui/Switch";
 import {
-  canConfirmInstall,
+  canRestartToUpdate,
   downloadPercent,
   type AppUpdateStatus,
 } from "../../lib/appUpdate";
@@ -15,19 +15,21 @@ interface SettingsModalProps {
   onClose: () => void;
   onToggleKeychain: (enabled: boolean) => Promise<void> | void;
   onCheckForUpdates: () => Promise<void> | void;
-  onInstallUpdate: () => Promise<void> | void;
+  onRestartToUpdate: () => Promise<void> | void;
 }
 
 function updateStatusCopy(status: AppUpdateStatus): string {
   switch (status.phase) {
     case "idle":
-      return "Check for updates when you want them. Installs never run until you confirm.";
+      return "Bizzi DB checks for updates automatically and downloads them in the background.";
     case "checking":
       return "Checking for updates…";
     case "upToDate":
       return "You're on the latest version.";
     case "available":
       return `Version ${status.version} is available.`;
+    case "ready":
+      return `Version ${status.version} is downloaded. Restart to finish updating.`;
     case "downloading": {
       const percent = downloadPercent(status.received, status.total);
       return percent == null
@@ -37,7 +39,13 @@ function updateStatusCopy(status: AppUpdateStatus): string {
     case "installing":
       return "Installing update. The app will restart.";
     case "error":
-      return status.message;
+      return `${
+        status.stage === "check"
+          ? "Couldn't check for updates"
+          : status.stage === "download"
+            ? "Couldn't download the update"
+            : "Couldn't install the update"
+      }: ${status.message}`;
   }
 }
 
@@ -49,14 +57,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   onToggleKeychain,
   onCheckForUpdates,
-  onInstallUpdate,
+  onRestartToUpdate,
 }) => {
   if (!isOpen) return null;
 
   const checking = updateStatus.phase === "checking";
-  const installing =
-    updateStatus.phase === "downloading" || updateStatus.phase === "installing";
-  const canInstall = canConfirmInstall(updateStatus);
+  const busy =
+    checking ||
+    updateStatus.phase === "available" ||
+    updateStatus.phase === "downloading" ||
+    updateStatus.phase === "ready" ||
+    updateStatus.phase === "installing";
+  const canRestart = canRestartToUpdate(updateStatus);
 
   return (
     <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 font-sans select-none text-foreground">
@@ -131,7 +143,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             >
               {updateStatusCopy(updateStatus)}
             </p>
-            {updateStatus.phase === "available" && updateStatus.notes ? (
+            {(updateStatus.phase === "available" ||
+              updateStatus.phase === "downloading" ||
+              updateStatus.phase === "ready") &&
+            updateStatus.notes ? (
               <p className="text-[10px] text-muted-foreground whitespace-pre-wrap max-h-24 overflow-y-auto">
                 {updateStatus.notes}
               </p>
@@ -139,23 +154,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                disabled={checking || installing}
+                disabled={busy}
                 onClick={() => {
                   void onCheckForUpdates();
                 }}
                 className="h-9 px-3 rounded-xl border border-border bg-background font-bold uppercase text-[10px] hover:bg-accent disabled:opacity-50"
               >
-                Check for updates
+                {updateStatus.phase === "error" ? "Retry" : "Check for updates"}
               </button>
               <button
                 type="button"
-                disabled={!canInstall}
+                disabled={!canRestart}
                 onClick={() => {
-                  void onInstallUpdate();
+                  void onRestartToUpdate();
                 }}
                 className="h-9 px-3 rounded-xl border border-border bg-primary text-primary-foreground font-bold uppercase text-[10px] hover:opacity-90 disabled:opacity-50 disabled:bg-background disabled:text-muted-foreground"
               >
-                Install and restart
+                Restart to update
               </button>
             </div>
           </div>

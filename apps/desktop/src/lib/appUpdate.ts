@@ -1,17 +1,26 @@
 import { invokeErrorMessage } from './invokeError';
 
-export type UpdateCheckKind = 'passive' | 'manual';
+export type UpdateErrorStage = 'check' | 'download' | 'install';
 
 export type AppUpdateStatus =
   | { phase: 'idle' }
   | { phase: 'checking' }
   | { phase: 'upToDate' }
   | { phase: 'available'; version: string; notes: string }
-  | { phase: 'downloading'; received: number; total: number | null }
+  | {
+      phase: 'downloading';
+      version: string;
+      notes: string;
+      received: number;
+      total: number | null;
+    }
+  | { phase: 'ready'; version: string; notes: string }
   | { phase: 'installing' }
-  | { phase: 'error'; message: string };
+  | { phase: 'error'; stage: UpdateErrorStage; message: string };
 
 export const IDLE_UPDATE_STATUS: AppUpdateStatus = { phase: 'idle' };
+
+export const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 export type RemoteUpdate = {
   version: string;
@@ -32,15 +41,24 @@ export function statusAfterCheck(update: RemoteUpdate | null): AppUpdateStatus {
   };
 }
 
-export function statusAfterCheckError(
-  kind: UpdateCheckKind,
+function failure(
+  stage: UpdateErrorStage,
   error: unknown,
-): AppUpdateStatus | null {
-  if (kind === 'passive') return null;
-  return {
-    phase: 'error',
-    message: invokeErrorMessage(error, 'Could not check for updates'),
-  };
+  fallback: string,
+): AppUpdateStatus {
+  return { phase: 'error', stage, message: invokeErrorMessage(error, fallback) };
+}
+
+export function statusAfterCheckError(error: unknown): AppUpdateStatus {
+  return failure('check', error, 'Could not check for updates');
+}
+
+export function statusAfterDownloadFailure(error: unknown): AppUpdateStatus {
+  return failure('download', error, 'Could not download the update');
+}
+
+export function statusAfterInstallFailure(error: unknown): AppUpdateStatus {
+  return failure('install', error, 'Could not install the update');
 }
 
 export function statusAfterDownloadEvent(
@@ -48,20 +66,25 @@ export function statusAfterDownloadEvent(
   event: DownloadProgressEvent,
 ): AppUpdateStatus {
   if (event.event === 'Started') {
+    if (current.phase !== 'available' && current.phase !== 'downloading') {
+      return current;
+    }
     return {
       phase: 'downloading',
+      version: current.version,
+      notes: current.notes,
       received: 0,
       total: event.data.contentLength ?? null,
     };
   }
+  if (current.phase !== 'downloading') return current;
   if (event.event === 'Progress') {
-    const received =
-      (current.phase === 'downloading' ? current.received : 0) +
-      event.data.chunkLength;
-    const total = current.phase === 'downloading' ? current.total : null;
-    return { phase: 'downloading', received, total };
+    return {
+      ...current,
+      received: current.received + event.data.chunkLength,
+    };
   }
-  return { phase: 'installing' };
+  return { phase: 'ready', version: current.version, notes: current.notes };
 }
 
 export function downloadPercent(
@@ -72,13 +95,33 @@ export function downloadPercent(
   return Math.min(100, Math.round((received / total) * 100));
 }
 
-export function canConfirmInstall(status: AppUpdateStatus): boolean {
-  return status.phase === 'available';
+export function canRestartToUpdate(status: AppUpdateStatus): boolean {
+  return status.phase === 'ready';
 }
 
-export function shouldStartInstall(
+/** Neither a background nor a manual check may interrupt an update that is already moving. */
+export function canStartUpdateCheck(status: AppUpdateStatus): boolean {
+  switch (status.phase) {
+    case 'idle':
+    case 'upToDate':
+    case 'error':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
+ * The banner is for things the user can act on: an update ready to install,
+ * or a download/install that failed. Offline check failures stay in Settings.
+ */
+export function shouldShowUpdateBanner(
   status: AppUpdateStatus,
-  userConfirmed: boolean,
+  dismissedVersion: string | null,
 ): boolean {
-  return userConfirmed && status.phase === 'available';
+  if (status.phase === 'ready') return status.version !== dismissedVersion;
+  return (
+    status.phase === 'error' &&
+    (status.stage === 'download' || status.stage === 'install')
+  );
 }

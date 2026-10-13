@@ -1,12 +1,23 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  canConfirmInstall,
+  UPDATE_CHECK_INTERVAL_MS,
+  canRestartToUpdate,
   downloadPercent,
-  shouldStartInstall,
+  canStartUpdateCheck,
+  shouldShowUpdateBanner,
   statusAfterCheck,
   statusAfterCheckError,
   statusAfterDownloadEvent,
+  statusAfterDownloadFailure,
+  statusAfterInstallFailure,
+  type AppUpdateStatus,
 } from './appUpdate';
+
+const available: AppUpdateStatus = {
+  phase: 'available',
+  version: '0.2.0',
+  notes: 'Bug fixes',
+};
 
 describe('statusAfterCheck', () => {
   test('maps a missing update to up to date', () => {
@@ -16,11 +27,7 @@ describe('statusAfterCheck', () => {
   test('maps a remote update to available with notes', () => {
     expect(
       statusAfterCheck({ version: '0.2.0', body: 'Bug fixes\n' }),
-    ).toEqual({
-      phase: 'available',
-      version: '0.2.0',
-      notes: 'Bug fixes',
-    });
+    ).toEqual(available);
   });
 
   test('treats a missing body as empty notes', () => {
@@ -32,50 +39,88 @@ describe('statusAfterCheck', () => {
   });
 });
 
-describe('statusAfterCheckError', () => {
-  test('swallows network errors on the passive path', () => {
-    expect(statusAfterCheckError('passive', 'error sending request')).toBeNull();
-    expect(statusAfterCheckError('passive', new Error('403 Forbidden'))).toBeNull();
+describe('failures are never silent', () => {
+  test('a failed check is reported with its stage', () => {
+    expect(statusAfterCheckError(new Error('404 Not Found'))).toEqual({
+      phase: 'error',
+      stage: 'check',
+      message: '404 Not Found',
+    });
   });
 
-  test('surfaces the message on a manual check', () => {
-    expect(statusAfterCheckError('manual', '403 Forbidden')).toEqual({
+  test('falls back to a readable message', () => {
+    expect(statusAfterCheckError(undefined)).toEqual({
       phase: 'error',
-      message: '403 Forbidden',
+      stage: 'check',
+      message: 'Could not check for updates',
+    });
+  });
+
+  test('a failed download is reported with its stage', () => {
+    expect(statusAfterDownloadFailure('connection reset')).toEqual({
+      phase: 'error',
+      stage: 'download',
+      message: 'connection reset',
+    });
+  });
+
+  test('a failed install is reported with its stage', () => {
+    expect(statusAfterInstallFailure(new Error('permission denied'))).toEqual({
+      phase: 'error',
+      stage: 'install',
+      message: 'permission denied',
     });
   });
 });
 
-describe('download progress', () => {
-  test('starts at zero with a known total', () => {
+describe('background download', () => {
+  test('starts at zero with a known total and keeps the version', () => {
     expect(
-      statusAfterDownloadEvent(
-        { phase: 'available', version: '0.2.0', notes: '' },
-        { event: 'Started', data: { contentLength: 1000 } },
-      ),
-    ).toEqual({ phase: 'downloading', received: 0, total: 1000 });
+      statusAfterDownloadEvent(available, {
+        event: 'Started',
+        data: { contentLength: 1000 },
+      }),
+    ).toEqual({
+      phase: 'downloading',
+      version: '0.2.0',
+      notes: 'Bug fixes',
+      received: 0,
+      total: 1000,
+    });
   });
 
   test('accumulates Progress chunks', () => {
-    const started = statusAfterDownloadEvent(
-      { phase: 'available', version: '0.2.0', notes: '' },
-      { event: 'Started', data: { contentLength: 400 } },
-    );
+    const started = statusAfterDownloadEvent(available, {
+      event: 'Started',
+      data: { contentLength: 400 },
+    });
     expect(
       statusAfterDownloadEvent(started, {
         event: 'Progress',
         data: { chunkLength: 100 },
       }),
-    ).toEqual({ phase: 'downloading', received: 100, total: 400 });
+    ).toMatchObject({ phase: 'downloading', received: 100, total: 400 });
   });
 
-  test('Finished means installing, not idle', () => {
+  test('Finished means ready to restart, not installing', () => {
     expect(
       statusAfterDownloadEvent(
-        { phase: 'downloading', received: 400, total: 400 },
+        {
+          phase: 'downloading',
+          version: '0.2.0',
+          notes: 'Bug fixes',
+          received: 400,
+          total: 400,
+        },
         { event: 'Finished' },
       ),
-    ).toEqual({ phase: 'installing' });
+    ).toEqual({ phase: 'ready', version: '0.2.0', notes: 'Bug fixes' });
+  });
+
+  test('ignores a stray Finished outside a download', () => {
+    expect(
+      statusAfterDownloadEvent({ phase: 'upToDate' }, { event: 'Finished' }),
+    ).toEqual({ phase: 'upToDate' });
   });
 
   test('percent is null when the total is unknown', () => {
@@ -85,24 +130,92 @@ describe('download progress', () => {
   });
 });
 
-describe('confirm-to-install', () => {
-  const available = {
-    phase: 'available' as const,
+describe('restart to update', () => {
+  test('restart is offered only once the update is downloaded', () => {
+    expect(
+      canRestartToUpdate({ phase: 'ready', version: '0.2.0', notes: '' }),
+    ).toBe(true);
+    expect(canRestartToUpdate(available)).toBe(false);
+    expect(canRestartToUpdate({ phase: 'idle' })).toBe(false);
+    expect(canRestartToUpdate({ phase: 'installing' })).toBe(false);
+  });
+});
+
+describe('starting a check', () => {
+  test('checks every six hours', () => {
+    expect(UPDATE_CHECK_INTERVAL_MS).toBe(6 * 60 * 60 * 1000);
+  });
+
+  test('never disturbs an update that is already in flight', () => {
+    expect(canStartUpdateCheck({ phase: 'checking' })).toBe(false);
+    expect(canStartUpdateCheck(available)).toBe(false);
+    expect(
+      canStartUpdateCheck({
+        phase: 'downloading',
+        version: '0.2.0',
+        notes: '',
+        received: 0,
+        total: null,
+      }),
+    ).toBe(false);
+    expect(
+      canStartUpdateCheck({ phase: 'ready', version: '0.2.0', notes: '' }),
+    ).toBe(false);
+    expect(canStartUpdateCheck({ phase: 'installing' })).toBe(false);
+  });
+
+  test('re-checks when idle, current, or after a failure', () => {
+    expect(canStartUpdateCheck({ phase: 'idle' })).toBe(true);
+    expect(canStartUpdateCheck({ phase: 'upToDate' })).toBe(true);
+    expect(
+      canStartUpdateCheck({ phase: 'error', stage: 'check', message: 'x' }),
+    ).toBe(true);
+    expect(
+      canStartUpdateCheck({ phase: 'error', stage: 'download', message: 'x' }),
+    ).toBe(true);
+  });
+});
+
+describe('update banner', () => {
+  const ready: AppUpdateStatus = {
+    phase: 'ready',
     version: '0.2.0',
     notes: '',
   };
 
-  test('install is offered only while an update is available', () => {
-    expect(canConfirmInstall(available)).toBe(true);
-    expect(canConfirmInstall({ phase: 'idle' })).toBe(false);
-    expect(canConfirmInstall({ phase: 'downloading', received: 1, total: 2 })).toBe(
-      false,
-    );
+  test('shows when an update is ready to install', () => {
+    expect(shouldShowUpdateBanner(ready, null)).toBe(true);
   });
 
-  test('does not start install until the user confirms', () => {
-    expect(shouldStartInstall(available, false)).toBe(false);
-    expect(shouldStartInstall(available, true)).toBe(true);
-    expect(shouldStartInstall({ phase: 'upToDate' }, true)).toBe(false);
+  test('stays hidden after Later for that version only', () => {
+    expect(shouldShowUpdateBanner(ready, '0.2.0')).toBe(false);
+    expect(shouldShowUpdateBanner(ready, '0.1.9')).toBe(true);
+  });
+
+  test('surfaces download and install failures', () => {
+    expect(
+      shouldShowUpdateBanner(
+        { phase: 'error', stage: 'download', message: 'x' },
+        null,
+      ),
+    ).toBe(true);
+    expect(
+      shouldShowUpdateBanner(
+        { phase: 'error', stage: 'install', message: 'x' },
+        null,
+      ),
+    ).toBe(true);
+  });
+
+  test('keeps routine checking and downloading quiet', () => {
+    expect(shouldShowUpdateBanner({ phase: 'checking' }, null)).toBe(false);
+    expect(shouldShowUpdateBanner(available, null)).toBe(false);
+    expect(shouldShowUpdateBanner({ phase: 'upToDate' }, null)).toBe(false);
+    expect(
+      shouldShowUpdateBanner(
+        { phase: 'error', stage: 'check', message: 'offline' },
+        null,
+      ),
+    ).toBe(false);
   });
 });
