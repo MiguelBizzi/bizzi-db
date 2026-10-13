@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence } from 'motion/react';
+import { OverlayPresence } from './ui/OverlayPresence';
+import { useIsPresent } from 'motion/react';
 import { Modal, ModalPanel } from './ui/Modal';
 import {
   Search,
@@ -200,8 +201,11 @@ const CommandPaletteBody: React.FC<CommandPaletteProps> = ({
     selectedRef.current?.scrollIntoView({ block: 'nearest' });
   }, [selectedIndex, query]);
 
+  // Stop handling keys once closing, or a second Enter would re-run the item.
+  const isPresent = useIsPresent();
+
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !isPresent) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.isComposing) return;
@@ -236,7 +240,7 @@ const CommandPaletteBody: React.FC<CommandPaletteProps> = ({
 
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [isOpen, onClose]);
+  }, [isOpen, isPresent, onClose]);
 
   if (!isOpen) return null;
 
@@ -424,7 +428,7 @@ const CommandPaletteBody: React.FC<CommandPaletteProps> = ({
 };
 
 export const CommandPalette: React.FC<CommandPaletteProps> = (props) => (
-  <AnimatePresence>
-    {props.isOpen && <CommandPaletteBody key="modal" {...props} />}
-  </AnimatePresence>
+  <OverlayPresence isOpen={props.isOpen}>
+    <CommandPaletteBody {...props} />
+  </OverlayPresence>
 );

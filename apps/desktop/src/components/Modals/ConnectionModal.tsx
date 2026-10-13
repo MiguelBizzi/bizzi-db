@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { AnimatePresence } from "motion/react";
+import { OverlayPresence } from "../ui/OverlayPresence";
 import { Modal, ModalPanel } from "../ui/Modal";
 import {
   ConnectionFolder,
@@ -820,7 +820,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
 };
 
 export const ConnectionModal: React.FC<ConnectionModalProps> = (props) => (
-  <AnimatePresence>
-    {props.isOpen && <ConnectionModalBody key="modal" {...props} />}
-  </AnimatePresence>
+  <OverlayPresence isOpen={props.isOpen}>
+    <ConnectionModalBody {...props} />
+  </OverlayPresence>
 );

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { AnimatePresence } from "motion/react";
+import { OverlayPresence } from "../ui/OverlayPresence";
 import { Modal, ModalPanel } from "../ui/Modal";
 import { AlertCircle, AlertTriangle, Check, Pencil, X } from "lucide-react";
 import type { ColumnTypeDef } from "@db/database";
@@ -204,7 +204,7 @@ const EditColumnModalBody: React.FC<EditColumnModalProps> = ({
 };
 
 export const EditColumnModal: React.FC<EditColumnModalProps> = (props) => (
-  <AnimatePresence>
-    {props.isOpen && props.column && <EditColumnModalBody key="modal" {...props} />}
-  </AnimatePresence>
+  <OverlayPresence isOpen={Boolean(props.isOpen && props.column)}>
+    <EditColumnModalBody {...props} />
+  </OverlayPresence>
 );

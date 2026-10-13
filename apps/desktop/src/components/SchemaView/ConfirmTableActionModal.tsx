@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AnimatePresence } from 'motion/react';
+import { OverlayPresence } from '../ui/OverlayPresence';
 import { Modal, ModalPanel } from '../ui/Modal';
 import { AlertTriangle, Eraser, Trash2, X } from 'lucide-react';
 import type { TableSchema } from '../../types';
@@ -157,7 +157,7 @@ const ConfirmTableActionModalBody: React.FC<ConfirmTableActionModalProps> = ({
 };
 
 export const ConfirmTableActionModal: React.FC<ConfirmTableActionModalProps> = (props) => (
-  <AnimatePresence>
-    {props.table && props.action && <ConfirmTableActionModalBody key="modal" {...props} />}
-  </AnimatePresence>
+  <OverlayPresence isOpen={Boolean(props.table && props.action)}>
+    <ConfirmTableActionModalBody {...props} />
+  </OverlayPresence>
 );

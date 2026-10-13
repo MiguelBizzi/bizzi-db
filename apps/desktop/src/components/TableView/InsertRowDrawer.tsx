@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence } from "motion/react";
+import { OverlayPresence } from "../ui/OverlayPresence";
 import { Drawer, DrawerPanel } from "../ui/Drawer";
 import { AlertCircle, Check, Clock, Key, Link, Plus, X } from "lucide-react";
 import type { ColumnDefinition, TableSchema } from "../../types";
@@ -258,9 +258,9 @@ const InsertRowDrawerBody: React.FC<InsertRowDrawerProps> = ({
 };
 
 export const InsertRowDrawer: React.FC<InsertRowDrawerProps> = (props) => (
-  <AnimatePresence>
-    {props.isOpen && <InsertRowDrawerBody key="drawer" {...props} />}
-  </AnimatePresence>
+  <OverlayPresence isOpen={props.isOpen}>
+    <InsertRowDrawerBody {...props} />
+  </OverlayPresence>
 );
 
 function ColumnField({

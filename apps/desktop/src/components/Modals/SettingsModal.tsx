@@ -1,5 +1,5 @@
 import React from "react";
-import { AnimatePresence } from "motion/react";
+import { OverlayPresence } from "../ui/OverlayPresence";
 import { Modal, ModalPanel } from "../ui/Modal";
 import { Settings, X, AlertTriangle } from "lucide-react";
 import { Switch } from "../ui/Switch";
@@ -216,7 +216,7 @@ const SettingsModalBody: React.FC<SettingsModalProps> = ({
 };
 
 export const SettingsModal: React.FC<SettingsModalProps> = (props) => (
-  <AnimatePresence>
-    {props.isOpen && <SettingsModalBody key="modal" {...props} />}
-  </AnimatePresence>
+  <OverlayPresence isOpen={props.isOpen}>
+    <SettingsModalBody {...props} />
+  </OverlayPresence>
 );

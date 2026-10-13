@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AnimatePresence } from 'motion/react';
+import { OverlayPresence } from '../ui/OverlayPresence';
 import { Modal, ModalPanel } from '../ui/Modal';
 import { AlertCircle, AlertTriangle, Trash2, X } from 'lucide-react';
 import type { ColumnDefinition, TableSchema } from '../../types';
@@ -163,7 +163,7 @@ const DeleteColumnModalBody: React.FC<DeleteColumnModalProps> = ({
 };
 
 export const DeleteColumnModal: React.FC<DeleteColumnModalProps> = (props) => (
-  <AnimatePresence>
-    {props.isOpen && props.column && <DeleteColumnModalBody key="modal" {...props} />}
-  </AnimatePresence>
+  <OverlayPresence isOpen={Boolean(props.isOpen && props.column)}>
+    <DeleteColumnModalBody {...props} />
+  </OverlayPresence>
 );

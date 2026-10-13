@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AnimatePresence } from 'motion/react';
+import { OverlayPresence } from '../ui/OverlayPresence';
 import { Modal, ModalPanel } from '../ui/Modal';
 import { X, Check, Copy, Code, AlertCircle } from 'lucide-react';
 
@@ -121,7 +121,7 @@ const JsonModalBody: React.FC<JsonModalProps> = ({
 };
 
 export const JsonModal: React.FC<JsonModalProps> = (props) => (
-  <AnimatePresence>
-    {props.isOpen && <JsonModalBody key="modal" {...props} />}
-  </AnimatePresence>
+  <OverlayPresence isOpen={props.isOpen}>
+    <JsonModalBody {...props} />
+  </OverlayPresence>
 );

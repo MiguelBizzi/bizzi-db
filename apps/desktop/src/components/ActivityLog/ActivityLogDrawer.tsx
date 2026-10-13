@@ -1,5 +1,5 @@
 import React from "react";
-import { AnimatePresence } from "motion/react";
+import { OverlayPresence } from "../ui/OverlayPresence";
 import { Drawer, DrawerPanel } from "../ui/Drawer";
 import { ActivityLogItem } from "../../types";
 import { Logs, CheckCircle, AlertTriangle, User, X } from "lucide-react";
@@ -86,7 +86,7 @@ const ActivityLogDrawerBody: React.FC<ActivityLogDrawerProps> = ({
 };
 
 export const ActivityLogDrawer: React.FC<ActivityLogDrawerProps> = (props) => (
-  <AnimatePresence>
-    {props.isOpen && <ActivityLogDrawerBody key="drawer" {...props} />}
-  </AnimatePresence>
+  <OverlayPresence isOpen={props.isOpen}>
+    <ActivityLogDrawerBody {...props} />
+  </OverlayPresence>
 );

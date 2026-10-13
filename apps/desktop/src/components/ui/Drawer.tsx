@@ -33,6 +33,15 @@ export function Drawer({ children, scrim = true, onScrimClick }: DrawerProps) {
 }
 
 /** The drawer surface. Inherits enter/exit from the surrounding <Drawer>. */
-export function DrawerPanel(props: ComponentProps<typeof motion.aside>) {
-  return <motion.aside variants={slideInRight} {...props} />;
+export function DrawerPanel({ style, ...rest }: ComponentProps<typeof motion.aside>) {
+  const isPresent = useIsPresent();
+
+  return (
+    <motion.aside
+      variants={slideInRight}
+      {...rest}
+      // While sliding out it must not take clicks: its handlers hold stale state.
+      style={{ ...style, ...(isPresent ? null : { pointerEvents: 'none' }) }}
+    />
+  );
 }

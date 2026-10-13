@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence } from "motion/react";
+import { OverlayPresence } from "../ui/OverlayPresence";
 import { Drawer, DrawerPanel } from "../ui/Drawer";
 import { AlertCircle, Check, Plus, X } from "lucide-react";
 import type { ColumnTypeDef } from "@db/database";
@@ -180,7 +180,7 @@ const AddColumnDrawerBody: React.FC<AddColumnDrawerProps> = ({
 };
 
 export const AddColumnDrawer: React.FC<AddColumnDrawerProps> = (props) => (
-  <AnimatePresence>
-    {props.isOpen && <AddColumnDrawerBody key="drawer" {...props} />}
-  </AnimatePresence>
+  <OverlayPresence isOpen={props.isOpen}>
+    <AddColumnDrawerBody {...props} />
+  </OverlayPresence>
 );

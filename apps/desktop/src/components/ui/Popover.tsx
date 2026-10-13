@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { motion } from 'motion/react';
+import { motion, useIsPresent } from 'motion/react';
 import { popIn, type PopOrigin } from '../../lib/motion';
 
 type PopoverProps = Omit<
@@ -15,6 +15,8 @@ type PopoverProps = Omit<
  * <AnimatePresence> so it can ease out as well as in.
  */
 export function Popover({ origin = 'top', style, ...rest }: PopoverProps) {
+  const isPresent = useIsPresent();
+
   return (
     <motion.div
       {...rest}
@@ -22,7 +24,12 @@ export function Popover({ origin = 'top', style, ...rest }: PopoverProps) {
       initial="initial"
       animate="animate"
       exit="exit"
-      style={{ transformOrigin: origin, ...style }}
+      // While easing out it must not take clicks: its handlers hold stale state.
+      style={{
+        transformOrigin: origin,
+        ...style,
+        ...(isPresent ? null : { pointerEvents: 'none' }),
+      }}
     />
   );
 }

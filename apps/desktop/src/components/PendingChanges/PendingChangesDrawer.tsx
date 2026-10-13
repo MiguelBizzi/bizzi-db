@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AnimatePresence } from 'motion/react';
+import { OverlayPresence } from '../ui/OverlayPresence';
 import { Drawer, DrawerPanel } from '../ui/Drawer';
 import {
   Check,
@@ -388,9 +388,9 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
 };
 
 export const PendingChangesDrawer: React.FC<PendingChangesDrawerProps> = (props) => (
-  <AnimatePresence>
-    {props.isOpen && <PendingChangesDrawerBody key="drawer" {...props} />}
-  </AnimatePresence>
+  <OverlayPresence isOpen={props.isOpen}>
+    <PendingChangesDrawerBody {...props} />
+  </OverlayPresence>
 );
 
 function ModeButton({
