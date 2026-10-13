@@ -260,6 +260,22 @@
   inset: -8px 0 0 0;
 }
 
+.scrollbar-always {
+  scrollbar-width: thin !important;
+}
+.scrollbar-always::-webkit-scrollbar {
+  display: block;
+  width: auto;
+  height: 4px;
+}
+.scrollbar-always::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-always::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--foreground) 38%, transparent);
+}
+
 .scrollbar-none,
 .scrollbar-none.is-scrolling {
   scrollbar-width: none !important;

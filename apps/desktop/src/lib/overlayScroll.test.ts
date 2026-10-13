@@ -34,6 +34,29 @@ describe("overlay scrollbars", () => {
     expect(classes.has("is-scrolling")).toBe(false);
   });
 
+  test("leaves always-visible scrollers to their own persistent bar", () => {
+    const classes = new Set<string>(["scrollbar-always"]);
+    const el = {
+      classList: {
+        contains: (name: string) => classes.has(name),
+        add: (name: string) => {
+          classes.add(name);
+        },
+      },
+    };
+    expect(showOverlayScrollbar(el)).toBe(false);
+    expect(classes.has("is-scrolling")).toBe(false);
+  });
+
+  test("always-visible scrollers get a persistent thin bar", async () => {
+    const css = await Bun.file(new URL("../index.css", import.meta.url)).text();
+    expect(css).toMatch(/\.scrollbar-always\s*\{[^}]*scrollbar-width:\s*thin/);
+    expect(css).toMatch(
+      /\.scrollbar-always::-webkit-scrollbar\s*\{[^}]*height:\s*4px/,
+    );
+    expect(css).toMatch(/\.scrollbar-always::-webkit-scrollbar-thumb\s*\{/);
+  });
+
   test("marks a scroller as scrolling", () => {
     const classes = new Set<string>();
     const el = {

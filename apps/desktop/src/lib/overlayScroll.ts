@@ -22,6 +22,7 @@ export function overlayScrollIdleMs(
 
 export function showOverlayScrollbar(el: { classList: ClassListLike }): boolean {
   if (el.classList.contains("scrollbar-none")) return false;
+  if (el.classList.contains("scrollbar-always")) return false;
   el.classList.add(SCROLLING_CLASS);
   return true;
 }

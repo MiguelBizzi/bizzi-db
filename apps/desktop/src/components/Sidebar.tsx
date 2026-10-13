@@ -18,6 +18,7 @@ import {
   tableManagementMenuItems,
   type TableManagementHandlers,
 } from './tableManagementMenu';
+import { tableMatchesSearch } from '../lib/tableSearch';
 
 const EXPLORER_SKELETON_COUNT = 7;
 const EXPLORER_SKELETON_NAME_WIDTHS = [
@@ -86,13 +87,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     new Set(currentDatabase.tables.map((t) => t.schema))
   );
 
-  // Filter tables by search, tag, and schema
   const filteredTables = currentDatabase.tables.filter((table) => {
-    const matchesSearch =
-      table.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      table.columns.some((c) =>
-        c.name.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+    const matchesSearch = tableMatchesSearch(table.name, searchTerm);
     const matchesTag =
       selectedTag === 'ALL' || table.tags.includes(selectedTag);
     const matchesSchema =
@@ -162,7 +158,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Filter tables & columns..."
+            placeholder="Filter tables..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-8 pr-3 py-1.5 bg-background border border-sidebar-border rounded-lg text-xs text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary font-mono transition-all"
@@ -185,7 +181,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Tag Filters */}
         {allTags.length > 0 && (
-          <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-always">
             <button
               onClick={() => setSelectedTag('ALL')}
               className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors shrink-0 ${
