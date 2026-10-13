@@ -190,7 +190,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
 
       {/* Filter Clauses Builder */}
       {showFilters && (
-        <div className="p-2.5 bg-background border border-border rounded-xl space-y-2 animate-in fade-in duration-150">
+        <div className="p-2.5 bg-background border border-border rounded-xl space-y-2 field-message">
           <div className="flex items-center justify-between text-xs font-mono text-muted-foreground font-semibold">
             <span>Data Filter Rules</span>
             <button

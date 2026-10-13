@@ -374,7 +374,7 @@ export const TabsBar: React.FC<TabsBarProps> = ({
                   if (isRenaming) return;
                   onSelectTab(tab.id);
                 }}
-                className={`group flex items-center gap-1.5 h-7 px-3 rounded-lg text-xs font-medium transition-colors duration-200 shrink-0 max-w-[200px] touch-none ${
+                className={`group flex items-center gap-1.5 h-7 px-3 rounded-lg text-xs font-medium transition-colors shrink-0 max-w-[200px] touch-none ${
                   isRenaming ? 'cursor-text' : 'cursor-grab active:cursor-grabbing'
                 } ${
                   isDragging
