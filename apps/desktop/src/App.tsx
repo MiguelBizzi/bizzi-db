@@ -126,7 +126,7 @@ import {
   type AppUpdateStatus,
 } from './lib/appUpdate';
 import { UpdateBanner } from './components/UpdateBanner';
-import { MotionConfig } from 'motion/react';
+import { AnimatePresence, MotionConfig } from 'motion/react';
 import { useMotionPreference } from './lib/motionPreference';
 
 const ROOT_PANE_ID = 'pane_root';
@@ -1380,8 +1380,10 @@ export default function App() {
         onCheckForUpdates={checkForAppUpdateManually}
         onRestartToUpdate={restartToUpdate}
       />
+      <AnimatePresence>
       {shouldShowUpdateBanner(updateStatus, dismissedUpdateVersion) ? (
         <UpdateBanner
+          key="update-banner"
           status={updateStatus}
           hasUnsavedChanges={Object.values(pendingByTable).some(hasPending)}
           onRestart={restartToUpdate}
@@ -1395,6 +1397,7 @@ export default function App() {
           }}
         />
       ) : null}
+      </AnimatePresence>
       <Toaster />
     </div>
     </MotionConfig>

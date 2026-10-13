@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useRef, useState } from 'react';
-import { AnimatePresence } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
+import { collapse } from '../lib/motion';
 import {
-  ChevronDown,
   ChevronRight,
   Database,
   FolderPlus,
@@ -549,11 +549,11 @@ export const ConnectionPicker: React.FC<ConnectionPickerProps> = ({
                             }));
                           }}
                         >
-                          {expanded ? (
-                            <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
-                          ) : (
-                            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                          )}
+                          <ChevronRight
+                            className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${
+                              expanded ? 'rotate-90' : ''
+                            }`}
+                          />
                           {renamingId === group.folder.id ? (
                             <input
                               autoFocus
@@ -681,7 +681,15 @@ export const ConnectionPicker: React.FC<ConnectionPickerProps> = ({
                           </div>
                         )}
                       </div>
+                      <AnimatePresence initial={false}>
                       {expanded && (
+                        <motion.div
+                          variants={collapse}
+                          initial="initial"
+                          animate="animate"
+                          exit="exit"
+                          className="overflow-hidden"
+                        >
                         <ul className="space-y-2 px-2 pb-2">
                           {group.profiles.length > 0 ? (
                             <>
@@ -700,7 +708,9 @@ export const ConnectionPicker: React.FC<ConnectionPickerProps> = ({
                             </li>
                           )}
                         </ul>
+                        </motion.div>
                       )}
+                      </AnimatePresence>
                     </section>
                   );
                 })}
