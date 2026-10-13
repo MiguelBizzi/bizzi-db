@@ -3,7 +3,7 @@
 #   1. rewrites Finder's window styling (style-dmg.py), because the alias Tauri/Finder records for the
 #      background points at the build machine's temporary image and never resolves on a user's Mac;
 #   2. swaps the stock blue Applications link for an alias carrying the orange folder icon;
-#   3. re-signs the DMG when APPLE_SIGNING_IDENTITY is set (re-creating the image drops Tauri's signature).
+#   (Re-creating the image drops Tauri's signature; sign-dmg.sh puts it back.)
 # The app bundle is never touched, so its signature, notarization and the updater artifacts stay valid.
 # usage: brand-dmg.sh path/to/Bizzi.DB_x.y.z_arch.dmg
 set -euo pipefail
@@ -49,10 +49,4 @@ mnt=""
 hdiutil convert "$work/rw.dmg" -format UDZO -imagekey zlib-level=9 -o "$work/out.dmg" >/dev/null
 mv -f "$work/out.dmg" "$dmg"
 
-if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
-  codesign --force --sign "$APPLE_SIGNING_IDENTITY" --timestamp "$dmg"
-  echo "signed: $dmg"
-else
-  echo "APPLE_SIGNING_IDENTITY not set; leaving the DMG unsigned" >&2
-fi
 echo "branded: $dmg"

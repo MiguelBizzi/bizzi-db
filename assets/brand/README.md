@@ -46,12 +46,15 @@ Applications at (470, 225)) lives in `tauri.conf.json` (`bundle.macOS.dmg`). The
 `tauri-action` builds the DMG, then the release workflow runs `dmg/brand-dmg.sh <file.dmg>`, which:
 
 1. replaces Finder's styling (`dmg/style-dmg.py` rewrites `.DS_Store` from `tauri.conf.json`);
-2. replaces the stock blue Applications link with an alias carrying the orange folder icon;
-3. re-signs the DMG (re-creating the image drops Tauri's signature).
+2. replaces the stock blue Applications link with an alias carrying the orange folder icon.
+
+Re-creating the image drops the signature Tauri applied, so the workflow then runs `dmg/sign-dmg.sh`, which imports
+the Developer ID certificate into a throwaway keychain (the keychain `tauri-action` builds is gone by then) and signs
+the DMG. Signing is allowed to fail without blocking the styled DMG; the run shows a warning instead.
 
 The app bundle is never touched, so its signature, notarization and the updater artifacts stay valid.
 
-`dmg/verify-dmg.py <file.dmg> <tauri.conf.json> [--require-signature]` fails unless the DMG will show the branded
+`dmg/verify-dmg.py <file.dmg> <tauri.conf.json> [--require-app-signature] [--require-dmg-signature]` fails unless the DMG will show the branded
 installer. The workflow runs it before upload and again on the asset users download. Run both locally with:
 
 ```sh

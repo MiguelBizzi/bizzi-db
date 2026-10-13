@@ -55,8 +55,9 @@ jobs:
         run: bun apps/desktop/scripts/verify-updater-manifest.ts "${{ github.ref_name }}" "${{ github.repository }}"
 
       # tauri-action styles the DMG through Finder, which stores a background alias that points at this runner's
-      # temporary image and never resolves on a user's Mac. brand-dmg.sh rewrites the styling, swaps in the orange
-      # Applications folder and re-signs the DMG. Any failure here fails the release so an unstyled DMG cannot ship quietly.
+      # temporary image and never resolves on a user's Mac. brand-dmg.sh rewrites the styling and swaps in the orange
+      # Applications folder; verify-dmg.py fails the release if the result would not look right. Signing is separate
+      # and cannot block the styled DMG from shipping, but a failure to sign is shown as a warning.
       - name: Install DMG tooling
         run: |
           python3 -m venv "$RUNNER_TEMP/dmg-venv"
@@ -64,14 +65,34 @@ jobs:
 
       - name: Brand the DMG
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           DMG_PYTHON: ${{ runner.temp }}/dmg-venv/bin/python3
         run: |
           set -euo pipefail
           dmg="$(ls target/universal-apple-darwin/release/bundle/dmg/*.dmg | head -n 1)"
           assets/brand/dmg/brand-dmg.sh "$dmg"
-          "$DMG_PYTHON" assets/brand/dmg/verify-dmg.py "$dmg" apps/desktop/src-tauri/tauri.conf.json --require-signature
+          "$DMG_PYTHON" assets/brand/dmg/verify-dmg.py "$dmg" apps/desktop/src-tauri/tauri.conf.json --require-app-signature
+
+      - name: Sign the DMG
+        id: sign
+        continue-on-error: true
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          dmg="$(ls target/universal-apple-darwin/release/bundle/dmg/*.dmg | head -n 1)"
+          assets/brand/dmg/sign-dmg.sh "$dmg"
+
+      - name: Warn when the DMG is unsigned
+        if: steps.sign.outcome != 'success'
+        run: echo "::warning title=DMG not signed::The branded DMG is published without a signature. The app inside is still signed and notarized."
+
+      - name: Upload the branded DMG
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          dmg="$(ls target/universal-apple-darwin/release/bundle/dmg/*.dmg | head -n 1)"
           gh release upload "${{ github.ref_name }}" "$dmg" --clobber
 
       # Download what users will actually get and check it again.
@@ -81,6 +102,8 @@ jobs:
           DMG_PYTHON: ${{ runner.temp }}/dmg-venv/bin/python3
         run: |
           set -euo pipefail
+          flags="--require-app-signature"
+          if [ "${{ steps.sign.outcome }}" = "success" ]; then flags="$flags --require-dmg-signature"; fi
           mkdir -p "$RUNNER_TEMP/published"
           gh release download "${{ github.ref_name }}" --pattern "*.dmg" --dir "$RUNNER_TEMP/published" --clobber
-          "$DMG_PYTHON" assets/brand/dmg/verify-dmg.py "$RUNNER_TEMP/published/"*.dmg apps/desktop/src-tauri/tauri.conf.json --require-signature
+          "$DMG_PYTHON" assets/brand/dmg/verify-dmg.py "$RUNNER_TEMP/published/"*.dmg apps/desktop/src-tauri/tauri.conf.json $flags

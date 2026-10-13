@@ -8,9 +8,9 @@ Mounts the image read-only and checks the things that have broken the installer 
   - the view options Finder keeps are valid (an undersized label silently discards the whole record);
   - window size and icon positions match tauri.conf.json;
   - the Applications entry is an alias, not the stock link;
-  - optionally, the app and the DMG carry valid code signatures.
+  - optionally, the app and/or the DMG carry valid code signatures.
 
-usage: verify-dmg.py <file.dmg> <tauri.conf.json> [--require-signature]
+usage: verify-dmg.py <file.dmg> <tauri.conf.json> [--require-app-signature] [--require-dmg-signature]
 Requires: pip install ds_store mac_alias
 """
 import glob
@@ -36,7 +36,7 @@ def run(*cmd):
     return subprocess.run(cmd, capture_output=True, text=True)
 
 
-def main(dmg, conf_path, require_signature):
+def main(dmg, conf_path, require_app, require_dmg):
     here = os.path.dirname(os.path.abspath(__file__))
     with open(conf_path) as fh:
         cfg = json.load(fh)["bundle"]["macOS"]["dmg"]
@@ -51,12 +51,12 @@ def main(dmg, conf_path, require_signature):
         sys.exit(f"cannot mount {dmg}: {attach.stderr.strip()}")
     mount = [l.split("\t")[-1].strip() for l in attach.stdout.splitlines() if "/Volumes/" in l][-1]
     try:
-        verify(dmg, mount, cfg, repo_background, require_signature)
+        verify(dmg, mount, cfg, repo_background, require_app, require_dmg)
     finally:
         subprocess.run(["hdiutil", "detach", mount, "-force"], capture_output=True)
 
 
-def verify(dmg, mount, cfg, repo_background, require_signature):
+def verify(dmg, mount, cfg, repo_background, require_app, require_dmg):
     print(f"verifying {os.path.basename(dmg)} (mounted at {mount})")
     info = plistlib.loads(subprocess.run(["diskutil", "info", "-plist", mount], capture_output=True).stdout)
     name = info["VolumeName"]
@@ -112,9 +112,10 @@ def verify(dmg, mount, cfg, repo_background, require_signature):
     finder_info = run("xattr", "-px", "com.apple.FinderInfo", applications).stdout.split()
     check(finder_info[:4] == ["66", "64", "72", "70"], "Applications is a Finder alias with a custom icon, not the stock link")
 
-    if require_signature and apps:
+    if require_app and apps:
         r = run("codesign", "--verify", "--deep", "--strict", apps[0])
         check(r.returncode == 0, "app bundle signature is valid" + ("" if r.returncode == 0 else f": {r.stderr.strip()}"))
+    if require_dmg:
         r = run("codesign", "--verify", "--strict", dmg)
         check(r.returncode == 0, "DMG is code-signed" + ("" if r.returncode == 0 else f": {r.stderr.strip()}"))
 
@@ -127,4 +128,4 @@ if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if len(args) != 2:
         sys.exit(__doc__)
-    main(args[0], args[1], "--require-signature" in sys.argv)
+    main(args[0], args[1], "--require-app-signature" in sys.argv, "--require-dmg-signature" in sys.argv)
