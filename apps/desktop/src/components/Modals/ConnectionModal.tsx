@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { AnimatePresence } from "motion/react";
+import { Modal, ModalPanel } from "../ui/Modal";
 import {
   ConnectionFolder,
   ConnectionProfile,
@@ -85,7 +87,7 @@ function formFromOpenState(
   return defaultFolderId ? { ...form, folderId: defaultFolderId } : form;
 }
 
-export const ConnectionModal: React.FC<ConnectionModalProps> = ({
+const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
   isOpen,
   editingProfile,
   folders,
@@ -223,8 +225,8 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
     `${fieldClass} ${showError(field) ? "border-destructive focus:border-destructive" : ""}`;
 
   return (
-    <div className="connection-modal fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 font-sans select-none text-foreground">
-      <div className="w-full max-w-xl bg-popover border border-border rounded-2xl shadow-2xl flex flex-col text-popover-foreground max-h-[90vh]">
+    <Modal className="connection-modal  font-sans select-none text-foreground">
+      <ModalPanel className="w-full max-w-xl bg-popover border border-border rounded-2xl shadow-2xl flex flex-col text-popover-foreground max-h-[90vh]">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between bg-background/60 rounded-t-2xl">
           <div className="flex items-center gap-2.5 font-mono">
             <PostgresLogo className="w-5 h-5" />
@@ -812,7 +814,13 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
             </div>
           </div>
         </form>
-      </div>
-    </div>
+      </ModalPanel>
+    </Modal>
   );
 };
+
+export const ConnectionModal: React.FC<ConnectionModalProps> = (props) => (
+  <AnimatePresence>
+    {props.isOpen && <ConnectionModalBody key="modal" {...props} />}
+  </AnimatePresence>
+);

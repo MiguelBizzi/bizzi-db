@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { AnimatePresence } from 'motion/react';
+import { Modal, ModalPanel } from '../ui/Modal';
 import { format } from 'sql-formatter';
 import {
   Play,
@@ -426,9 +428,10 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
       </div>
 
       {/* Save Query Modal */}
+      <AnimatePresence>
       {isSaveModalOpen && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-popover border border-border rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden font-sans text-popover-foreground">
+        <Modal>
+          <ModalPanel className="bg-popover border border-border rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden font-sans text-popover-foreground">
             {/* Modal Header */}
             <div className="p-4 bg-background/60 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2 text-foreground font-bold text-sm font-mono">
@@ -551,9 +554,10 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+          </ModalPanel>
+        </Modal>
       )}
+      </AnimatePresence>
     </div>
   );
 };

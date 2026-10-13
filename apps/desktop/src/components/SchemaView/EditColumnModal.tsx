@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { AnimatePresence } from "motion/react";
+import { Modal, ModalPanel } from "../ui/Modal";
 import { AlertCircle, AlertTriangle, Check, Pencil, X } from "lucide-react";
 import type { ColumnTypeDef } from "@db/database";
 import type { ColumnDefinition, TableSchema } from "../../types";
@@ -22,7 +24,7 @@ interface EditColumnModalProps {
   onExecute: (sql: string) => Promise<{ error?: string }>;
 }
 
-export const EditColumnModal: React.FC<EditColumnModalProps> = ({
+const EditColumnModalBody: React.FC<EditColumnModalProps> = ({
   isOpen,
   table,
   tables,
@@ -105,8 +107,8 @@ export const EditColumnModal: React.FC<EditColumnModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div
+    <Modal>
+      <ModalPanel
         role="dialog"
         aria-modal="true"
         aria-labelledby="edit-column-title"
@@ -196,7 +198,13 @@ export const EditColumnModal: React.FC<EditColumnModalProps> = ({
             </div>
           </footer>
         </form>
-      </div>
-    </div>
+      </ModalPanel>
+    </Modal>
   );
 };
+
+export const EditColumnModal: React.FC<EditColumnModalProps> = (props) => (
+  <AnimatePresence>
+    {props.isOpen && props.column && <EditColumnModalBody key="modal" {...props} />}
+  </AnimatePresence>
+);

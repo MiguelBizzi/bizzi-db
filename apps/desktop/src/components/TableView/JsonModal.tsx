@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { AnimatePresence } from 'motion/react';
+import { Modal, ModalPanel } from '../ui/Modal';
 import { X, Check, Copy, Code, AlertCircle } from 'lucide-react';
 
 interface JsonModalProps {
@@ -9,7 +11,7 @@ interface JsonModalProps {
   onClose: () => void;
 }
 
-export const JsonModal: React.FC<JsonModalProps> = ({
+const JsonModalBody: React.FC<JsonModalProps> = ({
   isOpen,
   columnName,
   initialValue,
@@ -50,8 +52,8 @@ export const JsonModal: React.FC<JsonModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-xl bg-popover border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col text-popover-foreground">
+    <Modal>
+      <ModalPanel className="w-full max-w-xl bg-popover border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col text-popover-foreground">
         {/* Header */}
         <div className="px-4 py-3 border-b border-border flex items-center justify-between bg-background/60">
           <div className="flex items-center gap-2">
@@ -113,7 +115,13 @@ export const JsonModal: React.FC<JsonModalProps> = ({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+      </ModalPanel>
+    </Modal>
   );
 };
+
+export const JsonModal: React.FC<JsonModalProps> = (props) => (
+  <AnimatePresence>
+    {props.isOpen && <JsonModalBody key="modal" {...props} />}
+  </AnimatePresence>
+);

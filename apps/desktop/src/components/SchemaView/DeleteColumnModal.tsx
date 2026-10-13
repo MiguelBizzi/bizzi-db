@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { AnimatePresence } from 'motion/react';
+import { Modal, ModalPanel } from '../ui/Modal';
 import { AlertCircle, AlertTriangle, Trash2, X } from 'lucide-react';
 import type { ColumnDefinition, TableSchema } from '../../types';
 import { buildDropColumnSql, canConfirmDelete } from '../../lib/schemaChange';
@@ -12,7 +14,7 @@ interface DeleteColumnModalProps {
   onExecute: (sql: string) => Promise<{ error?: string }>;
 }
 
-export const DeleteColumnModal: React.FC<DeleteColumnModalProps> = ({
+const DeleteColumnModalBody: React.FC<DeleteColumnModalProps> = ({
   isOpen,
   table,
   column,
@@ -65,8 +67,8 @@ export const DeleteColumnModal: React.FC<DeleteColumnModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div
+    <Modal>
+      <ModalPanel
         role="dialog"
         aria-modal="true"
         aria-labelledby="delete-column-title"
@@ -155,7 +157,13 @@ export const DeleteColumnModal: React.FC<DeleteColumnModalProps> = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </ModalPanel>
+    </Modal>
   );
 };
+
+export const DeleteColumnModal: React.FC<DeleteColumnModalProps> = (props) => (
+  <AnimatePresence>
+    {props.isOpen && props.column && <DeleteColumnModalBody key="modal" {...props} />}
+  </AnimatePresence>
+);

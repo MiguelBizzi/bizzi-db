@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence } from 'motion/react';
+import { Modal, ModalPanel } from './ui/Modal';
 import {
   Search,
   Table,
@@ -40,7 +42,7 @@ type PaletteItem = {
   run: () => void;
 };
 
-export const CommandPalette: React.FC<CommandPaletteProps> = ({
+const CommandPaletteBody: React.FC<CommandPaletteProps> = ({
   isOpen,
   onClose,
   currentDatabase,
@@ -252,14 +254,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-start justify-center pt-20 p-4"
-      onClick={onClose}
-      role="presentation"
-    >
-      <div
-        className="w-full max-w-2xl bg-popover border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col text-popover-foreground animate-in fade-in zoom-in-95 duration-150"
-        onClick={(e) => e.stopPropagation()}
+    <Modal align="top" onScrimClick={onClose} role="presentation">
+      <ModalPanel
+        className="w-full max-w-2xl bg-popover border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col text-popover-foreground"
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
@@ -421,7 +418,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           <span>↑↓ navigate • Enter select • Esc close • {MOD_K} toggle</span>
           <span>Active DB: {currentDatabase?.name || 'none'}</span>
         </div>
-      </div>
-    </div>
+      </ModalPanel>
+    </Modal>
   );
 };
+
+export const CommandPalette: React.FC<CommandPaletteProps> = (props) => (
+  <AnimatePresence>
+    {props.isOpen && <CommandPaletteBody key="modal" {...props} />}
+  </AnimatePresence>
+);

@@ -1,4 +1,6 @@
 import React from "react";
+import { AnimatePresence } from "motion/react";
+import { Modal, ModalPanel } from "../ui/Modal";
 import { Settings, X, AlertTriangle } from "lucide-react";
 import { Switch } from "../ui/Switch";
 import { Select, type SelectOption } from "../ui/Select";
@@ -59,7 +61,7 @@ function updateStatusCopy(status: AppUpdateStatus): string {
   }
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({
+const SettingsModalBody: React.FC<SettingsModalProps> = ({
   isOpen,
   keychainEnabled,
   appVersion,
@@ -83,8 +85,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const canRestart = canRestartToUpdate(updateStatus);
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 font-sans select-none text-foreground">
-      <div className="w-full max-w-lg bg-popover border border-border rounded-2xl shadow-2xl flex flex-col text-popover-foreground">
+    <Modal className="font-sans select-none text-foreground">
+      <ModalPanel className="w-full max-w-lg bg-popover border border-border rounded-2xl shadow-2xl flex flex-col text-popover-foreground">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between bg-background/60 rounded-t-2xl">
           <div className="flex items-center gap-2.5 font-mono">
             <Settings className="w-5 h-5 text-muted-foreground" />
@@ -208,7 +210,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </ModalPanel>
+    </Modal>
   );
 };
+
+export const SettingsModal: React.FC<SettingsModalProps> = (props) => (
+  <AnimatePresence>
+    {props.isOpen && <SettingsModalBody key="modal" {...props} />}
+  </AnimatePresence>
+);

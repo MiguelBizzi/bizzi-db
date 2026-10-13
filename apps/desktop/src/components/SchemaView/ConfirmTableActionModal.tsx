@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { AnimatePresence } from 'motion/react';
+import { Modal, ModalPanel } from '../ui/Modal';
 import { AlertTriangle, Eraser, Trash2, X } from 'lucide-react';
 import type { TableSchema } from '../../types';
 import {
@@ -14,7 +16,7 @@ interface ConfirmTableActionModalProps {
   onConfirm: () => void;
 }
 
-export const ConfirmTableActionModal: React.FC<ConfirmTableActionModalProps> = ({
+const ConfirmTableActionModalBody: React.FC<ConfirmTableActionModalProps> = ({
   table,
   action,
   onClose,
@@ -53,8 +55,8 @@ export const ConfirmTableActionModal: React.FC<ConfirmTableActionModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div
+    <Modal>
+      <ModalPanel
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -149,7 +151,13 @@ export const ConfirmTableActionModal: React.FC<ConfirmTableActionModalProps> = (
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </ModalPanel>
+    </Modal>
   );
 };
+
+export const ConfirmTableActionModal: React.FC<ConfirmTableActionModalProps> = (props) => (
+  <AnimatePresence>
+    {props.table && props.action && <ConfirmTableActionModalBody key="modal" {...props} />}
+  </AnimatePresence>
+);
