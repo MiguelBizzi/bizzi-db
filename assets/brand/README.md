@@ -39,10 +39,46 @@ cd - && BRAND_TOOLS=/tmp/brand-tools bun assets/brand/generate.mjs
 
 ## DMG installer
 
-`tauri.conf.json` (`bundle.macOS.dmg`) sets the window to 660×420 pt with the app at (190, 215) and
-Applications at (470, 215). Those numbers are mirrored in `DMG` in `generate.mjs`; change both together.
+Layout (window 660×468 including the 28 pt title bar, so the 660×440 background fills it; app at (190, 225),
+Applications at (470, 225)) lives in `tauri.conf.json` (`bundle.macOS.dmg`). The same numbers are mirrored in
+`DMG` in `generate.mjs`; change both together.
 
-Tauri always draws the stock blue Applications folder. `dmg/brand-dmg.sh <file.dmg>` replaces that link with
-a Finder alias to `/Applications` that carries the orange folder icon. It only touches the Applications entry,
-never the app bundle, so signing, notarization and updater artifacts stay valid. The release workflow runs it
-after `tauri-action` and re-uploads the DMG (best effort: a failure keeps the plain DMG).
+`tauri-action` builds the DMG, then the release workflow runs `dmg/brand-dmg.sh <file.dmg>`, which:
+
+1. replaces Finder's styling (`dmg/style-dmg.py` rewrites `.DS_Store` from `tauri.conf.json`);
+2. replaces the stock blue Applications link with an alias carrying the orange folder icon;
+3. re-signs the DMG (re-creating the image drops Tauri's signature).
+
+The app bundle is never touched, so its signature, notarization and the updater artifacts stay valid.
+
+`dmg/verify-dmg.py <file.dmg> <tauri.conf.json> [--require-signature]` fails unless the DMG will show the branded
+installer. The workflow runs it before upload and again on the asset users download. Run both locally with:
+
+```sh
+assets/brand/dmg/brand-dmg.sh path/to/Bizzi.DB.dmg   # needs python3 + network for ds_store, mac_alias
+python3 -m venv /tmp/dmg-venv && /tmp/dmg-venv/bin/pip install ds_store==1.3.3 mac_alias==2.2.3
+/tmp/dmg-venv/bin/python3 assets/brand/dmg/verify-dmg.py path/to/Bizzi.DB.dmg apps/desktop/src-tauri/tauri.conf.json
+```
+
+### Why not trust Tauri's own styling
+
+Tauri styles the DMG by driving Finder with AppleScript on a temporary image. Finder stores the background as an
+alias that includes a pointer to that temporary image on the build machine (on CI,
+`/Users/runner/work/.../rw.NNNN.Bizzi DB_x.y.z_universal.dmg`). Nobody else has that file, so on every other Mac
+Finder cannot resolve the alias and shows a plain window: icons in the right places, no background. The layout
+survives because icon positions are stored separately from the alias. `style-dmg.py` writes an alias that only
+names the volume and the file inside it.
+
+Rules learned the hard way:
+
+- Keep the label size (`textSize`) at 10 or more. Finder throws away the whole view-options record, background
+  included, when it is smaller.
+- Finder labels cannot be hidden or recoloured: with a background picture they are always dark, even in dark mode.
+  The background therefore draws a light plate behind each label (cream for the app, amber for Applications).
+  `DMG.labelY` in `generate.mjs` is where Finder centres the labels at icon size 128 and label size 12; if you
+  change either size in `style-dmg.py`, move the plates to match.
+- When testing a background change, mount the test DMG under a new volume name. Finder caches the background per
+  volume, so an image swapped inside a volume it has already seen keeps showing the old picture.
+- Do not make the DMG's volume name depend on the mount point. `style-dmg.py` names the volume explicitly, so a
+  second "Bizzi DB" volume already mounted (named "Bizzi DB 1") does not break the alias.
+- Never mark the branding step `continue-on-error`. That is how an unstyled DMG shipped for three releases.

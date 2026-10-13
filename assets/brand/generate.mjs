@@ -282,9 +282,10 @@ out('assets/brand/svg/applications-folder.svg', folder);
 out('assets/brand/png/applications-folder-1024.png', png(folder, 1024));
 
 // DMG installer background. Window and icon positions live in tauri.conf.json (bundle.macOS.dmg).
-const DMG = { w: 660, h: 440, iconY: 225, appX: 190, appsX: 470 };
+// labelY is where Finder centres the icon labels (icon size 128, label size 12); the plates sit behind them.
+const DMG = { w: 660, h: 440, iconY: 225, appX: 190, appsX: 470, labelY: 308 };
 function dmgBackgroundSvg() {
-  const { w, h, iconY, appX, appsX } = DMG;
+  const { w, h, iconY, appX, appsX, labelY } = DMG;
   const lockup = svgs['lockup-horizontal-on-dark'];
   const [, lw, lh] = lockup.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/).map(Number);
   const lk = 54 / lh;
@@ -294,14 +295,26 @@ function dmgBackgroundSvg() {
   const mid = (appX + appsX) / 2;
   const dots = [-18, -9, 0, 9].map((dx, i) => `<circle cx="${mid + dx - 4}" cy="${iconY}" r="1.7" fill="${COLOR.amber}" fill-opacity="${0.3 + i * 0.22}"/>`).join('');
   const chevron = `<path d="M${mid + 10} ${iconY - 6}L${mid + 17} ${iconY}L${mid + 10} ${iconY + 6}" fill="none" stroke="${COLOR.amber}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`;
-  // Finder draws the icon labels itself and a DMG cannot recolour them, so captions go above the cells.
+  // Finder draws the icon labels itself, always in dark text, and a DMG cannot recolour them. So the labels get a
+  // light plate to sit on (cream for the app, amber for the selected Applications cell) and the captions go above.
+  const plate = (cx, selected) => {
+    const pw = 120, ph = 28, x = cx - pw / 2, y = labelY - ph / 2;
+    const fill = selected ? COLOR.amber : COLOR.cream;
+    return (
+      `<rect x="${x}" y="${y}" width="${pw}" height="${ph}" rx="${ph / 2}" fill="${fill}" filter="url(#plateShadow)"/>` +
+      `<rect x="${x + 0.5}" y="${y + 0.5}" width="${pw - 1}" height="${ph - 1}" rx="${(ph - 1) / 2}" fill="none" stroke="#ffffff" stroke-opacity="${selected ? 0.35 : 0.7}"/>`
+    );
+  };
+  const defs = '<defs><filter id="plateShadow" x="-30%" y="-60%" width="160%" height="260%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.5"/></filter></defs>';
   const labels =
     centeredText('1 · Drag', appX, iconY - 84 - 14, 12, '#ffffff', 0.6) +
     centeredText('2 · Drop', appsX, iconY - 84 - 14, 12, COLOR.amber, 1);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
 <rect width="${w}" height="${h}" fill="#0c0d10"/>
+${defs}
 <g transform="translate(${(w - lw * lk) / 2},40) scale(${lk})">${lockInner}</g>
 ${cell(appX, false)}${cell(appsX, true)}
+${plate(appX, false)}${plate(appsX, true)}
 <rect x="${appsX + 88 - 5}" y="${iconY + 114 - 5}" width="10" height="10" rx="2" fill="${COLOR.amber}" stroke="#0c0d10" stroke-width="2"/>
 ${labels}${dots}${chevron}
 ${centeredText("Drag to Applications — that's the whole install.", w / 2, iconY + 156, 13, COLOR.cream, 0.82)}
