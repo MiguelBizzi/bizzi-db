@@ -399,22 +399,6 @@
   animation: pending-border-spin 2.8s linear infinite;
 }
 
-@keyframes pending-drawer-in {
-  from {
-    transform: translateX(24px);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-.pending-changes-drawer,
-.insert-row-drawer {
-  animation: pending-drawer-in 180ms ease-out;
-}
-
 /* Number fields are typed, not stepped — hide increment/decrement chevrons. */
 .connection-modal input[type="number"] {
   appearance: textfield;

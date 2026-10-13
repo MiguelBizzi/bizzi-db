@@ -1,4 +1,6 @@
 import React from "react";
+import { AnimatePresence } from "motion/react";
+import { Drawer, DrawerPanel } from "../ui/Drawer";
 import { ActivityLogItem } from "../../types";
 import { Logs, CheckCircle, AlertTriangle, User, X } from "lucide-react";
 
@@ -8,7 +10,7 @@ interface ActivityLogDrawerProps {
   onClose: () => void;
 }
 
-export const ActivityLogDrawer: React.FC<ActivityLogDrawerProps> = ({
+const ActivityLogDrawerBody: React.FC<ActivityLogDrawerProps> = ({
   logs,
   isOpen,
   onClose,
@@ -16,7 +18,8 @@ export const ActivityLogDrawer: React.FC<ActivityLogDrawerProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-y-0 right-0 z-40 w-full max-w-md bg-popover border-l border-border shadow-2xl flex flex-col font-sans select-none text-popover-foreground">
+    <Drawer scrim={false}>
+    <DrawerPanel className="fixed inset-y-0 right-0 z-40 w-full max-w-md bg-popover border-l border-border shadow-2xl flex flex-col font-sans select-none text-popover-foreground">
       {/* Header */}
       <div className="p-4 border-b border-border bg-background/60 flex items-center justify-between">
         <div className="flex items-center gap-2 font-mono font-bold text-xs text-foreground">
@@ -77,6 +80,13 @@ export const ActivityLogDrawer: React.FC<ActivityLogDrawerProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </DrawerPanel>
+    </Drawer>
   );
 };
+
+export const ActivityLogDrawer: React.FC<ActivityLogDrawerProps> = (props) => (
+  <AnimatePresence>
+    {props.isOpen && <ActivityLogDrawerBody key="drawer" {...props} />}
+  </AnimatePresence>
+);

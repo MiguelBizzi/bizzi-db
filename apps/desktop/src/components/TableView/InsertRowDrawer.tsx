@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence } from "motion/react";
+import { Drawer, DrawerPanel } from "../ui/Drawer";
 import { AlertCircle, Check, Clock, Key, Link, Plus, X } from "lucide-react";
 import type { ColumnDefinition, TableSchema } from "../../types";
 import { Select } from "../ui/Select";
@@ -32,7 +34,7 @@ interface InsertRowDrawerProps {
 const inputClass =
   "w-full px-3 py-2 bg-background border border-border rounded-xl text-xs font-mono text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed";
 
-export const InsertRowDrawer: React.FC<InsertRowDrawerProps> = ({
+const InsertRowDrawerBody: React.FC<InsertRowDrawerProps> = ({
   isOpen,
   table,
   tables,
@@ -140,18 +142,14 @@ export const InsertRowDrawer: React.FC<InsertRowDrawerProps> = ({
   };
 
   return (
-    <>
-      <div
-        className="fixed inset-0 z-40 bg-background/50 backdrop-blur-[2px]"
-        onClick={onClose}
-      />
-      <aside
+    <Drawer onScrimClick={onClose}>
+      <DrawerPanel
         ref={panelRef}
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="insert-row-title"
-        className="insert-row-drawer fixed inset-y-0 right-0 z-50 w-full max-w-xl bg-popover border-l border-border shadow-2xl flex flex-col font-sans text-popover-foreground outline-none"
+        className="fixed inset-y-0 right-0 z-50 w-full max-w-xl bg-popover border-l border-border shadow-2xl flex flex-col font-sans text-popover-foreground outline-none"
       >
         <header className="px-4 py-3 border-b border-border bg-background/60 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -254,10 +252,16 @@ export const InsertRowDrawer: React.FC<InsertRowDrawerProps> = ({
             </div>
           </footer>
         </form>
-      </aside>
-    </>
+      </DrawerPanel>
+    </Drawer>
   );
 };
+
+export const InsertRowDrawer: React.FC<InsertRowDrawerProps> = (props) => (
+  <AnimatePresence>
+    {props.isOpen && <InsertRowDrawerBody key="drawer" {...props} />}
+  </AnimatePresence>
+);
 
 function ColumnField({
   column,

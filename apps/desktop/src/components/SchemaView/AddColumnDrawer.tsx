@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence } from "motion/react";
+import { Drawer, DrawerPanel } from "../ui/Drawer";
 import { AlertCircle, Check, Plus, X } from "lucide-react";
 import type { ColumnTypeDef } from "@db/database";
 import type { TableSchema } from "../../types";
@@ -20,7 +22,7 @@ interface AddColumnDrawerProps {
   onExecute: (sql: string) => Promise<{ error?: string }>;
 }
 
-export const AddColumnDrawer: React.FC<AddColumnDrawerProps> = ({
+const AddColumnDrawerBody: React.FC<AddColumnDrawerProps> = ({
   isOpen,
   table,
   tables,
@@ -88,12 +90,8 @@ export const AddColumnDrawer: React.FC<AddColumnDrawerProps> = ({
   };
 
   return (
-    <>
-      <div
-        className="fixed inset-0 z-40 bg-background/50 backdrop-blur-[2px]"
-        onClick={onClose}
-      />
-      <aside
+    <Drawer onScrimClick={onClose}>
+      <DrawerPanel
         ref={panelRef}
         tabIndex={-1}
         role="dialog"
@@ -176,7 +174,13 @@ export const AddColumnDrawer: React.FC<AddColumnDrawerProps> = ({
             </div>
           </footer>
         </form>
-      </aside>
-    </>
+      </DrawerPanel>
+    </Drawer>
   );
 };
+
+export const AddColumnDrawer: React.FC<AddColumnDrawerProps> = (props) => (
+  <AnimatePresence>
+    {props.isOpen && <AddColumnDrawerBody key="drawer" {...props} />}
+  </AnimatePresence>
+);
