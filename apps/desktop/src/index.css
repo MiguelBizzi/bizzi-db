@@ -60,6 +60,11 @@
   --shadow-2xl: 0px 1px 4px 0px hsl(0 0% 0% / 0.13);
   --tracking-normal: 0rem;
   --spacing: 0.25rem;
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 240ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
 }
 
 .dark {
@@ -178,6 +183,9 @@
   --tracking-wide: calc(var(--tracking-normal) + 0.025em);
   --tracking-wider: calc(var(--tracking-normal) + 0.05em);
   --tracking-widest: calc(var(--tracking-normal) + 0.1em);
+
+  --default-transition-duration: 120ms;
+  --default-transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @layer base {
@@ -202,6 +210,22 @@
   }
   label:has(input[type="checkbox"]:not(:disabled)) {
     cursor: pointer;
+  }
+  button,
+  a,
+  input,
+  textarea,
+  select,
+  [role="button"],
+  [role="menuitem"],
+  [role="tab"],
+  [role="option"],
+  [role="switch"],
+  [role="checkbox"] {
+    transition-property: color, background-color, border-color, box-shadow, opacity,
+      outline-color;
+    transition-duration: var(--motion-fast);
+    transition-timing-function: var(--ease-out);
   }
 }
 
