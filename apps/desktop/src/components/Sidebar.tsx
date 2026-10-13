@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AnimatePresence } from 'motion/react';
 import {
   Table as TableIcon,
   Eye,
@@ -298,14 +299,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span>Interactive Visual ERD</span>
         </button>
       </div>
+      <AnimatePresence>
       {menu && (
         <ContextMenu
+          key={`${menu.x}:${menu.y}`}
           x={menu.x}
           y={menu.y}
           items={tableManagementMenuItems(menu.table, tableHandlers)}
           onClose={() => setMenu(null)}
         />
       )}
+      </AnimatePresence>
     </aside>
   );
 };

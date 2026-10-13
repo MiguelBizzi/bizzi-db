@@ -18,7 +18,7 @@ import {
   PanelBottom,
   PanelTop,
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useMotionPreference } from '../lib/motionPreference';
 import { WorkspaceTab } from '../types';
 import { ContextMenu, type ContextMenuItem } from './ui/ContextMenu';
@@ -469,14 +469,17 @@ export const TabsBar: React.FC<TabsBarProps> = ({
         <Plus className="w-3.5 h-3.5" />
       </button>
 
+      <AnimatePresence>
       {menu && (
         <ContextMenu
+          key={`${menu.x}:${menu.y}`}
           x={menu.x}
           y={menu.y}
           items={menuItems(menu.tabId)}
           onClose={() => setMenu(null)}
         />
       )}
+      </AnimatePresence>
     </div>
   );
 };

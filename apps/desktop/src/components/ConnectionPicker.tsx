@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useRef, useState } from 'react';
+import { AnimatePresence } from 'motion/react';
 import {
   ChevronDown,
   ChevronRight,
@@ -708,14 +709,17 @@ export const ConnectionPicker: React.FC<ConnectionPickerProps> = ({
           </div>
         )}
       </div>
+      <AnimatePresence>
       {menu && (
         <ContextMenu
+          key={`${menu.x}:${menu.y}`}
           x={menu.x}
           y={menu.y}
           items={menuItems(menu.profile)}
           onClose={() => setMenu(null)}
         />
       )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -1,3 +1,5 @@
+import { AnimatePresence } from "motion/react";
+import { Popover } from "./ui/Popover";
 import {
   Search,
   Activity,
@@ -75,8 +77,9 @@ function SwitcherFolderRow({
           <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />
         </span>
       </div>
+      <AnimatePresence>
       {open && (
-        <div role="menu" className="absolute top-0 left-full z-50 pl-1">
+        <Popover origin="left" role="menu" className="absolute top-0 left-full z-50 pl-1">
           <div className="min-w-44 bg-popover border border-border rounded-xl shadow-2xl p-1.5">
             {profiles.length === 0 ? (
               <div className="px-2.5 py-1.5 text-xs text-muted-foreground">
@@ -101,8 +104,9 @@ function SwitcherFolderRow({
               ))
             )}
           </div>
-        </div>
+        </Popover>
       )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -181,8 +185,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <ChevronDown className="w-3 h-3 text-muted-foreground ml-1" />
               </button>
 
+              <AnimatePresence>
               {switcher.open && (
-                <div className="absolute top-full left-0 z-50 pt-1 w-64">
+                <Popover origin="top" className="absolute top-full left-0 z-50 pt-1 w-64">
                   <div className="bg-popover border border-border rounded-xl shadow-2xl p-1.5">
                     <div className="px-2 py-1 text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
                       Connections
@@ -234,8 +239,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <span>Connect New Database...</span>
                     </button>
                   </div>
-                </div>
+                </Popover>
               )}
+              </AnimatePresence>
             </div>
 
             {currentDatabase && (

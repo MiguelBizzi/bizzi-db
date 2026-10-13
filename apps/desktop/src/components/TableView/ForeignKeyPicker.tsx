@@ -1,4 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { AnimatePresence } from 'motion/react';
+import { Popover } from '../ui/Popover';
 import { ChevronDown, LoaderCircle, Search } from 'lucide-react';
 import type { TableSchema } from '../../types';
 import {
@@ -183,8 +185,9 @@ export function ForeignKeyPicker({
       {showPicked && (
         <p className="mt-1 text-[10px] text-muted-foreground font-mono truncate">{pickedLabel}</p>
       )}
+      <AnimatePresence>
       {open && !disabled && (
-        <div
+        <Popover origin="top"
           id={listId}
           role="listbox"
           className="absolute z-50 left-0 right-0 mt-1 bg-popover border border-border rounded-xl shadow-lg overflow-hidden"
@@ -241,8 +244,9 @@ export function ForeignKeyPicker({
               Searching {referencedTable.schema}.{referencedTable.name}…
             </div>
           )}
-        </div>
+        </Popover>
       )}
+      </AnimatePresence>
     </div>
   );
 }

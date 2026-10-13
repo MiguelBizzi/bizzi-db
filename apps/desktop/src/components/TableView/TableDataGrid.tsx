@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence } from 'motion/react';
 import {
   Key,
   Link,
@@ -867,8 +868,10 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
         onLookup={onLookup}
       />
 
+      <AnimatePresence>
       {fkFloater && (
         <ForeignKeyFloater
+          key="fk-floater"
           anchor={fkFloater.anchor}
           targetTableName={fkFloater.targetTableName}
           targetColumn={fkFloater.targetColumn}
@@ -884,15 +887,19 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
           }}
         />
       )}
+      </AnimatePresence>
 
+      <AnimatePresence>
       {contextMenu && (
         <ContextMenu
+          key={`${contextMenu.x}:${contextMenu.y}`}
           x={contextMenu.x}
           y={contextMenu.y}
           items={contextMenuItems}
           onClose={closeContextMenu}
         />
       )}
+      </AnimatePresence>
 
       {/* JSON Inspector Modal */}
       <JsonModal

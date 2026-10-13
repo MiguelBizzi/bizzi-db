@@ -1,4 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { AnimatePresence } from 'motion/react';
+import { Popover } from './Popover';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Search } from 'lucide-react';
 
@@ -135,10 +137,11 @@ export function Select<T extends string>({
           } ${open ? 'rotate-180' : ''}`}
         />
       </button>
-      {open &&
-        menuBox &&
-        createPortal(
-        <div
+      {createPortal(
+        <AnimatePresence>
+        {open && menuBox && (
+        <Popover
+          origin={placement === 'top' ? 'bottom' : 'top'}
           ref={menuRef}
           className="fixed z-[200] bg-popover border border-border rounded-xl shadow-lg overflow-hidden"
           style={
@@ -206,7 +209,9 @@ export function Select<T extends string>({
               );
             })}
           </ul>
-        </div>,
+        </Popover>
+        )}
+        </AnimatePresence>,
         document.body
       )}
     </div>

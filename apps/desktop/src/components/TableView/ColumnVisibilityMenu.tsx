@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence } from 'motion/react';
+import { Popover } from '../ui/Popover';
 import { Columns } from 'lucide-react';
 import { Checkbox } from '../ui/Checkbox';
 
@@ -67,8 +69,9 @@ export function ColumnVisibilityMenu({
         <Columns className="w-3.5 h-3.5" />
         <span>Hide Columns{hiddenCount > 0 ? ` (${hiddenCount})` : ''}</span>
       </button>
+      <AnimatePresence>
       {open && (
-        <div className="absolute left-0 mt-1 min-w-52 bg-popover border border-border rounded-xl shadow-2xl p-1.5 z-40 text-xs text-popover-foreground">
+        <Popover origin="top" className="absolute left-0 mt-1 min-w-52 bg-popover border border-border rounded-xl shadow-2xl p-1.5 z-40 text-xs text-popover-foreground">
           <ul className="max-h-56 overflow-y-auto py-0.5">
             {columns.map((column) => {
               const visible = !hidden.has(column.name);
@@ -102,8 +105,9 @@ export function ColumnVisibilityMenu({
               Show All
             </button>
           </div>
-        </div>
+        </Popover>
       )}
+      </AnimatePresence>
     </div>
   );
 }
