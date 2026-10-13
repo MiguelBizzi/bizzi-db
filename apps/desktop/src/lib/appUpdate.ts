@@ -87,6 +87,19 @@ export function statusAfterDownloadEvent(
   return { phase: 'ready', version: current.version, notes: current.notes };
 }
 
+/**
+ * The resolved download promise is the source of truth. Progress events are
+ * cosmetic: they can be lost, so they must never gate the ready state.
+ */
+export function statusAfterDownloadComplete(
+  current: AppUpdateStatus,
+): AppUpdateStatus {
+  if (current.phase !== 'available' && current.phase !== 'downloading') {
+    return current;
+  }
+  return { phase: 'ready', version: current.version, notes: current.notes };
+}
+
 export function downloadPercent(
   received: number,
   total: number | null,
@@ -124,4 +137,24 @@ export function shouldShowUpdateBanner(
     status.phase === 'error' &&
     (status.stage === 'download' || status.stage === 'install')
   );
+}
+
+/** A manual check must always answer, even when nothing changed. */
+export function manualCheckFeedback(
+  status: AppUpdateStatus,
+  currentVersion: string,
+): { message: string; kind: 'success' | 'error' } | null {
+  if (status.phase === 'upToDate') {
+    return {
+      message: `You're on the latest version (${currentVersion})`,
+      kind: 'success',
+    };
+  }
+  if (status.phase === 'error' && status.stage === 'check') {
+    return {
+      message: `Couldn't check for updates: ${status.message}`,
+      kind: 'error',
+    };
+  }
+  return null;
 }

@@ -114,10 +114,12 @@ import {
   IDLE_UPDATE_STATUS,
   UPDATE_CHECK_INTERVAL_MS,
   canRestartToUpdate,
+  manualCheckFeedback,
   canStartUpdateCheck,
   shouldShowUpdateBanner,
   statusAfterCheck,
   statusAfterCheckError,
+  statusAfterDownloadComplete,
   statusAfterDownloadEvent,
   statusAfterDownloadFailure,
   statusAfterInstallFailure,
@@ -334,6 +336,7 @@ export default function App() {
       await update.download((event) => {
         setUpdateStatus((current) => statusAfterDownloadEvent(current, event));
       });
+      setUpdateStatus(statusAfterDownloadComplete);
     } catch (error: unknown) {
       console.error('Update download failed', error);
       setUpdateStatus(statusAfterDownloadFailure(error));
@@ -341,27 +344,36 @@ export default function App() {
   }, []);
 
   const checkForAppUpdate = useCallback(
-    async () => {
-      const current = updateStatusRef.current;
-      if (!canStartUpdateCheck(current)) return;
+    async (): Promise<AppUpdateStatus | null> => {
+      if (!canStartUpdateCheck(updateStatusRef.current)) return null;
       setUpdateStatus({ phase: 'checking' });
       try {
         const update = await check();
         if (!update) {
           pendingUpdateRef.current = null;
-          setUpdateStatus(statusAfterCheck(null));
-          return;
+          const next = statusAfterCheck(null);
+          setUpdateStatus(next);
+          return next;
         }
         pendingUpdateRef.current = update;
         setUpdateStatus(statusAfterCheck({ version: update.version, body: update.body }));
         await downloadAppUpdate(update);
+        return null;
       } catch (error: unknown) {
         console.error('Update check failed', error);
-        setUpdateStatus(statusAfterCheckError(error));
+        const next = statusAfterCheckError(error);
+        setUpdateStatus(next);
+        return next;
       }
     },
     [downloadAppUpdate],
   );
+
+  const checkForAppUpdateManually = useCallback(async () => {
+    const result = await checkForAppUpdate();
+    const feedback = result ? manualCheckFeedback(result, appVersion) : null;
+    if (feedback) toast(feedback.message, feedback.kind);
+  }, [appVersion, checkForAppUpdate]);
 
   const restartToUpdate = useCallback(async () => {
     const update = pendingUpdateRef.current;
@@ -1349,7 +1361,7 @@ export default function App() {
         updateStatus={updateStatus}
         onClose={() => setIsSettingsOpen(false)}
         onToggleKeychain={handleToggleKeychain}
-        onCheckForUpdates={() => checkForAppUpdate()}
+        onCheckForUpdates={checkForAppUpdateManually}
         onRestartToUpdate={restartToUpdate}
       />
       {shouldShowUpdateBanner(updateStatus, dismissedUpdateVersion) ? (
@@ -1357,7 +1369,7 @@ export default function App() {
           status={updateStatus}
           hasUnsavedChanges={Object.values(pendingByTable).some(hasPending)}
           onRestart={restartToUpdate}
-          onRetry={() => checkForAppUpdate()}
+          onRetry={checkForAppUpdateManually}
           onLater={() => {
             if (updateStatus.phase === 'ready') {
               setDismissedUpdateVersion(updateStatus.version);

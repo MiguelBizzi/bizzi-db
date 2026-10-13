@@ -2,11 +2,13 @@ import { describe, expect, test } from 'bun:test';
 import {
   UPDATE_CHECK_INTERVAL_MS,
   canRestartToUpdate,
+  manualCheckFeedback,
   downloadPercent,
   canStartUpdateCheck,
   shouldShowUpdateBanner,
   statusAfterCheck,
   statusAfterCheckError,
+  statusAfterDownloadComplete,
   statusAfterDownloadEvent,
   statusAfterDownloadFailure,
   statusAfterInstallFailure,
@@ -130,6 +132,34 @@ describe('background download', () => {
   });
 });
 
+describe('download completion does not depend on progress events', () => {
+  test('a resolved download is ready even if no event ever arrived', () => {
+    expect(statusAfterDownloadComplete(available)).toEqual({
+      phase: 'ready',
+      version: '0.2.0',
+      notes: 'Bug fixes',
+    });
+  });
+
+  test('a resolved download after progress is ready', () => {
+    expect(
+      statusAfterDownloadComplete({
+        phase: 'downloading',
+        version: '0.2.0',
+        notes: '',
+        received: 5,
+        total: 10,
+      }),
+    ).toEqual({ phase: 'ready', version: '0.2.0', notes: '' });
+  });
+
+  test('leaves unrelated states alone', () => {
+    expect(statusAfterDownloadComplete({ phase: 'upToDate' })).toEqual({
+      phase: 'upToDate',
+    });
+  });
+});
+
 describe('restart to update', () => {
   test('restart is offered only once the update is downloaded', () => {
     expect(
@@ -217,5 +247,30 @@ describe('update banner', () => {
         null,
       ),
     ).toBe(false);
+  });
+});
+
+describe('manualCheckFeedback', () => {
+  test('confirms when the app is already current', () => {
+    expect(manualCheckFeedback({ phase: 'upToDate' }, '0.1.8')).toEqual({
+      message: "You're on the latest version (0.1.8)",
+      kind: 'success',
+    });
+  });
+
+  test('reports a failed check', () => {
+    expect(
+      manualCheckFeedback(
+        { phase: 'error', stage: 'check', message: 'offline' },
+        '0.1.8',
+      ),
+    ).toEqual({ message: "Couldn't check for updates: offline", kind: 'error' });
+  });
+
+  test('stays quiet when the banner or settings already show progress', () => {
+    expect(manualCheckFeedback(available, '0.1.8')).toBeNull();
+    expect(
+      manualCheckFeedback({ phase: 'ready', version: '0.2.0', notes: '' }, '0.1.8'),
+    ).toBeNull();
   });
 });

@@ -21,6 +21,7 @@
     "typescript": "~5.8.2"
   },
   "overrides": {
+    "@tauri-apps/api": "2.2.0",
     "nanoid": "3.3.18",
     "source-map-js": "1.2.2"
   }
