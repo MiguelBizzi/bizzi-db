@@ -82,6 +82,9 @@ Rules learned the hard way:
   change either size in `style-dmg.py`, move the plates to match.
 - When testing a background change, mount the test DMG under a new volume name. Finder caches the background per
   volume, so an image swapped inside a volume it has already seen keeps showing the old picture.
-- Do not make the DMG's volume name depend on the mount point. `style-dmg.py` names the volume explicitly, so a
-  second "Bizzi DB" volume already mounted (named "Bizzi DB 1") does not break the alias.
+- Finder resolves the background by volume NAME. If another volume with the same name is still mounted (an older
+  installer someone left open), Finder uses that volume's `.background` image instead, so the window shows an old
+  design. `brand-dmg.sh` therefore names every release's volume `<productName> <version>` (for example
+  "Bizzi DB 0.1.12"), and `style-dmg.py` names the volume explicitly in the alias so the mount path ("Bizzi DB 1")
+  never leaks into it.
 - Never mark the branding step `continue-on-error`. That is how an unstyled DMG shipped for three releases.

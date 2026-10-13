@@ -2,7 +2,9 @@
 # Finishes a Tauri DMG so it looks the same on every Mac:
 #   1. rewrites Finder's window styling (style-dmg.py), because the alias Tauri/Finder records for the
 #      background points at the build machine's temporary image and never resolves on a user's Mac;
-#   2. swaps the stock blue Applications link for an alias carrying the orange folder icon;
+#   2. names the volume '<product> <version>' so another volume still mounted as 'Bizzi DB' cannot supply its
+#      background;
+#   3. swaps the stock blue Applications link for an alias carrying the orange folder icon;
 #   (Re-creating the image drops Tauri's signature; sign-dmg.sh puts it back.)
 # The app bundle is never touched, so its signature, notarization and the updater artifacts stay valid.
 # usage: brand-dmg.sh path/to/Bizzi.DB_x.y.z_arch.dmg
@@ -33,8 +35,18 @@ if [ -z "$py" ]; then
 fi
 
 hdiutil convert "$dmg" -format UDRW -o "$work/rw.dmg" >/dev/null
-mnt="$(hdiutil attach "$work/rw.dmg" -nobrowse -noverify -noautoopen | awk -F'\t' '/\/Volumes\//{print $NF}' | tail -n 1)"
+attach="$(hdiutil attach "$work/rw.dmg" -nobrowse -noverify -noautoopen | grep '/Volumes/' | tail -n 1)"
+dev="$(echo "$attach" | awk -F'\t' '{print $1}' | tr -d ' ')"
+mnt="$(echo "$attach" | awk -F'\t' '{print $NF}')"
 [ -d "$mnt" ] || { echo "could not mount the image" >&2; exit 1; }
+
+# Finder finds the background by volume NAME, so a volume that is still mounted under the same name (an older
+# installer left open) supplies its own, possibly outdated, picture. A name that carries the version makes every
+# release distinct.
+volname="$(python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); print(c["productName"] + " " + c["version"])' "$conf")"
+diskutil rename "$dev" "$volname" >/dev/null
+mnt="$(diskutil info -plist "$dev" | plutil -extract MountPoint raw -o - -)"
+[ -d "$mnt" ] || { echo "could not find the renamed volume" >&2; exit 1; }
 
 [ -e "$mnt/Applications" ] || [ -L "$mnt/Applications" ] || { echo "expected an Applications entry in the DMG" >&2; exit 1; }
 rm "$mnt/Applications"

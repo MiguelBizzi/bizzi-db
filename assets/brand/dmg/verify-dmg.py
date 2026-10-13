@@ -3,6 +3,7 @@
 
 Mounts the image read-only and checks the things that have broken the installer before:
   - the background image is on the volume and is the one in the repo;
+  - the volume name carries the version, so an older installer left mounted cannot supply its background;
   - the background alias names this volume and file, with no pointer to a build-machine image
     (that pointer is what made the background vanish for every user);
   - the view options Finder keeps are valid (an undersized label silently discards the whole record);
@@ -39,7 +40,9 @@ def run(*cmd):
 def main(dmg, conf_path, require_app, require_dmg):
     here = os.path.dirname(os.path.abspath(__file__))
     with open(conf_path) as fh:
-        cfg = json.load(fh)["bundle"]["macOS"]["dmg"]
+        conf = json.load(fh)
+    cfg = conf["bundle"]["macOS"]["dmg"]
+    cfg["volumeName"] = f"{conf['productName']} {conf['version']}"
     repo_background = os.path.join(os.path.dirname(os.path.abspath(conf_path)), cfg["background"])
 
     attach = subprocess.run(
@@ -60,6 +63,7 @@ def verify(dmg, mount, cfg, repo_background, require_app, require_dmg):
     print(f"verifying {os.path.basename(dmg)} (mounted at {mount})")
     info = plistlib.loads(subprocess.run(["diskutil", "info", "-plist", mount], capture_output=True).stdout)
     name = info["VolumeName"]
+    check(name == cfg["volumeName"], f"volume is named '{cfg['volumeName']}' (a name shared with an older installer lets Finder pick the wrong background)")
 
     backgrounds = glob.glob(os.path.join(mount, ".background", "*"))
     check(len(backgrounds) == 1, "exactly one image in .background")
