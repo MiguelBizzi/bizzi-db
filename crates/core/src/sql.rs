@@ -1,10 +1,103 @@
 use crate::types::HistoryQueryType;
 
-pub const DEFAULT_ROW_CAP: usize = 1000;
 pub const DEFAULT_PREVIEW_LIMIT: i64 = 100;
 
 pub fn clamp_preview_page(limit: i64, offset: i64) -> (i64, i64) {
-    (limit.clamp(0, DEFAULT_ROW_CAP as i64), offset.max(0))
+    (limit.max(0), offset.max(0))
+}
+
+/// Keywords that mean a statement writes, locks or creates something. Wrapping
+/// such a statement in a subquery would re-run its side effects for every page
+/// and for the row count, so it is never paged.
+const NON_PAGEABLE_WORDS: &[&str] = &["insert", "update", "delete", "merge", "into"];
+
+/// Wraps one read-only `SELECT`/`WITH`/`VALUES`/`TABLE` statement so a single
+/// page of its rows can be fetched. `None` means the statement must run as is.
+pub fn paged_select_sql(stmt: &str, limit: i64, offset: i64) -> Option<String> {
+    let body = pageable_body(stmt)?;
+    let (limit, offset) = (limit.max(1), offset.max(0));
+    Some(format!(
+        "SELECT * FROM (\n{body}\n) AS _paged LIMIT {limit} OFFSET {offset}"
+    ))
+}
+
+/// Counts every row the statement returns; same eligibility as `paged_select_sql`.
+pub fn count_select_sql(stmt: &str) -> Option<String> {
+    let body = pageable_body(stmt)?;
+    Some(format!("SELECT COUNT(*) FROM (\n{body}\n) AS _counted"))
+}
+
+fn pageable_body(stmt: &str) -> Option<String> {
+    let body = stmt.trim().trim_end_matches(';').trim_end();
+    let mut words = sql_words(body).into_iter();
+    if !matches!(
+        words.next()?.as_str(),
+        "select" | "with" | "values" | "table"
+    ) {
+        return None;
+    }
+    if words.any(|word| NON_PAGEABLE_WORDS.contains(&word.as_str())) {
+        return None;
+    }
+    Some(body.to_string())
+}
+
+/// Lowercased bare words of `sql`, skipping comments, quoted text and dollar-quoted bodies.
+fn sql_words(sql: &str) -> Vec<String> {
+    let chars: Vec<char> = sql.chars().collect();
+    let mut words = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if c == '-' && chars.get(i + 1) == Some(&'-') {
+            while i < chars.len() && chars[i] != '\n' {
+                i += 1;
+            }
+        } else if c == '/' && chars.get(i + 1) == Some(&'*') {
+            let mut depth = 1;
+            i += 2;
+            while i < chars.len() && depth > 0 {
+                if chars[i] == '/' && chars.get(i + 1) == Some(&'*') {
+                    depth += 1;
+                    i += 2;
+                } else if chars[i] == '*' && chars.get(i + 1) == Some(&'/') {
+                    depth -= 1;
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
+        } else if c == '\'' || c == '"' {
+            i += 1;
+            while i < chars.len() {
+                if chars[i] == c {
+                    if chars.get(i + 1) == Some(&c) {
+                        i += 2;
+                        continue;
+                    }
+                    i += 1;
+                    break;
+                }
+                i += 1;
+            }
+        } else if let Some(tag_len) = dollar_tag_len(&chars[i..]) {
+            let tag: Vec<char> = chars[i..i + tag_len].to_vec();
+            i += tag_len;
+            while i + tag_len <= chars.len() && chars[i..i + tag_len] != tag[..] {
+                i += 1;
+            }
+            i = (i + tag_len).min(chars.len());
+        } else if c.is_alphabetic() || c == '_' {
+            let start = i;
+            while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
+                i += 1;
+            }
+            words.push(chars[start..i].iter().collect::<String>().to_lowercase());
+        } else {
+            i += 1;
+        }
+    }
+    words
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -218,17 +311,52 @@ mod tests {
     }
 
     #[test]
-    fn clamp_preview_page_bounds_limit_and_offset() {
+    fn clamp_preview_page_only_rejects_negative_values() {
         assert_eq!(clamp_preview_page(100, 0), (100, 0));
         assert_eq!(clamp_preview_page(-5, -10), (0, 0));
+        assert_eq!(clamp_preview_page(i64::MAX, i64::MAX), (i64::MAX, i64::MAX));
+    }
+
+    #[test]
+    fn paged_select_wraps_read_only_statements() {
         assert_eq!(
-            clamp_preview_page(i64::MAX, i64::MAX),
-            (DEFAULT_ROW_CAP as i64, i64::MAX)
+            paged_select_sql("SELECT * FROM users;", 50, 100).as_deref(),
+            Some("SELECT * FROM (\nSELECT * FROM users\n) AS _paged LIMIT 50 OFFSET 100")
         );
         assert_eq!(
-            clamp_preview_page(DEFAULT_ROW_CAP as i64 + 1, 50),
-            (1000, 50)
+            count_select_sql("  -- all users\nWITH x AS (SELECT 1) SELECT * FROM x ").as_deref(),
+            Some("SELECT COUNT(*) FROM (\n-- all users\nWITH x AS (SELECT 1) SELECT * FROM x\n) AS _counted")
         );
+        assert!(paged_select_sql("VALUES (1), (2)", 10, 0).is_some());
+        assert!(paged_select_sql("TABLE users", 10, 0).is_some());
+        assert_eq!(
+            paged_select_sql("SELECT 1 -- trailing", 0, -4).as_deref(),
+            Some("SELECT * FROM (\nSELECT 1 -- trailing\n) AS _paged LIMIT 1 OFFSET 0")
+        );
+    }
+
+    #[test]
+    fn paged_select_skips_statements_with_side_effects() {
+        for sql in [
+            "INSERT INTO t VALUES (1)",
+            "UPDATE t SET a = 1",
+            "SHOW search_path",
+            "EXPLAIN SELECT 1",
+            "SELECT * INTO copy FROM t",
+            "SELECT * FROM t FOR UPDATE",
+            "WITH gone AS (DELETE FROM t RETURNING *) SELECT * FROM gone",
+            "",
+        ] {
+            assert_eq!(paged_select_sql(sql, 10, 0), None, "{sql}");
+            assert_eq!(count_select_sql(sql), None, "{sql}");
+        }
+    }
+
+    #[test]
+    fn paged_select_ignores_keywords_in_text_and_comments() {
+        let sql =
+            "SELECT 'delete me', \"update\" /* insert */ FROM t -- into\nWHERE x = $$ into $$";
+        assert!(paged_select_sql(sql, 10, 0).is_some());
     }
 
     #[test]

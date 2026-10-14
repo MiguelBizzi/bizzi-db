@@ -5,20 +5,14 @@ pub struct SimpleResult {
     pub columns: Vec<String>,
     pub rows: Vec<Value>,
     pub affected_rows: u64,
-    pub truncated: bool,
 }
 
 /// `bool_columns[i]` marks result column `i` as a Postgres `bool`, whose text
 /// form is `t`/`f` and can't be told apart from a text column by value alone.
-pub fn collect_simple(
-    messages: Vec<SimpleQueryMessage>,
-    cap: usize,
-    bool_columns: &[bool],
-) -> SimpleResult {
+pub fn collect_simple(messages: Vec<SimpleQueryMessage>, bool_columns: &[bool]) -> SimpleResult {
     let mut columns = Vec::new();
     let mut rows = Vec::new();
     let mut affected_rows = 0u64;
-    let mut truncated = false;
 
     for message in messages {
         match message {
@@ -26,13 +20,7 @@ pub fn collect_simple(
                 if columns.is_empty() {
                     columns = column_names(&row);
                 }
-                if take_capped(
-                    &mut rows,
-                    simple_row_to_object(&row, &columns, bool_columns),
-                    cap,
-                ) {
-                    truncated = true;
-                }
+                rows.push(simple_row_to_object(&row, &columns, bool_columns));
             }
             SimpleQueryMessage::CommandComplete(count) => {
                 affected_rows = affected_rows.saturating_add(count);
@@ -46,16 +34,15 @@ pub fn collect_simple(
         columns,
         rows,
         affected_rows,
-        truncated,
     }
 }
 
-fn take_capped<T>(rows: &mut Vec<T>, item: T, cap: usize) -> bool {
-    if rows.len() >= cap {
-        return true;
-    }
-    rows.push(item);
-    false
+/// The single number a `SELECT COUNT(*)` returned.
+pub fn first_count(messages: &[SimpleQueryMessage]) -> Option<u64> {
+    messages.iter().find_map(|message| match message {
+        SimpleQueryMessage::Row(row) => row.get(0)?.parse().ok(),
+        _ => None,
+    })
 }
 
 fn finalize_affected(affected: u64, row_count: usize) -> u64 {
@@ -135,12 +122,7 @@ mod tests {
     }
 
     #[test]
-    fn take_capped_and_affected_rows() {
-        let mut rows = Vec::new();
-        assert!(!take_capped(&mut rows, 1, 2));
-        assert!(!take_capped(&mut rows, 2, 2));
-        assert!(take_capped(&mut rows, 3, 2));
-        assert_eq!(rows, vec![1, 2]);
+    fn finalizes_affected_rows() {
         assert_eq!(finalize_affected(0, 4), 4);
         assert_eq!(finalize_affected(9, 4), 9);
     }

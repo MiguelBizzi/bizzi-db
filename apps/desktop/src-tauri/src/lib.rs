@@ -10,9 +10,9 @@ use db_core::{
     ssh_secret_key, ssh_tunnel_from_profile, ssh_tunnel_from_save, validate_folder_name,
     validate_save_input, ActivityLogItem, Adapter, AppSettings, ConnectionFolder,
     ConnectionProfile, ConnectionStatus, DatabaseSchema, ExecuteQueryRequest, QueryExecuteResponse,
-    QueryExecutionResult, SaveConnectionInput, SaveFolderInput, SavedQuery, SchemaSyncRequest,
-    SchemaSyncResponse, Session, SshAuthMethod, TablePreviewRequest, TestConnectionResult,
-    WorkspaceState, DEFAULT_ROW_CAP,
+    QueryExecutionResult, QueryPageRequest, SaveConnectionInput, SaveFolderInput, SavedQuery,
+    SchemaSyncRequest, SchemaSyncResponse, Session, SshAuthMethod, TablePreviewRequest,
+    TestConnectionResult, WorkspaceState,
 };
 use db_postgres::PostgresAdapter;
 use db_storage::{DualSecretStore, FileSecrets, KeychainSecrets, Storage};
@@ -389,6 +389,18 @@ async fn table_preview(
         .map_err(map_err)
 }
 
+#[tauri::command]
+async fn query_page(
+    state: State<'_, AppState>,
+    input: QueryPageRequest,
+) -> Result<QueryExecutionResult, String> {
+    let session = session_for(&state, &input.connection_id).await?;
+    session
+        .query_page(&input.sql, input.limit, input.offset, input.with_count)
+        .await
+        .map_err(map_err)
+}
+
 fn record_history(
     state: &AppState,
     profile: &ConnectionProfile,
@@ -417,7 +429,7 @@ async fn query_execute(
         .ok_or_else(|| "Connection not found".to_string())?;
     let session = session_for(&state, &input.connection_id).await?;
     let results = session
-        .execute(&input.sql, DEFAULT_ROW_CAP)
+        .execute(&input.sql, input.page_size)
         .await
         .map_err(map_err)?;
     if input.record_history {
@@ -617,6 +629,7 @@ pub fn run() {
             schema_sync,
             table_preview,
             query_execute,
+            query_page,
             history_list,
             saved_queries_list,
             saved_queries_save,

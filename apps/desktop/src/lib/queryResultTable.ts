@@ -1,5 +1,6 @@
 import type { ColumnDefinition, QueryExecutionResult, TableSchema } from '../types';
 import { inferQualifiedTable } from './dataExport';
+import { resultTotalRows } from './queryPaging';
 
 export interface QueryResultAnalysis {
   /** Table the grid renders: the source table when editable, a read-only stand-in otherwise. */
@@ -12,7 +13,10 @@ export interface QueryResultAnalysis {
   readOnlyColumns: Set<string>;
 }
 
-type ResultShape = Pick<QueryExecutionResult, 'query' | 'columns' | 'rows'>;
+type ResultShape = Pick<
+  QueryExecutionResult,
+  'query' | 'columns' | 'rows' | 'pageOffset' | 'totalRows'
+>;
 
 const IDENT = String.raw`"[^"]+"|[A-Za-z_][\w$]*`;
 const CLAUSE_START = String.raw`where|order|limit|offset|fetch|for`;
@@ -115,7 +119,7 @@ export function analyzeQueryResult(
   tables: TableSchema[]
 ): QueryResultAnalysis {
   const columns = resultColumnNames(result);
-  const rowCount = result.rows?.length ?? 0;
+  const rowCount = resultTotalRows(result);
   const scrubbed = scrub(result.query);
 
   const structure = structureProblem(scrubbed);

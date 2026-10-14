@@ -38,6 +38,8 @@ interface TableToolbarProps {
   onInsertRow: () => void;
   onDeleteSelectedRows: () => void;
   exportRows: Record<string, unknown>[];
+  /** Fetches every row, so Copy and Export cover more than the loaded page. */
+  fetchAllRows?: () => Promise<Record<string, unknown>[]>;
   onRefresh: () => void;
   isLoading?: boolean;
 }
@@ -64,6 +66,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
   onInsertRow,
   onDeleteSelectedRows,
   exportRows,
+  fetchAllRows,
   onRefresh,
   isLoading = false,
 }) => {
@@ -211,6 +214,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
           <DataExportMenu
             columns={table.columns.map((column) => column.name)}
             rows={exportRows}
+            loadAllRows={selectedRowsCount > 0 ? undefined : fetchAllRows}
             tableName={table.name}
             schema={table.schema}
             disabled={isLoading}

@@ -16,6 +16,7 @@ commands.allow = [
   "schema_sync",
   "table_preview",
   "query_execute",
+  "query_page",
   "history_list",
   "saved_queries_list",
   "saved_queries_save",

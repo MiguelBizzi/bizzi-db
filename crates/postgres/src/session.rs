@@ -3,9 +3,9 @@ use std::time::Instant;
 use async_trait::async_trait;
 use chrono::Utc;
 use db_core::{
-    clamp_pool_size, clamp_preview_page, split_sql_statements, Adapter, AdapterError,
-    ConnectConfig, ConnectionStatus, DatabaseDialect, DatabaseSchema, QueryExecutionResult,
-    Session, DEFAULT_ROW_CAP,
+    clamp_pool_size, clamp_preview_page, count_select_sql, paged_select_sql, split_sql_statements,
+    Adapter, AdapterError, ConnectConfig, ConnectionStatus, DatabaseDialect, DatabaseSchema,
+    QueryExecutionResult, Session,
 };
 use deadpool_postgres::{ManagerConfig, Pool, RecyclingMethod, Runtime};
 use native_tls::TlsConnector;
@@ -14,7 +14,7 @@ use tokio_postgres::{config::SslMode, NoTls};
 use uuid::Uuid;
 
 use crate::ident::qualify_table;
-use crate::values::collect_simple;
+use crate::values::{collect_simple, first_count};
 
 pub struct PostgresAdapter;
 
@@ -27,7 +27,7 @@ impl Adapter for PostgresAdapter {
     async fn test_connection(&self, cfg: &ConnectConfig) -> Result<(u64, String), AdapterError> {
         let started = Instant::now();
         let session = self.connect(cfg).await?;
-        let result = session.execute("SELECT version()", 1).await?;
+        let result = session.execute("SELECT version()", None).await?;
         let first = result
             .into_iter()
             .next()
@@ -40,7 +40,9 @@ impl Adapter for PostgresAdapter {
                 columns: None,
                 rows: None,
                 error: Some("empty result".into()),
-                truncated: None,
+                page_size: None,
+                page_offset: None,
+                total_rows: None,
             });
         let latency = started.elapsed().as_millis() as u64;
         if let Some(err) = first.error {
@@ -77,9 +79,25 @@ impl Session for PostgresSession {
     async fn execute(
         &self,
         sql: &str,
-        row_cap: usize,
+        page_size: Option<i64>,
     ) -> Result<Vec<QueryExecutionResult>, AdapterError> {
-        run_script(self, sql, row_cap).await
+        run_script(self, sql, page_size).await
+    }
+
+    async fn query_page(
+        &self,
+        sql: &str,
+        limit: i64,
+        offset: i64,
+        with_count: bool,
+    ) -> Result<QueryExecutionResult, AdapterError> {
+        let client = self.client().await?;
+        let page = PageRequest {
+            limit,
+            offset,
+            with_count,
+        };
+        Ok(run_statement(&client, sql.trim().trim_end_matches(';'), Some(page)).await)
     }
 
     async fn preview(
@@ -96,7 +114,7 @@ impl Session for PostgresSession {
             limit,
             offset
         );
-        run_sql(self, &sql, DEFAULT_ROW_CAP).await
+        run_sql(self, &sql).await
     }
 }
 
@@ -182,32 +200,24 @@ impl PostgresSession {
             .map_err(|e| AdapterError::msg(e.to_string()))
     }
 }
+struct PageRequest {
+    limit: i64,
+    offset: i64,
+    with_count: bool,
+}
+
 async fn run_sql(
     session: &PostgresSession,
     sql: &str,
-    row_cap: usize,
 ) -> Result<QueryExecutionResult, AdapterError> {
-    let started = Instant::now();
-    let timestamp = Utc::now().to_rfc3339();
     let client = session.client().await?;
-    let bool_columns = bool_column_flags(&client, sql).await;
-    match client.simple_query(sql).await {
-        Ok(messages) => Ok(success_result(
-            sql,
-            timestamp,
-            started,
-            messages,
-            row_cap,
-            &bool_columns,
-        )),
-        Err(err) => Ok(error_result(sql, timestamp, started, err.to_string())),
-    }
+    Ok(run_statement(&client, sql, None).await)
 }
 
 async fn run_script(
     session: &PostgresSession,
     sql: &str,
-    row_cap: usize,
+    page_size: Option<i64>,
 ) -> Result<Vec<QueryExecutionResult>, AdapterError> {
     let statements = split_sql_statements(sql);
     if statements.is_empty() {
@@ -216,27 +226,58 @@ async fn run_script(
     let client = session.client().await?;
     let mut results = Vec::with_capacity(statements.len());
     for stmt in statements {
-        let started = Instant::now();
-        let timestamp = Utc::now().to_rfc3339();
-        let bool_columns = bool_column_flags(&client, &stmt).await;
-        match client.simple_query(&stmt).await {
-            Ok(messages) => {
-                results.push(success_result(
-                    &stmt,
-                    timestamp,
-                    started,
-                    messages,
-                    row_cap,
-                    &bool_columns,
-                ));
-            }
-            Err(err) => {
-                results.push(error_result(&stmt, timestamp, started, err.to_string()));
-                break;
-            }
+        let page = page_size.map(|limit| PageRequest {
+            limit,
+            offset: 0,
+            with_count: true,
+        });
+        let result = run_statement(&client, &stmt, page).await;
+        let failed = result.error.is_some();
+        results.push(result);
+        if failed {
+            break;
         }
     }
     Ok(results)
+}
+
+/// Runs one statement. With a `page`, a read-only statement fetches just that
+/// page; anything that can't be paged (or fails when wrapped) runs as written
+/// and returns every row.
+async fn run_statement(
+    client: &deadpool_postgres::Client,
+    stmt: &str,
+    page: Option<PageRequest>,
+) -> QueryExecutionResult {
+    let started = Instant::now();
+    let timestamp = Utc::now().to_rfc3339();
+    if let Some(page) = page {
+        if let Some(paged) = paged_select_sql(stmt, page.limit, page.offset) {
+            let bool_columns = bool_column_flags(client, &paged).await;
+            if let Ok(messages) = client.simple_query(&paged).await {
+                let mut result = success_result(stmt, timestamp, started, messages, &bool_columns);
+                result.page_size = Some(page.limit.max(1));
+                result.page_offset = Some(page.offset.max(0));
+                // A page's own row count says nothing about the query as a whole.
+                result.affected_rows = None;
+                if page.with_count {
+                    result.total_rows = count_rows(client, stmt).await;
+                    result.affected_rows = result.total_rows;
+                }
+                return result;
+            }
+        }
+    }
+    let bool_columns = bool_column_flags(client, stmt).await;
+    match client.simple_query(stmt).await {
+        Ok(messages) => success_result(stmt, timestamp, started, messages, &bool_columns),
+        Err(err) => error_result(stmt, timestamp, started, err.to_string()),
+    }
+}
+
+async fn count_rows(client: &deadpool_postgres::Client, stmt: &str) -> Option<u64> {
+    let sql = count_select_sql(stmt)?;
+    first_count(&client.simple_query(&sql).await.ok()?)
 }
 
 /// The simple query protocol returns untyped text, so prepare the statement to
@@ -258,10 +299,9 @@ fn success_result(
     timestamp: String,
     started: Instant,
     messages: Vec<tokio_postgres::SimpleQueryMessage>,
-    row_cap: usize,
     bool_columns: &[bool],
 ) -> QueryExecutionResult {
-    let collected = collect_simple(messages, row_cap, bool_columns);
+    let collected = collect_simple(messages, bool_columns);
     QueryExecutionResult {
         id: format!("res_{}", Uuid::new_v4()),
         query: sql.to_string(),
@@ -275,11 +315,9 @@ fn success_result(
         },
         rows: Some(collected.rows),
         error: None,
-        truncated: if collected.truncated {
-            Some(true)
-        } else {
-            None
-        },
+        page_size: None,
+        page_offset: None,
+        total_rows: None,
     }
 }
 
@@ -298,7 +336,9 @@ fn error_result(
         columns: None,
         rows: None,
         error: Some(error),
-        truncated: None,
+        page_size: None,
+        page_offset: None,
+        total_rows: None,
     }
 }
 

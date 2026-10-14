@@ -3,6 +3,7 @@ import type {
   ExecuteQueryRequest,
   QueryExecuteResponse,
   QueryExecutionResult,
+  QueryPageRequest,
   TablePreviewRequest,
 } from '@db/shared';
 
@@ -12,4 +13,8 @@ export function queryExecute(input: ExecuteQueryRequest): Promise<QueryExecuteRe
 
 export function tablePreview(input: TablePreviewRequest): Promise<QueryExecutionResult> {
   return invoke('table_preview', { input });
+}
+
+export function queryPage(input: QueryPageRequest): Promise<QueryExecutionResult> {
+  return invoke('query_page', { input });
 }

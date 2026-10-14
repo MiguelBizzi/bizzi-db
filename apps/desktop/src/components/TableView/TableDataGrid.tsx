@@ -121,10 +121,18 @@ interface TableDataGridProps {
   onLookup: FkLookupFn;
   onOpenTable: (table: TableSchema) => void;
   /**
-   * "query" renders a SQL result: no pagination, search or filters, and
-   * `onLoadRows` re-runs the query instead of paging a table.
+   * "query" renders a SQL result: no search or filters, and `onLoadRows` loads
+   * a page of the query instead of a page of a table.
    */
   variant?: "table" | "query";
+  /**
+   * The page `rows` already holds. A table grid shows it without fetching
+   * again; a query result is paged only when this is set, and shown whole
+   * (no pagination footer) otherwise.
+   */
+  pagination?: { pageSize: number; offset: number };
+  /** Fetches every row of the table or query; Copy and Export use it unless rows are selected. */
+  onFetchAllRows?: () => Promise<Record<string, unknown>[]>;
   /** Disables selection, editing, inserting and deleting. */
   readOnly?: boolean;
   readOnlyReason?: string;
@@ -172,6 +180,8 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   onLookup,
   onOpenTable,
   variant = "table",
+  pagination,
+  onFetchAllRows,
   readOnly = false,
   readOnlyReason,
   readOnlyColumns,
@@ -180,6 +190,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   toolbarTrailing,
 }) => {
   const isQuery = variant === "query";
+  const paged = !isQuery || pagination !== undefined;
   const [searchInput, setSearchInput] = useState("");
   const searchTerm = useDebouncedValue(searchInput);
   const [filters, setFilters] = useState<FilterClause[]>([]);
@@ -196,8 +207,12 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     rowPk: any;
     value: any;
   }>({ isOpen: false, columnName: "", rowPk: null, value: null });
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [page, setPage] = useState(() =>
+    pagination ? Math.floor(pagination.offset / pagination.pageSize) + 1 : 1,
+  );
+  const [pageSize, setPageSize] = useState(
+    pagination?.pageSize ?? DEFAULT_PAGE_SIZE,
+  );
   const [insertOpen, setInsertOpen] = useState(false);
   const [pendingLoad, setPendingLoad] = useState(false);
   const [fkFloater, setFkFloater] = useState<ForeignKeyFloaterState | null>(
@@ -227,8 +242,16 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   const pageCount = Math.max(1, Math.ceil((table.rowCount || 0) / pageSize));
   const safePage = Math.min(page, pageCount);
 
+  // Rows handed in with `pagination` are already loaded; only a different page is fetched.
+  const loadedPage = useRef(
+    pagination ? `${table.id}:${pageSize}:${safePage}` : null,
+  );
+
   useEffect(() => {
-    if (isQuery) return;
+    if (!paged) return;
+    const key = `${table.id}:${pageSize}:${safePage}`;
+    if (loadedPage.current === key) return;
+    loadedPage.current = key;
     let cancelled = false;
     void onLoadRowsRef
       .current(pageSize, (safePage - 1) * pageSize)
@@ -238,7 +261,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [pageSize, safePage, table.id, isQuery]);
+  }, [pageSize, safePage, table.id, paged]);
 
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
@@ -615,6 +638,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
           setSelectedRowPks([]);
         }}
         exportRows={exportRows}
+        fetchAllRows={onFetchAllRows}
         onRefresh={() => {
           void handleRefresh();
         }}
@@ -820,7 +844,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
         </table>
       </div>
 
-      {isQuery && (
+      {!paged && (
         <div className="px-3 py-1.5 bg-card border-t border-border text-xs font-mono text-muted-foreground shrink-0">
           {rows.length.toLocaleString()} row{rows.length === 1 ? "" : "s"}
           {selectedRowPks.length > 0 && ` (${selectedRowPks.length} selected)`}
@@ -828,7 +852,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
       )}
 
       {/* Grid Bottom Footer: pagination */}
-      {!isQuery && (
+      {paged && (
       <div className="px-3 py-1.5 bg-card border-t border-border text-xs font-mono text-muted-foreground flex items-center justify-between gap-3 shrink-0">
         <div className="min-w-0 truncate">
           {tableFooterRange({

@@ -205,8 +205,14 @@ pub struct QueryExecutionResult {
     pub rows: Option<Vec<Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Set when `rows` is one page of a larger result: the page's size and
+    /// offset, and, when it was counted, how many rows the query returns in all.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub truncated: Option<bool>,
+    pub page_size: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page_offset: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_rows: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -374,6 +380,21 @@ pub struct ExecuteQueryRequest {
     pub sql: String,
     #[serde(default = "default_true")]
     pub record_history: bool,
+    /// Page the rows of single read-only statements; omitted returns every row.
+    #[serde(default)]
+    pub page_size: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryPageRequest {
+    pub connection_id: String,
+    pub sql: String,
+    pub limit: i64,
+    pub offset: i64,
+    /// Also count the rows the query returns in all (one extra scan).
+    #[serde(default)]
+    pub with_count: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -431,7 +452,10 @@ mod tests {
         let json = r#"{"tabs":[],"activeTabId":null,"currentConnectionId":null,
             "activeTabByConnection":{"c1":"t1"}}"#;
         let ws: WorkspaceState = serde_json::from_str(json).unwrap();
-        assert_eq!(ws.active_tab_by_connection.get("c1").map(String::as_str), Some("t1"));
+        assert_eq!(
+            ws.active_tab_by_connection.get("c1").map(String::as_str),
+            Some("t1")
+        );
     }
 
     #[test]
@@ -499,6 +523,7 @@ mod tests {
         let req: ExecuteQueryRequest =
             serde_json::from_str(r#"{"connectionId":"c1","sql":"SELECT 1"}"#).unwrap();
         assert!(req.record_history);
+        assert_eq!(req.page_size, None);
         assert_eq!(req.connection_id, "c1");
 
         let sync: SchemaSyncRequest =

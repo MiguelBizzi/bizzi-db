@@ -169,7 +169,11 @@ export interface QueryExecutionResult {
   columns?: string[];
   rows?: Record<string, unknown>[];
   error?: string;
-  truncated?: boolean;
+  /** Set when `rows` is one page of a larger result (see `ExecuteQueryRequest.pageSize`). */
+  pageSize?: number;
+  pageOffset?: number;
+  /** Rows the whole query returns; only known when the page was counted. */
+  totalRows?: number;
   explainPlan?: ExplainPlanNode;
 }
 
@@ -274,6 +278,17 @@ export interface ExecuteQueryRequest {
   connectionId: string;
   sql: string;
   recordHistory?: boolean;
+  /** Pages single read-only statements; omitted, every row is returned. */
+  pageSize?: number;
+}
+
+export interface QueryPageRequest {
+  connectionId: string;
+  sql: string;
+  limit: number;
+  offset: number;
+  /** Also count the rows the query returns in all (one extra scan). */
+  withCount?: boolean;
 }
 
 export interface SchemaSyncRequest {
@@ -295,5 +310,4 @@ export interface WorkspaceState {
   activeTabByConnection?: Record<string, string>;
 }
 
-export const DEFAULT_ROW_CAP = 1000;
 export const DEFAULT_PREVIEW_LIMIT = 100;

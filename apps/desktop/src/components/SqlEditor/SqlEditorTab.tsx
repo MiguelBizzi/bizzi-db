@@ -21,6 +21,7 @@ import { invokeErrorMessage } from '../../lib/invokeError';
 import { toast } from '../../lib/toast';
 import { queryErrorText } from '../../lib/sqlQuery';
 import { analyzeQueryResult } from '../../lib/queryResultTable';
+import { lastPageOffset, mergePageResult, QUERY_PAGE_SIZE } from '../../lib/queryPaging';
 import {
   clampResultIndex,
   replaceResult,
@@ -42,14 +43,24 @@ interface SqlEditorTabProps {
   onTabStateChange: (update: (prev: SqlTabState) => SqlTabState) => void;
   /** Bumped per table whenever its data changes outside this tab. */
   dataRevisions: Record<string, number>;
-  grid: Omit<QueryGridActions, 'tables' | 'onRerun'>;
+  grid: Omit<QueryGridActions, 'tables' | 'onLoadPage' | 'onFetchAll'>;
   currentDatabase: DatabaseSchema;
   savedQueries: SavedQuery[];
-  /** `silent` skips query history, for background refreshes of an existing result. */
+  /**
+   * `silent` skips query history, for background refreshes of an existing
+   * result. `unpaged` returns every row instead of the first page.
+   */
   onExecuteQuery: (
     sql: string,
-    options?: { silent?: boolean }
+    options?: { silent?: boolean; unpaged?: boolean }
   ) => Promise<QueryExecutionResult[]>;
+  /** One page of a single statement, for paging and refreshing a result. */
+  onQueryPage: (
+    sql: string,
+    limit: number,
+    offset: number,
+    withCount: boolean
+  ) => Promise<QueryExecutionResult>;
   onBookmarkQuery: (title: string, sql: string, description?: string, tags?: string[]) => void;
   onDeleteSavedQuery?: (id: string) => void;
   onUpdateSavedQueryTags?: (id: string, tags: string[]) => void;
@@ -66,6 +77,7 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
   currentDatabase,
   savedQueries,
   onExecuteQuery,
+  onQueryPage,
   onBookmarkQuery,
   onDeleteSavedQuery,
   onUpdateSavedQueryTags,
@@ -85,6 +97,8 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
   const refreshing = useRef(new Set<string>());
   const onExecuteQueryRef = useRef(onExecuteQuery);
   onExecuteQueryRef.current = onExecuteQuery;
+  const onQueryPageRef = useRef(onQueryPage);
+  onQueryPageRef.current = onQueryPage;
 
   useEffect(() => {
     const handle = window.setTimeout(() => onSqlChangeRef.current?.(sql), 300);
@@ -105,10 +119,28 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
     onTabStateChange(() => ({ results, activeResultIndex: 0, fetchedRevisions }));
   };
 
-  const rerunResult = async (result: QueryExecutionResult) => {
+  /**
+   * Fetches `limit` rows of the result's query from `offset` and swaps them in.
+   * Asking for the page already shown refreshes it, and recounts the total.
+   */
+  const loadResultPage = async (
+    result: QueryExecutionResult,
+    limit: number,
+    offset: number
+  ) => {
+    const refresh = limit === result.pageSize && offset === (result.pageOffset ?? 0);
     let fresh: QueryExecutionResult | undefined;
     try {
-      fresh = (await onExecuteQueryRef.current(result.query, { silent: true }))[0];
+      fresh = await onQueryPageRef.current(result.query, limit, offset, refresh);
+      // Rows were deleted from under this page: show the last one that still exists.
+      if (!fresh.error && offset > 0 && fresh.rows?.length === 0) {
+        const first = await onQueryPageRef.current(result.query, limit, 0, true);
+        const lastOffset = first.error ? 0 : lastPageOffset(first.totalRows ?? 0, limit);
+        fresh =
+          lastOffset === 0
+            ? first
+            : await onQueryPageRef.current(result.query, limit, lastOffset, true);
+      }
     } catch (e: unknown) {
       toast.error(invokeErrorMessage(e));
     }
@@ -117,11 +149,26 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
       fresh = undefined;
     }
     const revision = revisionOf(result);
-    onTabStateChange((prev) => ({
-      ...prev,
-      results: fresh ? replaceResult(prev.results, result.id, fresh) : prev.results,
-      fetchedRevisions: { ...prev.fetchedRevisions, [result.id]: revision },
-    }));
+    onTabStateChange((prev) => {
+      const current = prev.results.find((item) => item.id === result.id);
+      return {
+        ...prev,
+        results:
+          fresh && current
+            ? replaceResult(prev.results, result.id, mergePageResult(current, fresh))
+            : prev.results,
+        fetchedRevisions: { ...prev.fetchedRevisions, [result.id]: revision },
+      };
+    });
+  };
+
+  const rerunResult = (result: QueryExecutionResult) =>
+    loadResultPage(result, result.pageSize ?? QUERY_PAGE_SIZE, result.pageOffset ?? 0);
+
+  const fetchAllRows = async (result: QueryExecutionResult) => {
+    const [all] = await onExecuteQueryRef.current(result.query, { silent: true, unpaged: true });
+    if (!all || all.error) throw new Error(queryErrorText(all?.error));
+    return (all.rows ?? []) as Record<string, unknown>[];
   };
 
   // Re-run results whose source table changed (apply, insert) while they were on screen or away.
@@ -138,7 +185,12 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
   }, [dataRevisions, queryResults, tabState.fetchedRevisions]);
 
   const gridActions: QueryGridActions = useMemo(
-    () => ({ ...grid, tables: currentDatabase.tables, onRerun: rerunResult }),
+    () => ({
+      ...grid,
+      tables: currentDatabase.tables,
+      onLoadPage: loadResultPage,
+      onFetchAll: fetchAllRows,
+    }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [grid, currentDatabase.tables]
   );

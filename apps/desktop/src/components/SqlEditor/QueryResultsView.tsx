@@ -8,6 +8,7 @@ import { DataExportMenu } from '../DataExport/DataExportMenu';
 import { inferQualifiedTable } from '../../lib/dataExport';
 import { queryErrorText, resultTabLabel } from '../../lib/sqlQuery';
 import { analyzeQueryResult } from '../../lib/queryResultTable';
+import { hasUnloadedRows } from '../../lib/queryPaging';
 import { emptyPending } from '../../lib/pendingChanges';
 import { TableDataGrid } from '../TableView/TableDataGrid';
 import type { FkLookupFn } from '../TableView/ForeignKeyPicker';
@@ -35,8 +36,10 @@ export interface QueryGridActions {
   onInsertRow: (table: TableSchema, sql: string) => Promise<{ error?: string }>;
   onLookup: FkLookupFn;
   onOpenTable: (table: TableSchema) => void;
-  /** Re-runs the result's query and swaps the fresh rows in. */
-  onRerun: (result: QueryExecutionResult) => Promise<void>;
+  /** Loads one page of the result's query and swaps its rows in; refreshes when the page is unchanged. */
+  onLoadPage: (result: QueryExecutionResult, limit: number, offset: number) => Promise<void>;
+  /** Runs the result's query without paging, for Copy and Export. */
+  onFetchAll: (result: QueryExecutionResult) => Promise<Record<string, unknown>[]>;
 }
 
 interface QueryResultsViewProps {
@@ -120,12 +123,14 @@ function ResultsToolbar({
   result,
   activeSubTab,
   onSubTab,
+  loadAllRows,
 }: {
   disabled: boolean;
   rows: number;
   result?: QueryExecutionResult;
   activeSubTab?: 'grid' | 'explain';
   onSubTab?: (tab: 'grid' | 'explain') => void;
+  loadAllRows?: () => Promise<Record<string, unknown>[]>;
 }) {
   const sqlTarget = inferQualifiedTable(result?.query);
   return (
@@ -147,6 +152,7 @@ function ResultsToolbar({
         <DataExportMenu
           columns={result?.columns || []}
           rows={result?.rows || []}
+          loadAllRows={loadAllRows}
           tableName={sqlTarget.table}
           schema={sqlTarget.schema}
           disabled={disabled}
@@ -210,7 +216,6 @@ function ExecutionSummary({ result }: { result: QueryExecutionResult }) {
     <div className="text-[11px] text-muted-foreground font-mono whitespace-nowrap">
       Executed in <span className="text-emerald-400 font-bold">{result.executionTimeMs}ms</span>
       {result.affectedRows !== undefined && ` • ${result.affectedRows} rows affected`}
-      {result.truncated && ' • truncated'}
     </div>
   );
 }
@@ -296,6 +301,7 @@ function SingleResultView({
     result.columns ||
     (result.rows && result.rows.length > 0 ? Object.keys(result.rows[0]) : []);
   const rows = result.rows || [];
+  const loadAllRows = hasUnloadedRows(result) ? () => grid.onFetchAll(result) : undefined;
   const showGrid =
     !isLoading && activeSubTab === 'grid' && (rows.length > 0 || analysis.editable);
 
@@ -331,7 +337,13 @@ function SingleResultView({
             onDeleteSelectedRows={(pks) => {
               if (sourceTable) grid.onDeleteRows(sourceTable, pks, rows);
             }}
-            onLoadRows={() => grid.onRerun(result)}
+            onLoadRows={(limit, offset) => grid.onLoadPage(result, limit, offset)}
+            pagination={
+              result.pageSize === undefined
+                ? undefined
+                : { pageSize: result.pageSize, offset: result.pageOffset ?? 0 }
+            }
+            onFetchAllRows={loadAllRows}
             onLookup={grid.onLookup}
             onOpenTable={grid.onOpenTable}
             toolbarLeading={
@@ -371,6 +383,7 @@ function SingleResultView({
         result={result}
         activeSubTab={activeSubTab}
         onSubTab={setActiveSubTab}
+        loadAllRows={loadAllRows}
       />
 
       {isLoading ? (

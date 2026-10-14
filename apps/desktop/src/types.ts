@@ -18,6 +18,7 @@ export type {
   PendingRowInsert,
   QueryExecuteResponse,
   QueryExecutionResult,
+  QueryPageRequest,
   SaveConnectionInput,
   SaveFolderInput,
   SavedQuery,
@@ -37,5 +38,4 @@ export type {
 export {
   DEFAULT_APP_SETTINGS,
   DEFAULT_PREVIEW_LIMIT,
-  DEFAULT_ROW_CAP,
 } from '@db/shared';

@@ -40,22 +40,68 @@ async fn test_connection_reports_version() {
 
 #[tokio::test]
 #[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
-async fn execute_select_and_row_cap() {
+async fn execute_returns_every_row_and_pages_on_request() {
     let session = connect().await;
-    let result = session.execute("SELECT 1 AS n", 10).await.expect("execute");
+    let result = session
+        .execute("SELECT 1 AS n", None)
+        .await
+        .expect("execute");
     let result = result.into_iter().next().expect("one result");
     assert!(result.error.is_none(), "{:?}", result.error);
     assert_eq!(result.columns.as_deref(), Some(&["n".to_string()][..]));
     assert_eq!(result.rows.as_ref().map(|rows| rows.len()), Some(1));
+    assert_eq!(result.total_rows, None);
 
-    let capped = session
-        .execute("SELECT * FROM shop.users", 2)
+    let all = session
+        .execute("SELECT * FROM generate_series(1, 2500) AS n", None)
         .await
-        .expect("capped execute");
-    let capped = capped.into_iter().next().expect("one result");
-    assert!(capped.error.is_none(), "{:?}", capped.error);
-    assert_eq!(capped.rows.as_ref().map(|rows| rows.len()), Some(2));
-    assert_eq!(capped.truncated, Some(true));
+        .expect("uncapped execute");
+    let all = all.into_iter().next().expect("one result");
+    assert_eq!(all.rows.as_ref().map(|rows| rows.len()), Some(2500));
+    assert_eq!(all.page_size, None);
+
+    let paged = session
+        .execute("SELECT * FROM generate_series(1, 2500) AS n;", Some(100))
+        .await
+        .expect("paged execute");
+    let paged = paged.into_iter().next().expect("one result");
+    assert!(paged.error.is_none(), "{:?}", paged.error);
+    assert_eq!(paged.rows.as_ref().map(|rows| rows.len()), Some(100));
+    assert_eq!(paged.total_rows, Some(2500));
+    assert_eq!(paged.page_size, Some(100));
+    assert_eq!(paged.page_offset, Some(0));
+
+    let last = session
+        .query_page(
+            "SELECT * FROM generate_series(1, 2500) AS n",
+            100,
+            2450,
+            false,
+        )
+        .await
+        .expect("query_page");
+    assert_eq!(last.rows.as_ref().map(|rows| rows.len()), Some(50));
+    assert_eq!(last.total_rows, None);
+    assert_eq!(last.page_offset, Some(2450));
+
+    let unpageable = session
+        .query_page("SHOW server_version", 100, 0, true)
+        .await
+        .expect("unpageable query_page");
+    assert!(unpageable.error.is_none(), "{:?}", unpageable.error);
+    assert_eq!(unpageable.page_size, None);
+}
+
+#[tokio::test]
+#[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
+async fn preview_accepts_the_largest_limit_the_ui_sends() {
+    let session = connect().await;
+    let result = session
+        .preview("shop", "users", 9_007_199_254_740_991, 0)
+        .await
+        .expect("preview");
+    assert!(result.error.is_none(), "{:?}", result.error);
+    assert!(!result.rows.unwrap_or_default().is_empty());
 }
 
 #[tokio::test]
@@ -76,7 +122,7 @@ async fn preview_quotes_schema_and_table() {
 async fn execute_error_is_returned_not_panic() {
     let session = connect().await;
     let result = session
-        .execute("SELECT * FROM definitely_missing_table_xyz", 10)
+        .execute("SELECT * FROM definitely_missing_table_xyz", None)
         .await
         .expect("execute should not fail the adapter");
     let result = result.into_iter().next().expect("one result");
@@ -89,7 +135,7 @@ async fn execute_error_is_returned_not_panic() {
 async fn execute_multiple_statements_returns_separate_results() {
     let session = connect().await;
     let results = session
-        .execute("SELECT 1 AS n; SELECT 2 AS n", 10)
+        .execute("SELECT 1 AS n; SELECT 2 AS n", None)
         .await
         .expect("execute batch");
     assert_eq!(results.len(), 2);
@@ -179,7 +225,7 @@ async fn schema_fingerprint_ignores_row_changes_and_detects_ddl() {
         .as_nanos();
     let table = format!("fp_{suffix}");
     let create = format!("CREATE TABLE shop.{table} (id int PRIMARY KEY)");
-    session.execute(&create, 1).await.expect("create");
+    session.execute(&create, None).await.expect("create");
     let before = session
         .schema_fingerprint()
         .await
@@ -194,7 +240,7 @@ async fn schema_fingerprint_ignores_row_changes_and_detects_ddl() {
     );
 
     let insert = format!("INSERT INTO shop.{table} (id) VALUES (1)");
-    session.execute(&insert, 1).await.expect("insert");
+    session.execute(&insert, None).await.expect("insert");
     assert_eq!(
         before,
         session
@@ -204,7 +250,7 @@ async fn schema_fingerprint_ignores_row_changes_and_detects_ddl() {
     );
 
     let alter = format!("ALTER TABLE shop.{table} ADD COLUMN note text");
-    session.execute(&alter, 1).await.expect("alter");
+    session.execute(&alter, None).await.expect("alter");
     let after_ddl = session
         .schema_fingerprint()
         .await
@@ -212,5 +258,5 @@ async fn schema_fingerprint_ignores_row_changes_and_detects_ddl() {
     assert_ne!(before, after_ddl);
 
     let drop = format!("DROP TABLE shop.{table}");
-    session.execute(&drop, 1).await.expect("drop");
+    session.execute(&drop, None).await.expect("drop");
 }

@@ -178,6 +178,20 @@ describe('analyzeQueryResult grid table', () => {
     expect(result.table.rowCount).toBe(2);
   });
 
+  test('row count is the whole result when only one page is loaded', () => {
+    const result = analyzeQueryResult(
+      {
+        query: 'SELECT id FROM users',
+        columns: ['id'],
+        rows: [{ id: 3 }, { id: 4 }],
+        pageOffset: 2,
+        totalRows: 90,
+      },
+      tables
+    );
+    expect(result.table.rowCount).toBe(90);
+  });
+
   test('derives columns from the first row when the result has none', () => {
     const result = analyzeQueryResult(
       { query: 'SELECT id FROM users', rows: [{ id: 1 }] },

@@ -536,7 +536,9 @@ mod tests {
                 columns: None,
                 rows: None,
                 error: None,
-                truncated: None,
+                page_size: None,
+                page_offset: None,
+                total_rows: None,
             },
         );
         assert_eq!(ok.query_type, HistoryQueryType::Insert);
@@ -554,7 +556,9 @@ mod tests {
                 columns: None,
                 rows: None,
                 error: Some("boom".into()),
-                truncated: None,
+                page_size: None,
+                page_offset: None,
+                total_rows: None,
             },
         );
         assert_eq!(err.status, HistoryStatus::Error);

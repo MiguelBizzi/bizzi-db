@@ -77,11 +77,21 @@ impl std::fmt::Debug for SshTunnelAuth {
 pub trait Session: Send + Sync {
     async fn introspect(&self) -> Result<DatabaseSchema, AdapterError>;
     async fn schema_fingerprint(&self) -> Result<String, AdapterError>;
+    /// Runs a script. Every row comes back unless `page_size` is set, which
+    /// pages (and counts) single read-only statements.
     async fn execute(
         &self,
         sql: &str,
-        row_cap: usize,
+        page_size: Option<i64>,
     ) -> Result<Vec<QueryExecutionResult>, AdapterError>;
+    /// One page of a single statement. Statements that can't be paged return every row.
+    async fn query_page(
+        &self,
+        sql: &str,
+        limit: i64,
+        offset: i64,
+        with_count: bool,
+    ) -> Result<QueryExecutionResult, AdapterError>;
     async fn preview(
         &self,
         schema: &str,

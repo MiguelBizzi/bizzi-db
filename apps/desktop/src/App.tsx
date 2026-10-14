@@ -43,6 +43,7 @@ import {
   foldersSave,
   historyList,
   queryExecute,
+  queryPage,
   schemaSync,
   settingsGet,
   settingsSave,
@@ -99,6 +100,7 @@ import {
   type CloseTabKind,
 } from './lib/tabPaneActions';
 import { defaultQuerySql, nextUntitledQueryTitle } from './lib/sqlQuery';
+import { QUERY_PAGE_SIZE } from './lib/queryPaging';
 import { emptySqlTabState, pruneSqlTabState, type SqlTabState } from './lib/sqlTabState';
 import {
   dropConnectionTabs,
@@ -201,7 +203,10 @@ export default function App() {
 
   const skipWorkspaceSave = useRef(true);
   const workspaceRef = useRef<WorkspaceState | null>(null);
-  const tableFetchRef = useRef<Record<string, { limit: number; offset: number }>>({});
+  /** Page each table's rows were last fetched for, so a reopened tab can reuse them. */
+  const tableFetchRef = useRef<
+    Record<string, { limit: number; offset: number; connectionId: string }>
+  >({});
   const tableLoadInflight = useRef<Record<string, number>>({});
   const fingerprintByConnection = useRef<Record<string, string>>({});
   const currentDbIdRef = useRef<string | null>(null);
@@ -221,7 +226,7 @@ export default function App() {
   const loadTableRows = useCallback(
     async (table: TableSchema, limit: number, offset: number) => {
       if (!currentDatabase) return;
-      tableFetchRef.current[table.id] = { limit, offset };
+      tableFetchRef.current[table.id] = { limit, offset, connectionId: currentDatabase.id };
       tableLoadInflight.current[table.id] = (tableLoadInflight.current[table.id] ?? 0) + 1;
       setTableLoading((prev) => ({ ...prev, [table.id]: true }));
       try {
@@ -1155,18 +1160,38 @@ export default function App() {
         }
         const rows = tableRows[table.id] || [];
         const pending = getPending(table.id);
-        const isLoading = Boolean(tableLoading[table.id]) || !(table.id in tableRows);
+        // Rows loaded earlier for this connection are shown as they are; refresh re-fetches.
+        const fetched = tableFetchRef.current[table.id];
+        const cachedPage =
+          fetched && fetched.connectionId === currentDatabase.id && table.id in tableRows
+            ? fetched
+            : undefined;
+        const isLoading = Boolean(tableLoading[table.id]) || !cachedPage;
         return (
           <TableDataGrid
             key={tab.id}
             table={table}
             rows={rows}
+            pagination={
+              cachedPage ? { pageSize: cachedPage.limit, offset: cachedPage.offset } : undefined
+            }
             isLoading={isLoading}
             pendingModifications={pending}
             tables={currentDatabase.tables}
             onOpenTable={handleSelectTableData}
             onLookup={runLookup}
             onLoadRows={(limit, offset) => loadTableRows(table, limit, offset)}
+            onFetchAllRows={async () => {
+              const res = await tablePreview({
+                connectionId: currentDatabase.id,
+                schema: table.schema,
+                table: table.name,
+                limit: Number.MAX_SAFE_INTEGER,
+                offset: 0,
+              });
+              if (res.error) throw new Error(res.error);
+              return (res.rows ?? []) as Record<string, unknown>[];
+            }}
             onUpdateCell={(pk, col, oldV, newV) =>
               handleUpdateCell(table.id, pk, col, oldV, newV)
             }
@@ -1204,6 +1229,7 @@ export default function App() {
                 connectionId: currentDatabase.id,
                 sql,
                 ...(options?.silent ? { recordHistory: false } : {}),
+                ...(options?.unpaged ? {} : { pageSize: QUERY_PAGE_SIZE }),
               });
               if (!options?.silent) {
                 await refreshHistory();
@@ -1211,6 +1237,9 @@ export default function App() {
               }
               return res.results;
             }}
+            onQueryPage={(sql, limit, offset, withCount) =>
+              queryPage({ connectionId: currentDatabase.id, sql, limit, offset, withCount })
+            }
             onBookmarkQuery={async (title, sql, description, tags) => {
               const newSq: SavedQuery = {
                 id: 'sq_' + Date.now(),
