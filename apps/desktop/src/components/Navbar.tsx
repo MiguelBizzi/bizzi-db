@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronRight,
   Folder,
+  Loader2,
   ListChecks,
   Settings,
 } from "lucide-react";
@@ -34,6 +35,7 @@ interface NavbarProps {
   currentDatabase: DatabaseSchema | null;
   variant?: "picker" | "workspace";
   pendingCount?: number;
+  connectingId?: string | null;
   onSelectDatabase: (dbId: string) => void;
   onOpenCommandPalette: () => void;
   onOpenActivityLog: () => void;
@@ -49,12 +51,14 @@ function SwitcherFolderRow({
   count,
   profiles,
   currentId,
+  connectingId,
   onSelect,
 }: {
   name: string;
   count: number;
   profiles: ConnectionProfile[];
   currentId?: string;
+  connectingId?: string | null;
   onSelect: (id: string) => void;
 }) {
   const { open, onMouseEnter, onMouseLeave } = useHoverMenu();
@@ -91,14 +95,19 @@ function SwitcherFolderRow({
                   key={profile.id}
                   type="button"
                   role="menuitem"
+                  disabled={connectingId != null}
                   onClick={() => onSelect(profile.id)}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs font-medium transition-colors ${
-                    profile.id === currentId
+                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs font-medium transition-colors disabled:cursor-default ${
+                    profile.id === currentId || profile.id === connectingId
                       ? "bg-primary/20 text-primary font-semibold"
-                      : "text-popover-foreground hover:bg-accent"
+                      : "text-popover-foreground hover:bg-accent disabled:opacity-50 disabled:hover:bg-transparent"
                   }`}
                 >
-                  <PostgresLogo className="w-4 h-4 shrink-0" />
+                  {profile.id === connectingId ? (
+                    <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+                  ) : (
+                    <PostgresLogo className="w-4 h-4 shrink-0" />
+                  )}
                   <span className="truncate font-mono">{profile.name}</span>
                 </button>
               ))
@@ -117,6 +126,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentDatabase,
   variant = "workspace",
   pendingCount = 0,
+  connectingId = null,
   onSelectDatabase,
   onOpenCommandPalette,
   onOpenActivityLog,
@@ -128,6 +138,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const isPicker = variant === "picker";
   const switcher = useHoverMenu();
+  const connectingProfile = connectingId
+    ? profiles.find((p) => p.id === connectingId)
+    : undefined;
 
   const getEnvBadgeColor = (env: string) => {
     switch (env) {
@@ -178,9 +191,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 type="button"
                 className="pressable flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted hover:bg-accent border border-border cursor-pointer transition-colors text-xs font-medium text-foreground"
               >
-                <PostgresLogo className="w-4 h-4 shrink-0" />
+                {connectingId ? (
+                  <Loader2 className="w-4 h-4 shrink-0 animate-spin text-primary" />
+                ) : (
+                  <PostgresLogo className="w-4 h-4 shrink-0" />
+                )}
                 <span className="max-w-[160px] truncate font-mono">
-                  {currentDatabase?.name || "No connection"}
+                  {connectingId
+                    ? `Connecting to ${connectingProfile?.name ?? "…"}`
+                    : currentDatabase?.name || "No connection"}
                 </span>
                 <ChevronDown className="w-3 h-3 text-muted-foreground ml-1" />
               </button>
@@ -204,14 +223,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                         <button
                           key={entry.profile.id}
                           type="button"
+                          disabled={connectingId != null}
                           onClick={() => onSelectDatabase(entry.profile.id)}
-                          className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-medium transition-colors ${
-                            entry.profile.id === currentDatabase?.id
+                          className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-medium transition-colors disabled:cursor-default ${
+                            entry.profile.id === currentDatabase?.id ||
+                            entry.profile.id === connectingId
                               ? "bg-primary/20 text-primary border border-primary/30 font-semibold"
-                              : "text-popover-foreground hover:bg-accent"
+                              : "text-popover-foreground hover:bg-accent disabled:opacity-50 disabled:hover:bg-transparent"
                           }`}
                         >
-                          <PostgresLogo className="w-4 h-4 shrink-0" />
+                          {entry.profile.id === connectingId ? (
+                            <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+                          ) : (
+                            <PostgresLogo className="w-4 h-4 shrink-0" />
+                          )}
                           <span className="truncate font-mono">
                             {entry.profile.name}
                           </span>
@@ -223,6 +248,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                           count={entry.count}
                           profiles={entry.profiles}
                           currentId={currentDatabase?.id}
+                          connectingId={connectingId}
                           onSelect={onSelectDatabase}
                         />
                       ),

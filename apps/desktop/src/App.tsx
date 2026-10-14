@@ -57,7 +57,7 @@ import {
   savedQueriesSave,
   savedQueriesUpdateTags,
 } from '@db/storage';
-import { Database } from 'lucide-react';
+import { Database, Loader2 } from 'lucide-react';
 import { invokeErrorMessage } from './lib/invokeError';
 import {
   changeKey,
@@ -910,7 +910,9 @@ export default function App() {
         }
         await refreshHistory();
       } catch (e: unknown) {
-        setConnectError(invokeErrorMessage(e, 'Failed to connect'));
+        const message = invokeErrorMessage(e, 'Failed to connect');
+        setConnectError(message);
+        if (currentDbId) toast.error(message);
       } finally {
         setConnectingId(null);
       }
@@ -1213,6 +1215,7 @@ export default function App() {
         folders={folders}
         currentDatabase={currentDatabase}
         pendingCount={pendingCount}
+        connectingId={connectingId}
         onSelectDatabase={(id) => {
           void handleOpenConnection(id);
         }}
@@ -1321,6 +1324,24 @@ export default function App() {
               renderTabContent={renderTabContent}
             />
           </div>
+
+          {connectingId && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="absolute inset-0 z-20 flex items-center justify-center bg-background/70 backdrop-blur-[1px]"
+            >
+              <div className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-2.5 text-sm shadow-lg">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                <span>
+                  Connecting to{' '}
+                  <span className="font-mono font-semibold">
+                    {profiles.find((p) => p.id === connectingId)?.name ?? '…'}
+                  </span>
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
