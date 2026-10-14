@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { AnimatePresence } from 'motion/react';
+import { Popover } from './Popover';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronRight } from 'lucide-react';
@@ -38,10 +40,10 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const rect = el.getBoundingClientRect();
+    // Layout size, not the rect: the panel is scaled down while it animates in.
     setPos({
-      left: Math.max(8, Math.min(x, window.innerWidth - rect.width - 8)),
-      top: Math.max(8, Math.min(y, window.innerHeight - rect.height - 8)),
+      left: Math.max(8, Math.min(x, window.innerWidth - el.offsetWidth - 8)),
+      top: Math.max(8, Math.min(y, window.innerHeight - el.offsetHeight - 8)),
     });
   }, [x, y, items]);
 
@@ -68,16 +70,16 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   }, [onClose]);
 
   return createPortal(
-    <div
+    <Popover
       ref={ref}
       role="menu"
       className={`fixed z-[220] ${PANEL}`}
-      style={{ left: pos.left, top: pos.top }}
+      style={{ left: pos.left, top: pos.top, transformOrigin: 'top left' }}
     >
       {items.map((item) => (
         <MenuRow key={item.id} item={item} onClose={onClose} />
       ))}
-    </div>,
+    </Popover>,
     document.body
   );
 }
@@ -141,8 +143,10 @@ function MenuRow({ item, onClose }: { item: ContextMenuItem; onClose: () => void
         >
           {body}
         </button>
+        <AnimatePresence>
         {open && !item.disabled && (
-          <div
+          <Popover
+            origin={flip ? 'right' : 'left'}
             role="menu"
             className={`absolute top-0 z-10 ${PANEL} ${
               flip ? 'right-full mr-1' : 'left-full ml-1'
@@ -151,8 +155,9 @@ function MenuRow({ item, onClose }: { item: ContextMenuItem; onClose: () => void
             {item.submenu.map((child) => (
               <MenuRow key={child.id} item={child} onClose={onClose} />
             ))}
-          </div>
+          </Popover>
         )}
+        </AnimatePresence>
       </div>
     );
   }

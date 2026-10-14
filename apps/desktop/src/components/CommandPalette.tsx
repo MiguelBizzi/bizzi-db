@@ -1,4 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { OverlayPresence } from './ui/OverlayPresence';
+import { useIsPresent } from 'motion/react';
+import { Modal, ModalPanel } from './ui/Modal';
 import {
   Search,
   Table,
@@ -40,7 +43,7 @@ type PaletteItem = {
   run: () => void;
 };
 
-export const CommandPalette: React.FC<CommandPaletteProps> = ({
+const CommandPaletteBody: React.FC<CommandPaletteProps> = ({
   isOpen,
   onClose,
   currentDatabase,
@@ -198,8 +201,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     selectedRef.current?.scrollIntoView({ block: 'nearest' });
   }, [selectedIndex, query]);
 
+  // Stop handling keys once closing, or a second Enter would re-run the item.
+  const isPresent = useIsPresent();
+
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !isPresent) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.isComposing) return;
@@ -234,7 +240,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [isOpen, onClose]);
+  }, [isOpen, isPresent, onClose]);
 
   if (!isOpen) return null;
 
@@ -252,14 +258,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-start justify-center pt-20 p-4"
-      onClick={onClose}
-      role="presentation"
-    >
-      <div
-        className="w-full max-w-2xl bg-popover border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col text-popover-foreground animate-in fade-in zoom-in-95 duration-150"
-        onClick={(e) => e.stopPropagation()}
+    <Modal align="top" onScrimClick={onClose} role="presentation">
+      <ModalPanel
+        className="w-full max-w-2xl bg-popover border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col text-popover-foreground"
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
@@ -421,7 +422,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           <span>↑↓ navigate • Enter select • Esc close • {MOD_K} toggle</span>
           <span>Active DB: {currentDatabase?.name || 'none'}</span>
         </div>
-      </div>
-    </div>
+      </ModalPanel>
+    </Modal>
   );
 };
+
+export const CommandPalette: React.FC<CommandPaletteProps> = (props) => (
+  <OverlayPresence isOpen={props.isOpen}>
+    <CommandPaletteBody {...props} />
+  </OverlayPresence>
+);

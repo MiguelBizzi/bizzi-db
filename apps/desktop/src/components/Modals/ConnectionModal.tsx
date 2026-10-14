@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { OverlayPresence } from "../ui/OverlayPresence";
+import { Modal, ModalPanel } from "../ui/Modal";
 import {
   ConnectionFolder,
   ConnectionProfile,
@@ -85,7 +87,7 @@ function formFromOpenState(
   return defaultFolderId ? { ...form, folderId: defaultFolderId } : form;
 }
 
-export const ConnectionModal: React.FC<ConnectionModalProps> = ({
+const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
   isOpen,
   editingProfile,
   folders,
@@ -223,8 +225,8 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
     `${fieldClass} ${showError(field) ? "border-destructive focus:border-destructive" : ""}`;
 
   return (
-    <div className="connection-modal fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 font-sans select-none text-foreground">
-      <div className="w-full max-w-xl bg-popover border border-border rounded-2xl shadow-2xl flex flex-col text-popover-foreground max-h-[90vh]">
+    <Modal className="connection-modal  font-sans select-none text-foreground">
+      <ModalPanel className="w-full max-w-xl bg-popover border border-border rounded-2xl shadow-2xl flex flex-col text-popover-foreground max-h-[90vh]">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between bg-background/60 rounded-t-2xl">
           <div className="flex items-center gap-2.5 font-mono">
             <PostgresLogo className="w-5 h-5" />
@@ -282,7 +284,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                     }`}
                   />
                   {parseError && (
-                    <p className="text-[10px] text-destructive">{parseError}</p>
+                    <p className="field-message text-[10px] text-destructive">{parseError}</p>
                   )}
                 </div>
 
@@ -726,7 +728,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                                   markTouched("sshKeyPath");
                                 }
                               }}
-                              className="h-9 px-3 rounded-xl bg-muted hover:bg-accent text-foreground font-bold border border-border shrink-0 inline-flex items-center gap-1.5"
+                              className="pressable h-9 px-3 rounded-xl bg-muted hover:bg-accent text-foreground font-bold border border-border shrink-0 inline-flex items-center gap-1.5"
                             >
                               <FolderOpen className="w-3.5 h-3.5" />
                               Import
@@ -789,7 +791,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
               onClick={handleTestConnection}
               disabled={isTesting || !isValid}
               title={!isValid ? "Fill in all required fields" : undefined}
-              className="px-3 py-2 rounded-xl bg-muted hover:bg-accent text-foreground font-bold border border-border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="pressable px-3 py-2 rounded-xl bg-muted hover:bg-accent text-foreground font-bold border border-border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {isTesting ? "Testing..." : "Test Connection"}
             </button>
@@ -797,7 +799,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-3 py-2 rounded-xl hover:bg-accent text-muted-foreground hover:text-foreground font-bold transition-colors"
+                className="pressable px-3 py-2 rounded-xl hover:bg-accent text-muted-foreground hover:text-foreground font-bold transition-colors"
               >
                 Cancel
               </button>
@@ -805,14 +807,20 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                 type="submit"
                 disabled={isSaving || !isValid}
                 title={!isValid ? "Fill in all required fields" : undefined}
-                className="px-4 py-2 rounded-xl bg-primary hover:opacity-90 text-primary-foreground font-bold shadow-md transition-colors disabled:opacity-40 disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:cursor-not-allowed"
+                className="pressable px-4 py-2 rounded-xl bg-primary hover:opacity-90 text-primary-foreground font-bold shadow-md transition-colors disabled:opacity-40 disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:cursor-not-allowed"
               >
                 {isSaving ? copy.submitting : copy.submit}
               </button>
             </div>
           </div>
         </form>
-      </div>
-    </div>
+      </ModalPanel>
+    </Modal>
   );
 };
+
+export const ConnectionModal: React.FC<ConnectionModalProps> = (props) => (
+  <OverlayPresence isOpen={props.isOpen}>
+    <ConnectionModalBody {...props} />
+  </OverlayPresence>
+);

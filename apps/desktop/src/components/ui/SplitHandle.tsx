@@ -59,7 +59,7 @@ export function SplitHandle({
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
-      className={`shrink-0 bg-border hover:bg-primary/60 active:bg-primary z-10 ${
+      className={`shrink-0 bg-border transition-colors hover:bg-primary/60 active:bg-primary z-10 ${
         isRow ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize'
       }`}
     />

@@ -124,7 +124,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
           <button
             type="button"
             onClick={() => (showFilters ? onShowFiltersChange(false) : openFilters())}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${
+            className={`pressable flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${
               filters.length > 0 || showFilters
                 ? 'bg-primary/20 text-primary border-primary/40'
                 : 'bg-background text-muted-foreground border-border hover:bg-accent hover:text-foreground'
@@ -146,7 +146,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
             onClick={onInsertRow}
             disabled={table.isView}
             title={table.isView ? 'Cannot insert into a view' : 'Add a row'}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-600/20"
+            className="pressable flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-600/20"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add Row</span>
@@ -156,7 +156,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
           {selectedRowsCount > 0 && (
             <button
               onClick={onDeleteSelectedRows}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-medium transition-colors"
+              className="pressable flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-medium transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Delete ({selectedRowsCount})</span>
@@ -190,7 +190,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
 
       {/* Filter Clauses Builder */}
       {showFilters && (
-        <div className="p-2.5 bg-background border border-border rounded-xl space-y-2 animate-in fade-in duration-150">
+        <div className="p-2.5 bg-background border border-border rounded-xl space-y-2 field-message">
           <div className="flex items-center justify-between text-xs font-mono text-muted-foreground font-semibold">
             <span>Data Filter Rules</span>
             <button

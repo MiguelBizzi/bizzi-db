@@ -462,7 +462,7 @@ export const InteractiveErd: React.FC<InteractiveErdProps> = ({
                         stroke={hot ? 'var(--primary)' : 'var(--border)'}
                         strokeWidth={hot ? 2.5 : 1.6}
                         markerEnd={hot ? 'url(#erd-arrow-hot)' : 'url(#erd-arrow)'}
-                        className="pointer-events-none transition-[stroke,stroke-width] duration-150"
+                        className="pointer-events-none transition-[stroke,stroke-width]"
                       />
                     </g>
                   );

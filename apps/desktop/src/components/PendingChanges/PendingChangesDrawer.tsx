@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { OverlayPresence } from '../ui/OverlayPresence';
+import { Drawer, DrawerPanel } from '../ui/Drawer';
 import {
   Check,
   X,
@@ -44,7 +46,7 @@ interface PendingChangesDrawerProps {
   onCancelAll: () => void;
 }
 
-export const PendingChangesDrawer: React.FC<PendingChangesDrawerProps> = ({
+const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
   isOpen,
   pendingByTable,
   tables,
@@ -108,12 +110,8 @@ export const PendingChangesDrawer: React.FC<PendingChangesDrawerProps> = ({
   };
 
   return (
-    <>
-      <div
-        className="fixed inset-0 z-40 bg-background/50 backdrop-blur-[2px]"
-        onClick={onClose}
-      />
-      <aside className="pending-changes-drawer fixed inset-y-0 right-0 z-50 w-full max-w-xl bg-popover border-l border-border shadow-2xl flex flex-col font-sans select-none text-popover-foreground">
+    <Drawer onScrimClick={onClose}>
+      <DrawerPanel className="fixed inset-y-0 right-0 z-50 w-full max-w-xl bg-popover border-l border-border shadow-2xl flex flex-col font-sans select-none text-popover-foreground">
         <header className="px-4 py-3 border-b border-border bg-background/60 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <ListChecks className="w-4 h-4 text-amber-400 shrink-0" />
@@ -366,7 +364,7 @@ export const PendingChangesDrawer: React.FC<PendingChangesDrawerProps> = ({
                 type="button"
                 disabled={busy}
                 onClick={() => armOrRun('approve-all', onApproveAll)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shadow-md transition-colors disabled:opacity-50 ${
+                className={`pressable flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shadow-md transition-colors disabled:opacity-50 ${
                   armed === 'approve-all'
                     ? 'bg-amber-400 text-amber-950'
                     : 'bg-amber-500 hover:bg-amber-400 text-amber-950'
@@ -384,10 +382,16 @@ export const PendingChangesDrawer: React.FC<PendingChangesDrawerProps> = ({
             </div>
           </footer>
         )}
-      </aside>
-    </>
+      </DrawerPanel>
+    </Drawer>
   );
 };
+
+export const PendingChangesDrawer: React.FC<PendingChangesDrawerProps> = (props) => (
+  <OverlayPresence isOpen={props.isOpen}>
+    <PendingChangesDrawerBody {...props} />
+  </OverlayPresence>
+);
 
 function ModeButton({
   active,

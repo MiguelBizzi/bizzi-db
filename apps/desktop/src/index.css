@@ -60,6 +60,11 @@
   --shadow-2xl: 0px 1px 4px 0px hsl(0 0% 0% / 0.13);
   --tracking-normal: 0rem;
   --spacing: 0.25rem;
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 240ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
 }
 
 .dark {
@@ -178,6 +183,9 @@
   --tracking-wide: calc(var(--tracking-normal) + 0.025em);
   --tracking-wider: calc(var(--tracking-normal) + 0.05em);
   --tracking-widest: calc(var(--tracking-normal) + 0.1em);
+
+  --default-transition-duration: 120ms;
+  --default-transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @layer base {
@@ -202,6 +210,22 @@
   }
   label:has(input[type="checkbox"]:not(:disabled)) {
     cursor: pointer;
+  }
+  button,
+  a,
+  input,
+  textarea,
+  select,
+  [role="button"],
+  [role="menuitem"],
+  [role="tab"],
+  [role="option"],
+  [role="switch"],
+  [role="checkbox"] {
+    transition-property: color, background-color, border-color, box-shadow, opacity,
+      outline-color;
+    transition-duration: var(--motion-fast);
+    transition-timing-function: var(--ease-out);
   }
 }
 
@@ -375,22 +399,6 @@
   animation: pending-border-spin 2.8s linear infinite;
 }
 
-@keyframes pending-drawer-in {
-  from {
-    transform: translateX(24px);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-.pending-changes-drawer,
-.insert-row-drawer {
-  animation: pending-drawer-in 180ms ease-out;
-}
-
 /* Number fields are typed, not stepped — hide increment/decrement chevrons. */
 .connection-modal input[type="number"] {
   appearance: textfield;
@@ -428,4 +436,40 @@
     transparent
   );
   animation: table-skeleton-shimmer 1.2s ease-in-out infinite;
+}
+
+[data-motion="reduced"] *,
+[data-motion="reduced"] *::before,
+[data-motion="reduced"] *::after {
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+}
+/* Spinners convey loading, so they keep turning. */
+[data-motion="reduced"] .animate-spin {
+  animation-duration: 1s !important;
+  animation-iteration-count: infinite !important;
+}
+
+/* Unlayered so they win over Tailwind's transition utilities. */
+.pressable {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-out);
+}
+.pressable:not(:disabled):active {
+  transform: scale(0.98);
+}
+[data-motion="reduced"] .pressable:active {
+  transform: none;
+}
+
+@keyframes field-message-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+.field-message {
+  animation: field-message-in var(--motion-base) var(--ease-out);
 }

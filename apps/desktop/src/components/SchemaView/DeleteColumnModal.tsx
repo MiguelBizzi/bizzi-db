@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { OverlayPresence } from '../ui/OverlayPresence';
+import { Modal, ModalPanel } from '../ui/Modal';
 import { AlertCircle, AlertTriangle, Trash2, X } from 'lucide-react';
 import type { ColumnDefinition, TableSchema } from '../../types';
 import { buildDropColumnSql, canConfirmDelete } from '../../lib/schemaChange';
@@ -12,7 +14,7 @@ interface DeleteColumnModalProps {
   onExecute: (sql: string) => Promise<{ error?: string }>;
 }
 
-export const DeleteColumnModal: React.FC<DeleteColumnModalProps> = ({
+const DeleteColumnModalBody: React.FC<DeleteColumnModalProps> = ({
   isOpen,
   table,
   column,
@@ -65,8 +67,8 @@ export const DeleteColumnModal: React.FC<DeleteColumnModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div
+    <Modal>
+      <ModalPanel
         role="dialog"
         aria-modal="true"
         aria-labelledby="delete-column-title"
@@ -91,7 +93,7 @@ export const DeleteColumnModal: React.FC<DeleteColumnModalProps> = ({
 
         <form onSubmit={handleSubmit} className="p-4 space-y-3">
           {submitError && (
-            <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px] font-mono flex items-start gap-2">
+            <div className="field-message p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px] font-mono flex items-start gap-2">
               <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               <span className="break-all">{submitError}</span>
             </div>
@@ -141,21 +143,27 @@ export const DeleteColumnModal: React.FC<DeleteColumnModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 rounded-lg hover:bg-accent text-muted-foreground text-xs transition-colors"
+              className="pressable px-3 py-1.5 rounded-lg hover:bg-accent text-muted-foreground text-xs transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!matched || submitting || disabled}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md transition-colors disabled:opacity-50"
+              className="pressable flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md transition-colors disabled:opacity-50"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>{submitting ? 'Deleting…' : 'Delete column'}</span>
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </ModalPanel>
+    </Modal>
   );
 };
+
+export const DeleteColumnModal: React.FC<DeleteColumnModalProps> = (props) => (
+  <OverlayPresence isOpen={Boolean(props.isOpen && props.column)}>
+    <DeleteColumnModalBody {...props} />
+  </OverlayPresence>
+);

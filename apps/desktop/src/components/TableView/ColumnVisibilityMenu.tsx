@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence } from 'motion/react';
+import { Popover } from '../ui/Popover';
 import { Columns } from 'lucide-react';
 import { Checkbox } from '../ui/Checkbox';
 
@@ -58,7 +60,7 @@ export function ColumnVisibilityMenu({
         onClick={() => {
           if (!disabled) setOpen((current) => !current);
         }}
-        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+        className={`pressable flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
           hiddenCount > 0 || open
             ? 'bg-primary/20 text-primary border-primary/40'
             : 'bg-background text-muted-foreground border-border hover:bg-accent hover:text-foreground'
@@ -67,8 +69,9 @@ export function ColumnVisibilityMenu({
         <Columns className="w-3.5 h-3.5" />
         <span>Hide Columns{hiddenCount > 0 ? ` (${hiddenCount})` : ''}</span>
       </button>
+      <AnimatePresence>
       {open && (
-        <div className="absolute left-0 mt-1 min-w-52 bg-popover border border-border rounded-xl shadow-2xl p-1.5 z-40 text-xs text-popover-foreground">
+        <Popover origin="top" className="absolute left-0 mt-1 min-w-52 bg-popover border border-border rounded-xl shadow-2xl p-1.5 z-40 text-xs text-popover-foreground">
           <ul className="max-h-56 overflow-y-auto py-0.5">
             {columns.map((column) => {
               const visible = !hidden.has(column.name);
@@ -89,21 +92,22 @@ export function ColumnVisibilityMenu({
           <div className="flex items-center justify-between gap-2 pt-1.5 mt-1 border-t border-border px-1">
             <button
               type="button"
-              className="px-2 py-1 rounded-lg text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
+              className="pressable px-2 py-1 rounded-lg text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
               onClick={() => onHiddenColumnsChange(columns.map((column) => column.name))}
             >
               Hide All
             </button>
             <button
               type="button"
-              className="px-2 py-1 rounded-lg text-[11px] text-primary hover:bg-accent"
+              className="pressable px-2 py-1 rounded-lg text-[11px] text-primary hover:bg-accent"
               onClick={() => onHiddenColumnsChange([])}
             >
               Show All
             </button>
           </div>
-        </div>
+        </Popover>
       )}
+      </AnimatePresence>
     </div>
   );
 }

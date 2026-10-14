@@ -1,4 +1,6 @@
 import React from 'react';
+import { motion } from 'motion/react';
+import { viewEnter } from '../lib/motion';
 import type { WorkspaceTab } from '../types';
 import { TabsBar } from './TabsBar';
 import { WorkspaceEmptyState } from './WorkspaceEmptyState';
@@ -112,11 +114,20 @@ function LeafPane({
         onReorderTabs={(from, to) => onReorderTabs(pane.id, from, to)}
       />
       <div className="flex-1 min-h-0 overflow-hidden relative">
-        {activeTab ? (
-          renderTabContent(activeTab)
-        ) : (
-          <WorkspaceEmptyState onOpenNewQuery={() => onOpenNewQueryTab(pane.id)} />
-        )}
+        {/* Opacity only: a transform here would break the grid's sticky headers. */}
+        <motion.div
+          key={activeTab?.id ?? 'empty'}
+          variants={viewEnter}
+          initial="initial"
+          animate="animate"
+          className="w-full h-full"
+        >
+          {activeTab ? (
+            renderTabContent(activeTab)
+          ) : (
+            <WorkspaceEmptyState onOpenNewQuery={() => onOpenNewQueryTab(pane.id)} />
+          )}
+        </motion.div>
       </div>
     </div>
   );

@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { OverlayPresence } from '../ui/OverlayPresence';
+import { Modal, ModalPanel } from '../ui/Modal';
 import { X, Check, Copy, Code, AlertCircle } from 'lucide-react';
 
 interface JsonModalProps {
@@ -9,7 +11,7 @@ interface JsonModalProps {
   onClose: () => void;
 }
 
-export const JsonModal: React.FC<JsonModalProps> = ({
+const JsonModalBody: React.FC<JsonModalProps> = ({
   isOpen,
   columnName,
   initialValue,
@@ -50,8 +52,8 @@ export const JsonModal: React.FC<JsonModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-xl bg-popover border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col text-popover-foreground">
+    <Modal>
+      <ModalPanel className="w-full max-w-xl bg-popover border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col text-popover-foreground">
         {/* Header */}
         <div className="px-4 py-3 border-b border-border flex items-center justify-between bg-background/60">
           <div className="flex items-center gap-2">
@@ -71,7 +73,7 @@ export const JsonModal: React.FC<JsonModalProps> = ({
         {/* Textarea Code Body */}
         <div className="p-4 space-y-3">
           {error && (
-            <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2 font-mono">
+            <div className="field-message p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2 font-mono">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
@@ -92,7 +94,7 @@ export const JsonModal: React.FC<JsonModalProps> = ({
         <div className="px-4 py-3 border-t border-border bg-background/60 flex items-center justify-between">
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-accent text-foreground text-xs font-mono border border-border transition-colors"
+            className="pressable flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-accent text-foreground text-xs font-mono border border-border transition-colors"
           >
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
             <span>{copied ? 'Copied' : 'Copy JSON'}</span>
@@ -101,19 +103,25 @@ export const JsonModal: React.FC<JsonModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-3 py-1.5 rounded-lg hover:bg-accent text-muted-foreground text-xs transition-colors"
+              className="pressable px-3 py-1.5 rounded-lg hover:bg-accent text-muted-foreground text-xs transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              className="px-4 py-1.5 rounded-lg bg-primary hover:opacity-90 text-primary-foreground text-xs font-semibold shadow-md transition-colors"
+              className="pressable px-4 py-1.5 rounded-lg bg-primary hover:opacity-90 text-primary-foreground text-xs font-semibold shadow-md transition-colors"
             >
               Update Value
             </button>
           </div>
         </div>
-      </div>
-    </div>
+      </ModalPanel>
+    </Modal>
   );
 };
+
+export const JsonModal: React.FC<JsonModalProps> = (props) => (
+  <OverlayPresence isOpen={props.isOpen}>
+    <JsonModalBody {...props} />
+  </OverlayPresence>
+);

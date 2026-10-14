@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { motion } from 'motion/react';
+import { slideUp } from '../lib/motion';
 import { CircleAlert, Download } from 'lucide-react';
 import type { AppUpdateStatus } from '../lib/appUpdate';
 
@@ -11,7 +13,7 @@ interface UpdateBannerProps {
 }
 
 const BUTTON =
-  'h-7 px-2.5 rounded-lg border border-border font-bold uppercase text-[10px] hover:bg-accent';
+  'pressable h-7 px-2.5 rounded-lg border border-border font-bold uppercase text-[10px] hover:bg-accent';
 
 export const UpdateBanner: React.FC<UpdateBannerProps> = ({
   status,
@@ -24,7 +26,11 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({
 
   if (status.phase === 'error') {
     return (
-      <div
+      <motion.div
+        variants={slideUp}
+        initial="initial"
+        animate="animate"
+        exit="exit"
         role="alert"
         className="fixed bottom-4 left-4 z-[250] w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-border bg-popover p-3 text-xs text-popover-foreground shadow-2xl"
       >
@@ -55,7 +61,7 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({
             Retry
           </button>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
@@ -64,7 +70,11 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({
   const restartLabel = confirmingDiscard ? 'Restart anyway' : 'Restart now';
 
   return (
-    <div
+    <motion.div
+      variants={slideUp}
+      initial="initial"
+      animate="animate"
+      exit="exit"
       role="status"
       className="fixed bottom-4 left-4 z-[250] w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-border bg-popover p-3 text-xs text-popover-foreground shadow-2xl"
     >
@@ -104,6 +114,6 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({
           {restartLabel}
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 };

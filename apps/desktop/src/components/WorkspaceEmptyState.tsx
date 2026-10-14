@@ -49,7 +49,7 @@ export function WorkspaceEmptyState({
         <button
           type="button"
           onClick={onOpenNewQuery}
-          className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90"
+          className="pressable mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90"
         >
           <Plus className="w-4 h-4" />
           New query

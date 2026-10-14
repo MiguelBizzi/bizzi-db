@@ -18,7 +18,8 @@ import {
   PanelBottom,
   PanelTop,
 } from 'lucide-react';
-import { motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
+import { useMotionPreference } from '../lib/motionPreference';
 import { WorkspaceTab } from '../types';
 import { ContextMenu, type ContextMenuItem } from './ui/ContextMenu';
 import { canClosePaneTabs, type CloseTabKind } from '../lib/tabPaneActions';
@@ -91,7 +92,7 @@ export const TabsBar: React.FC<TabsBarProps> = ({
   const [menu, setMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  const reduceMotion = useReducedMotion();
+  const { reduced: reduceMotion } = useMotionPreference();
 
   const getTabIcon = (type: WorkspaceTab['type']) => {
     switch (type) {
@@ -373,7 +374,7 @@ export const TabsBar: React.FC<TabsBarProps> = ({
                   if (isRenaming) return;
                   onSelectTab(tab.id);
                 }}
-                className={`group flex items-center gap-1.5 h-7 px-3 rounded-lg text-xs font-medium transition-colors duration-200 shrink-0 max-w-[200px] touch-none ${
+                className={`group flex items-center gap-1.5 h-7 px-3 rounded-lg text-xs font-medium transition-colors shrink-0 max-w-[200px] touch-none ${
                   isRenaming ? 'cursor-text' : 'cursor-grab active:cursor-grabbing'
                 } ${
                   isDragging
@@ -468,14 +469,17 @@ export const TabsBar: React.FC<TabsBarProps> = ({
         <Plus className="w-3.5 h-3.5" />
       </button>
 
+      <AnimatePresence>
       {menu && (
         <ContextMenu
+          key={`${menu.x}:${menu.y}`}
           x={menu.x}
           y={menu.y}
           items={menuItems(menu.tabId)}
           onClose={() => setMenu(null)}
         />
       )}
+      </AnimatePresence>
     </div>
   );
 };

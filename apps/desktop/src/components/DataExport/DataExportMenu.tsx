@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence } from 'motion/react';
+import { Popover } from '../ui/Popover';
 import {
   Check,
   ChevronDown,
@@ -166,14 +168,15 @@ function FormatDropdown({
         disabled={disabled}
         title={title}
         onClick={onToggle}
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-background border border-border hover:bg-accent text-foreground text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-background"
+        className="pressable flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-background border border-border hover:bg-accent text-foreground text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-background"
       >
         <Icon className={`w-3.5 h-3.5 ${iconClass ?? ''}`} />
         <span>{label}</span>
         <ChevronDown className="w-3 h-3 text-muted-foreground" />
       </button>
+      <AnimatePresence>
       {open && (
-        <div className="absolute right-0 mt-1 min-w-34 bg-popover border border-border rounded-xl shadow-2xl p-1.5 z-40 text-xs text-popover-foreground">
+        <Popover origin="top" className="absolute right-0 mt-1 min-w-34 bg-popover border border-border rounded-xl shadow-2xl p-1.5 z-40 text-xs text-popover-foreground">
           {DATA_EXPORT_FORMATS.map((format) => {
             const { icon: FormatIcon, className } = FORMAT_ICONS[format.id];
             return (
@@ -188,8 +191,9 @@ function FormatDropdown({
               </button>
             );
           })}
-        </div>
+        </Popover>
       )}
+      </AnimatePresence>
     </div>
   );
 }

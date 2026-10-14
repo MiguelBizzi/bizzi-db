@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Popover } from "../ui/Popover";
 import { createPortal } from "react-dom";
 import { ArrowRight, Key, Link, Loader2, X } from "lucide-react";
 import type { TableSchema } from "../../types";
@@ -47,11 +48,11 @@ export const ForeignKeyFloater: React.FC<ForeignKeyFloaterProps> = ({
   useLayoutEffect(() => {
     const panel = panelRef.current;
     if (!panel) return;
-    const rect = panel.getBoundingClientRect();
+    // Layout size, not the rect: the panel is scaled down while it animates in.
     setPosition(
       floaterPosition(
         anchor,
-        { width: rect.width, height: rect.height },
+        { width: panel.offsetWidth, height: panel.offsetHeight },
         { width: window.innerWidth, height: window.innerHeight },
       ),
     );
@@ -96,7 +97,7 @@ export const ForeignKeyFloater: React.FC<ForeignKeyFloaterProps> = ({
   );
 
   return createPortal(
-    <div
+    <Popover
       ref={panelRef}
       role="dialog"
       aria-label={`Referenced ${qualified} row`}
@@ -186,7 +187,7 @@ export const ForeignKeyFloater: React.FC<ForeignKeyFloaterProps> = ({
           </button>
         </div>
       )}
-    </div>,
+    </Popover>,
     document.body,
   );
 };

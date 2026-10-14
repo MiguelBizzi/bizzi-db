@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { collapse } from '../lib/motion';
 import {
-  ChevronDown,
   ChevronRight,
   Database,
   FolderPlus,
@@ -423,7 +424,7 @@ export const ConnectionPicker: React.FC<ConnectionPickerProps> = ({
               disabled={busy}
               title="New folder"
               aria-label="New folder"
-              className="inline-flex items-center justify-center size-8 rounded-lg border border-border bg-card text-foreground hover:bg-accent disabled:opacity-50"
+              className="pressable inline-flex items-center justify-center size-8 rounded-lg border border-border bg-card text-foreground hover:bg-accent disabled:opacity-50"
             >
               <FolderPlus className="w-4 h-4" />
             </button>
@@ -433,7 +434,7 @@ export const ConnectionPicker: React.FC<ConnectionPickerProps> = ({
               disabled={busy}
               title="New connection"
               aria-label="New connection"
-              className="inline-flex items-center justify-center size-8 rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
+              className="pressable inline-flex items-center justify-center size-8 rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
             >
               <Plus className="w-4 h-4" />
             </button>
@@ -463,7 +464,7 @@ export const ConnectionPicker: React.FC<ConnectionPickerProps> = ({
             <button
               type="button"
               onClick={() => onNewConnection()}
-              className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
+              className="pressable mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
             >
               <Plus className="w-4 h-4" />
               Add connection
@@ -548,11 +549,11 @@ export const ConnectionPicker: React.FC<ConnectionPickerProps> = ({
                             }));
                           }}
                         >
-                          {expanded ? (
-                            <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
-                          ) : (
-                            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                          )}
+                          <ChevronRight
+                            className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${
+                              expanded ? 'rotate-90' : ''
+                            }`}
+                          />
                           {renamingId === group.folder.id ? (
                             <input
                               autoFocus
@@ -680,7 +681,15 @@ export const ConnectionPicker: React.FC<ConnectionPickerProps> = ({
                           </div>
                         )}
                       </div>
+                      <AnimatePresence initial={false}>
                       {expanded && (
+                        <motion.div
+                          variants={collapse}
+                          initial="initial"
+                          animate="animate"
+                          exit="exit"
+                          className="overflow-hidden"
+                        >
                         <ul className="space-y-2 px-2 pb-2">
                           {group.profiles.length > 0 ? (
                             <>
@@ -699,7 +708,9 @@ export const ConnectionPicker: React.FC<ConnectionPickerProps> = ({
                             </li>
                           )}
                         </ul>
+                        </motion.div>
                       )}
+                      </AnimatePresence>
                     </section>
                   );
                 })}
@@ -708,14 +719,17 @@ export const ConnectionPicker: React.FC<ConnectionPickerProps> = ({
           </div>
         )}
       </div>
+      <AnimatePresence>
       {menu && (
         <ContextMenu
+          key={`${menu.x}:${menu.y}`}
           x={menu.x}
           y={menu.y}
           items={menuItems(menu.profile)}
           onClose={() => setMenu(null)}
         />
       )}
+      </AnimatePresence>
     </div>
   );
 };

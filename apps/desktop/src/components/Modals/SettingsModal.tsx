@@ -1,6 +1,10 @@
 import React from "react";
+import { OverlayPresence } from "../ui/OverlayPresence";
+import { Modal, ModalPanel } from "../ui/Modal";
 import { Settings, X, AlertTriangle } from "lucide-react";
 import { Switch } from "../ui/Switch";
+import { Select, type SelectOption } from "../ui/Select";
+import type { MotionPreference } from "../../lib/motionPreference";
 import {
   canRestartToUpdate,
   downloadPercent,
@@ -12,11 +16,19 @@ interface SettingsModalProps {
   keychainEnabled: boolean;
   appVersion: string;
   updateStatus: AppUpdateStatus;
+  motionPreference: MotionPreference;
+  onChangeMotionPreference: (pref: MotionPreference) => void;
   onClose: () => void;
   onToggleKeychain: (enabled: boolean) => Promise<void> | void;
   onCheckForUpdates: () => Promise<void> | void;
   onRestartToUpdate: () => Promise<void> | void;
 }
+
+const MOTION_OPTIONS: SelectOption<MotionPreference>[] = [
+  { value: "on", label: "On" },
+  { value: "system", label: "Match system" },
+  { value: "reduced", label: "Reduced" },
+];
 
 function updateStatusCopy(status: AppUpdateStatus): string {
   switch (status.phase) {
@@ -49,11 +61,13 @@ function updateStatusCopy(status: AppUpdateStatus): string {
   }
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({
+const SettingsModalBody: React.FC<SettingsModalProps> = ({
   isOpen,
   keychainEnabled,
   appVersion,
   updateStatus,
+  motionPreference,
+  onChangeMotionPreference,
   onClose,
   onToggleKeychain,
   onCheckForUpdates,
@@ -71,8 +85,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const canRestart = canRestartToUpdate(updateStatus);
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 font-sans select-none text-foreground">
-      <div className="w-full max-w-lg bg-popover border border-border rounded-2xl shadow-2xl flex flex-col text-popover-foreground">
+    <Modal className="font-sans select-none text-foreground">
+      <ModalPanel className="w-full max-w-lg bg-popover border border-border rounded-2xl shadow-2xl flex flex-col text-popover-foreground">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between bg-background/60 rounded-t-2xl">
           <div className="flex items-center gap-2.5 font-mono">
             <Settings className="w-5 h-5 text-muted-foreground" />
@@ -127,6 +141,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           )}
 
+          <div className="space-y-1.5">
+            <label
+              htmlFor="settings-motion"
+              className="text-[10px] font-bold uppercase text-muted-foreground"
+            >
+              Motion
+            </label>
+            <Select
+              id="settings-motion"
+              size="sm"
+              value={motionPreference}
+              options={MOTION_OPTIONS}
+              onChange={onChangeMotionPreference}
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Animations are on by default. Choose Match system to follow your
+              operating system's reduce-motion setting, or Reduced to turn most
+              animation off.
+            </p>
+          </div>
+
           <div className="space-y-1.5 pt-1">
             <span className="text-[10px] font-bold uppercase text-muted-foreground">
               Updates
@@ -158,7 +193,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onClick={() => {
                   void onCheckForUpdates();
                 }}
-                className="h-9 px-3 rounded-xl border border-border bg-background font-bold uppercase text-[10px] hover:bg-accent disabled:opacity-50"
+                className="pressable h-9 px-3 rounded-xl border border-border bg-background font-bold uppercase text-[10px] hover:bg-accent disabled:opacity-50"
               >
                 {updateStatus.phase === "error" ? "Retry" : "Check for updates"}
               </button>
@@ -168,14 +203,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onClick={() => {
                   void onRestartToUpdate();
                 }}
-                className="h-9 px-3 rounded-xl border border-border bg-primary text-primary-foreground font-bold uppercase text-[10px] hover:opacity-90 disabled:opacity-50 disabled:bg-background disabled:text-muted-foreground"
+                className="pressable h-9 px-3 rounded-xl border border-border bg-primary text-primary-foreground font-bold uppercase text-[10px] hover:opacity-90 disabled:opacity-50 disabled:bg-background disabled:text-muted-foreground"
               >
                 Restart to update
               </button>
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </ModalPanel>
+    </Modal>
   );
 };
+
+export const SettingsModal: React.FC<SettingsModalProps> = (props) => (
+  <OverlayPresence isOpen={props.isOpen}>
+    <SettingsModalBody {...props} />
+  </OverlayPresence>
+);

@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { OverlayPresence } from '../ui/OverlayPresence';
+import { Modal, ModalPanel } from '../ui/Modal';
 import { AlertTriangle, Eraser, Trash2, X } from 'lucide-react';
 import type { TableSchema } from '../../types';
 import {
@@ -14,7 +16,7 @@ interface ConfirmTableActionModalProps {
   onConfirm: () => void;
 }
 
-export const ConfirmTableActionModal: React.FC<ConfirmTableActionModalProps> = ({
+const ConfirmTableActionModalBody: React.FC<ConfirmTableActionModalProps> = ({
   table,
   action,
   onClose,
@@ -53,8 +55,8 @@ export const ConfirmTableActionModal: React.FC<ConfirmTableActionModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div
+    <Modal>
+      <ModalPanel
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -135,21 +137,27 @@ export const ConfirmTableActionModal: React.FC<ConfirmTableActionModalProps> = (
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 rounded-lg hover:bg-accent text-muted-foreground text-xs transition-colors"
+              className="pressable px-3 py-1.5 rounded-lg hover:bg-accent text-muted-foreground text-xs transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!matched}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md transition-colors disabled:opacity-50"
+              className="pressable flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md transition-colors disabled:opacity-50"
             >
               <Icon className="w-3.5 h-3.5" />
               <span>{isDrop ? 'Stage delete' : 'Stage empty'}</span>
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </ModalPanel>
+    </Modal>
   );
 };
+
+export const ConfirmTableActionModal: React.FC<ConfirmTableActionModalProps> = (props) => (
+  <OverlayPresence isOpen={Boolean(props.table && props.action)}>
+    <ConfirmTableActionModalBody {...props} />
+  </OverlayPresence>
+);

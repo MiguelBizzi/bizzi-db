@@ -1,4 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { AnimatePresence } from 'motion/react';
+import { Popover } from '../ui/Popover';
 import { createPortal } from 'react-dom';
 import type { ColumnDefinition } from '../../types';
 import {
@@ -167,10 +169,10 @@ export function FilterExpressionInput({
           {error}
         </p>
       )}
-      {showMenu &&
-        menuBox &&
-        createPortal(
-          <div
+      {createPortal(
+          <AnimatePresence>
+          {showMenu && menuBox && (
+          <Popover
             ref={menuRef}
             className="fixed z-[200] bg-popover border border-border rounded-xl shadow-lg overflow-hidden"
             style={{
@@ -204,7 +206,9 @@ export function FilterExpressionInput({
                 );
               })}
             </ul>
-          </div>,
+          </Popover>
+          )}
+          </AnimatePresence>,
           document.body
         )}
     </div>

@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { OverlayPresence } from "../ui/OverlayPresence";
+import { Modal, ModalPanel } from "../ui/Modal";
 import { AlertCircle, AlertTriangle, Check, Pencil, X } from "lucide-react";
 import type { ColumnTypeDef } from "@db/database";
 import type { ColumnDefinition, TableSchema } from "../../types";
@@ -22,7 +24,7 @@ interface EditColumnModalProps {
   onExecute: (sql: string) => Promise<{ error?: string }>;
 }
 
-export const EditColumnModal: React.FC<EditColumnModalProps> = ({
+const EditColumnModalBody: React.FC<EditColumnModalProps> = ({
   isOpen,
   table,
   tables,
@@ -105,8 +107,8 @@ export const EditColumnModal: React.FC<EditColumnModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div
+    <Modal>
+      <ModalPanel
         role="dialog"
         aria-modal="true"
         aria-labelledby="edit-column-title"
@@ -133,7 +135,7 @@ export const EditColumnModal: React.FC<EditColumnModalProps> = ({
         </header>
 
         {submitError && (
-          <div className="px-4 py-2 text-[11px] font-mono border-b bg-rose-500/10 text-rose-300 border-rose-500/20 flex items-start gap-2">
+          <div className="field-message px-4 py-2 text-[11px] font-mono border-b bg-rose-500/10 text-rose-300 border-rose-500/20 flex items-start gap-2">
             <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
             <span className="break-all">{submitError}</span>
           </div>
@@ -181,14 +183,14 @@ export const EditColumnModal: React.FC<EditColumnModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-3 py-1.5 rounded-lg hover:bg-accent text-muted-foreground text-xs transition-colors"
+                className="pressable px-3 py-1.5 rounded-lg hover:bg-accent text-muted-foreground text-xs transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={submitting || disabled || !valid || !sql}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-primary hover:opacity-90 text-primary-foreground text-xs font-semibold shadow-md transition-colors disabled:opacity-50"
+                className="pressable flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-primary hover:opacity-90 text-primary-foreground text-xs font-semibold shadow-md transition-colors disabled:opacity-50"
               >
                 <Check className="w-3.5 h-3.5" />
                 <span>{submitting ? "Updating…" : "Update column"}</span>
@@ -196,7 +198,13 @@ export const EditColumnModal: React.FC<EditColumnModalProps> = ({
             </div>
           </footer>
         </form>
-      </div>
-    </div>
+      </ModalPanel>
+    </Modal>
   );
 };
+
+export const EditColumnModal: React.FC<EditColumnModalProps> = (props) => (
+  <OverlayPresence isOpen={Boolean(props.isOpen && props.column)}>
+    <EditColumnModalBody {...props} />
+  </OverlayPresence>
+);
