@@ -5,68 +5,77 @@
   </picture>
 </p>
 
+<h1 align="center">Bizzi DB</h1>
+
+<p align="center"><strong>PostgreSQL, native and fast.</strong><br>A private desktop workspace for browsing data, designing schemas, and running SQL.</p>
+
 <p align="center">
-  <strong>A fast, private PostgreSQL workspace for your desktop.</strong><br>
-  Browse data, design schemas, and run SQL without a cloud account in the middle.
+  <a href="https://github.com/MiguelBizzi/bizzi-db/releases/latest"><strong>Download</strong></a> ·
+  <a href="#start-querying">Getting started</a> ·
+  <a href="#features">Features</a> ·
+  <a href="SECURITY.md">Security</a> ·
+  <a href="#contributing">Contribute</a> ·
+  <a href="https://buymeacoffee.com/miguelbizzi">Buy me a coffee</a>
 </p>
 
-## Download
+<p align="center">
+  <a href="Cargo.toml"><img src="https://img.shields.io/badge/Built_with-Tauri_%C2%B7_React_%C2%B7_Rust-d87943" alt="Built with Tauri, React, and Rust"></a>
+  <a href="https://github.com/MiguelBizzi/bizzi-db/releases/latest"><img src="https://img.shields.io/badge/Platform-macOS-15171c" alt="Available for macOS"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-d87943" alt="MIT license"></a>
+</p>
 
-**[Download Bizzi DB for macOS](https://github.com/MiguelBizzi/bizzi-db/releases/latest)**
+Bizzi DB is a PostgreSQL client written with [Tauri](https://tauri.app), React, and Rust. It runs on your machine, keeps your connections and passwords local, and starts quickly without a browser engine behind it. There is no account to create and no cloud service in between.
 
-Bizzi DB ships as a universal DMG that runs on Apple silicon and Intel Macs. Open the disk image, drag Bizzi DB into Applications, and launch it. Windows and Linux are not available yet.
+<!-- Add a screenshot at assets/brand/png/app-screenshot.png and uncomment:
+![Bizzi DB showing a table grid, schema diagram, and SQL editor](assets/brand/png/app-screenshot.png)
+-->
 
 ## Features
 
-### Browse and edit your data
+| Feature | What you can do |
+|---|---|
+| **Data grid** | Open any table in a spreadsheet-style grid. Filter with expressions, choose visible columns, follow foreign keys, and insert rows from a side drawer. Export to CSV. |
+| **Reviewed changes** | Edits are staged in a pending changes drawer. Review each one, discard what you don't want, then apply the rest. |
+| **Schema diagram** | Explore tables and relationships in an interactive entity-relationship diagram. |
+| **Schema designer** | Add, edit, and delete columns from a visual table designer. |
+| **SQL editor** | Work in multiple tabs with query history and saved statements. Inspect query plans with EXPLAIN output. |
+| **Metrics and activity** | See database metrics and a log of what you have run. |
+| **Command palette** | Run actions from the keyboard. |
+| **Keychain storage** | Passwords live in your operating system's keychain, never in plain text on disk. |
+| **SSL by default** | SSL is on for remote hosts. Bizzi DB warns you before you turn it off for a remote server. |
+| **Auto updates** | Checks on launch and every six hours. Updates download in the background, are verified, and install only after you confirm. |
 
-Open any table in a spreadsheet-style grid. Filter rows with expressions, choose which columns to show, follow foreign keys to related records, and insert new rows from a side drawer. Export what you see to CSV.
+## Install
 
-### Review changes before they reach your database
+| Platform | Installation |
+|---|---|
+| **macOS** | [Download the universal DMG](https://github.com/MiguelBizzi/bizzi-db/releases/latest) for Apple silicon or Intel. Drag Bizzi DB into Applications and open it. |
+| **Windows and Linux** | Not available yet. |
+| **From source** | See [Development](#development). |
 
-Edits are collected in a pending changes drawer. Look over each change, discard the ones you don't want, and apply the rest when you're ready.
+The first install is always manual. After that, Bizzi DB updates itself from the same GitHub Release.
 
-### Design schemas visually
+## Start querying
 
-Explore your database with an interactive entity-relationship diagram. Add, edit, and delete columns from the table schema designer.
+1. Open Bizzi DB and add a connection with the host, port, database, and user for your PostgreSQL server. Turn on SSL for remote servers.
+2. Pick a table in the sidebar to browse its data, or open the SQL editor to write a query.
+3. Review pending changes before you apply them.
 
-### Write and analyze SQL
-
-Work in a multi-tab SQL editor with query history and saved statements. Inspect query plans with EXPLAIN output, and jump anywhere quickly with the command palette.
-
-### Keep an eye on your database
-
-View database metrics and an activity log of what you have run, so you can see what changed and when.
-
-### Secure by default
-
-- Passwords are stored in your operating system's keychain, never in plain text on disk.
-- SSL is on by default for remote hosts. Bizzi DB warns you before you disable it for a remote server.
-- Connections and queries stay on your machine. There is no account to create and no backend in the middle.
-
-### Stay up to date
-
-Bizzi DB checks for updates on launch and every six hours. Updates download in the background and are verified before installation. You decide when to restart and apply them.
-
-## Getting started
-
-1. Download and open Bizzi DB.
-2. Add a connection with the host, port, database, and user for your PostgreSQL server. Turn on SSL for remote servers.
-3. Pick a table from the sidebar to browse its data, or open the SQL editor to start writing queries.
+To try Bizzi DB without a server of your own, run the local test database described in [Development](#development).
 
 ## Security
 
-For the security model, data flow, and accepted risks, read [SECURITY.md](SECURITY.md).
+Bizzi DB is local-only. There is no application backend. Read [SECURITY.md](SECURITY.md) for the data flow, accepted risks, and the update trust model.
 
 To report a vulnerability or a credential or data-exposure bug, please contact the maintainers privately instead of opening a public issue.
 
-## Support
+## Contributing
 
-Found a bug or have an idea? [Open an issue on GitHub](https://github.com/MiguelBizzi/bizzi-db/issues).
+Found a bug or have an idea? [Open an issue](https://github.com/MiguelBizzi/bizzi-db/issues). Pull requests are welcome against `main`.
 
-## Development
+### Development
 
-You will need [Bun](https://bun.sh) 1.3 or later, [Rust](https://rustup.rs) 1.88 or later, and [Docker](https://www.docker.com) for the local test database.
+You need [Bun](https://bun.sh) 1.3 or later, [Rust](https://rustup.rs) 1.88 or later, and [Docker](https://www.docker.com) for the local test database.
 
 ```sh
 bun install
@@ -74,8 +83,18 @@ bun run db:up   # local PostgreSQL on 127.0.0.1:5433 (user postgres, password po
 bun run dev     # launch the desktop app
 ```
 
-Run the test suite with `bun run test`. To cut a release, follow [RELEASING.md](RELEASING.md).
+Run the tests with `bun run test`. To cut a release, follow [RELEASING.md](RELEASING.md).
+
+## Support the project
+
+Bizzi DB is free and open source. If it saves you time, you can support its development on [Buy Me a Coffee](https://buymeacoffee.com/miguelbizzi).
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy_me_a_coffee-miguelbizzi-d87943?logo=buymeacoffee&logoColor=white)](https://buymeacoffee.com/miguelbizzi)
+
+## Acknowledgements
+
+Bizzi DB is built on [Tauri](https://tauri.app), [React](https://react.dev), and [Rust](https://www.rust-lang.org). The wordmark uses [Geist Mono](https://vercel.com/font) (SIL OFL).
 
 ## License
 
-Bizzi DB is released under the [MIT License](LICENSE).
+Released under the [MIT License](LICENSE).
