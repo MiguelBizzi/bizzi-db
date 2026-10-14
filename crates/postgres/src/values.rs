@@ -8,7 +8,13 @@ pub struct SimpleResult {
     pub truncated: bool,
 }
 
-pub fn collect_simple(messages: Vec<SimpleQueryMessage>, cap: usize) -> SimpleResult {
+/// `bool_columns[i]` marks result column `i` as a Postgres `bool`, whose text
+/// form is `t`/`f` and can't be told apart from a text column by value alone.
+pub fn collect_simple(
+    messages: Vec<SimpleQueryMessage>,
+    cap: usize,
+    bool_columns: &[bool],
+) -> SimpleResult {
     let mut columns = Vec::new();
     let mut rows = Vec::new();
     let mut affected_rows = 0u64;
@@ -20,7 +26,11 @@ pub fn collect_simple(messages: Vec<SimpleQueryMessage>, cap: usize) -> SimpleRe
                 if columns.is_empty() {
                     columns = column_names(&row);
                 }
-                if take_capped(&mut rows, simple_row_to_object(&row, &columns), cap) {
+                if take_capped(
+                    &mut rows,
+                    simple_row_to_object(&row, &columns, bool_columns),
+                    cap,
+                ) {
                     truncated = true;
                 }
             }
@@ -62,17 +72,20 @@ fn column_names(row: &SimpleQueryRow) -> Vec<String> {
         .collect()
 }
 
-fn simple_row_to_object(row: &SimpleQueryRow, columns: &[String]) -> Value {
+fn simple_row_to_object(row: &SimpleQueryRow, columns: &[String], bool_columns: &[bool]) -> Value {
     let mut map = Map::new();
     for (i, name) in columns.iter().enumerate() {
-        map.insert(name.clone(), simple_cell(row.get(i)));
+        let is_bool = bool_columns.get(i).copied().unwrap_or(false);
+        map.insert(name.clone(), simple_cell(row.get(i), is_bool));
     }
     Value::Object(map)
 }
 
-fn simple_cell(raw: Option<&str>) -> Value {
+fn simple_cell(raw: Option<&str>, is_bool: bool) -> Value {
     match raw {
         None => Value::Null,
+        Some("t") if is_bool => json!(true),
+        Some("f") if is_bool => json!(false),
         Some(s) => coerce_text(s),
     }
 }
@@ -110,7 +123,15 @@ mod tests {
         assert_eq!(coerce_text("1e3"), json!(1000.0));
         assert_eq!(coerce_text("007"), json!("007"));
         assert_eq!(coerce_text("hello"), json!("hello"));
-        assert_eq!(simple_cell(None), json!(null));
+        assert_eq!(simple_cell(None, false), json!(null));
+    }
+
+    #[test]
+    fn bool_columns_map_t_and_f() {
+        assert_eq!(simple_cell(Some("t"), true), json!(true));
+        assert_eq!(simple_cell(Some("f"), true), json!(false));
+        assert_eq!(simple_cell(Some("t"), false), json!("t"));
+        assert_eq!(simple_cell(Some("f"), false), json!("f"));
     }
 
     #[test]

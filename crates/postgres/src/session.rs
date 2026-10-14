@@ -154,17 +154,6 @@ impl PostgresSession {
             .map_err(|e| AdapterError::msg(e.to_string()))
     }
 
-    async fn simple_query(
-        &self,
-        sql: &str,
-    ) -> Result<Vec<tokio_postgres::SimpleQueryMessage>, AdapterError> {
-        self.client()
-            .await?
-            .simple_query(sql)
-            .await
-            .map_err(|e| AdapterError::msg(e.to_string()))
-    }
-
     async fn query_one_i64(&self, sql: &str) -> Result<i64, AdapterError> {
         let client = self.client().await?;
         let row = client
@@ -200,8 +189,17 @@ async fn run_sql(
 ) -> Result<QueryExecutionResult, AdapterError> {
     let started = Instant::now();
     let timestamp = Utc::now().to_rfc3339();
-    match session.simple_query(sql).await {
-        Ok(messages) => Ok(success_result(sql, timestamp, started, messages, row_cap)),
+    let client = session.client().await?;
+    let bool_columns = bool_column_flags(&client, sql).await;
+    match client.simple_query(sql).await {
+        Ok(messages) => Ok(success_result(
+            sql,
+            timestamp,
+            started,
+            messages,
+            row_cap,
+            &bool_columns,
+        )),
         Err(err) => Ok(error_result(sql, timestamp, started, err.to_string())),
     }
 }
@@ -220,9 +218,17 @@ async fn run_script(
     for stmt in statements {
         let started = Instant::now();
         let timestamp = Utc::now().to_rfc3339();
+        let bool_columns = bool_column_flags(&client, &stmt).await;
         match client.simple_query(&stmt).await {
             Ok(messages) => {
-                results.push(success_result(&stmt, timestamp, started, messages, row_cap));
+                results.push(success_result(
+                    &stmt,
+                    timestamp,
+                    started,
+                    messages,
+                    row_cap,
+                    &bool_columns,
+                ));
             }
             Err(err) => {
                 results.push(error_result(&stmt, timestamp, started, err.to_string()));
@@ -233,14 +239,29 @@ async fn run_script(
     Ok(results)
 }
 
+/// The simple query protocol returns untyped text, so prepare the statement to
+/// learn which result columns are `bool`. Any prepare failure (multi-statement
+/// text, syntax error) just yields no flags; `simple_query` reports the error.
+async fn bool_column_flags(client: &deadpool_postgres::Client, sql: &str) -> Vec<bool> {
+    match client.prepare(sql).await {
+        Ok(stmt) => stmt
+            .columns()
+            .iter()
+            .map(|c| *c.type_() == tokio_postgres::types::Type::BOOL)
+            .collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
 fn success_result(
     sql: &str,
     timestamp: String,
     started: Instant,
     messages: Vec<tokio_postgres::SimpleQueryMessage>,
     row_cap: usize,
+    bool_columns: &[bool],
 ) -> QueryExecutionResult {
-    let collected = collect_simple(messages, row_cap);
+    let collected = collect_simple(messages, row_cap, bool_columns);
     QueryExecutionResult {
         id: format!("res_{}", Uuid::new_v4()),
         query: sql.to_string(),
