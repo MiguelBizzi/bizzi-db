@@ -100,6 +100,11 @@ import {
 } from './lib/tabPaneActions';
 import { defaultQuerySql, nextUntitledQueryTitle } from './lib/sqlQuery';
 import { emptySqlTabState, pruneSqlTabState, type SqlTabState } from './lib/sqlTabState';
+import {
+  dropConnectionTabs,
+  mergeConnectionTabs,
+  restoreConnectionTabs,
+} from './lib/connectionWorkspace';
 import { refreshConnectionSchemas } from './lib/refreshSchemas';
 import {
   createSchemaSyncQueue,
@@ -132,6 +137,12 @@ import { AnimatePresence, MotionConfig } from 'motion/react';
 import { useMotionPreference } from './lib/motionPreference';
 
 const ROOT_PANE_ID = 'pane_root';
+const EMPTY_WORKSPACE: WorkspaceState = {
+  tabs: [],
+  activeTabId: null,
+  currentConnectionId: null,
+  activeTabByConnection: {},
+};
 
 export default function App() {
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
@@ -418,11 +429,14 @@ export default function App() {
 
   useEffect(() => {
     if (!bootstrapped || skipWorkspaceSave.current) return;
-    const next: WorkspaceState = {
-      tabs,
-      activeTabId: activeTabId || null,
-      currentConnectionId: currentDbId,
-    };
+    const stored = workspaceRef.current ?? EMPTY_WORKSPACE;
+    const next: WorkspaceState = currentDbId
+      ? {
+          ...mergeConnectionTabs(stored, currentDbId, tabs, activeTabId || null),
+          activeTabId: activeTabId || null,
+          currentConnectionId: currentDbId,
+        }
+      : { ...stored, currentConnectionId: null };
     workspaceRef.current = next;
     const handle = window.setTimeout(() => {
       workspaceSave(next).catch(() => undefined);
@@ -719,10 +733,12 @@ export default function App() {
   const getPending = (tableId: string) => pendingByTable[tableId] || emptyPending();
 
   useEffect(() => {
+    // Tabs parked under other connections keep their query results for the session.
+    const parked = workspaceRef.current?.tabs ?? [];
     setSqlTabStates((prev) =>
       pruneSqlTabState(
         prev,
-        tabs.map((tab) => tab.id)
+        [...tabs, ...parked].map((tab) => tab.id)
       )
     );
   }, [tabs]);
@@ -980,22 +996,21 @@ export default function App() {
         await connectionsConnect(id);
         const schema = await loadSchema(id);
         setCurrentDbId(schema.id);
-        const ws = workspaceRef.current;
-        const matchingTabs =
-          ws?.tabs.filter((t) => !t.databaseId || t.databaseId === id) || [];
-        if (matchingTabs.length > 0) {
-          setTabs(matchingTabs);
-          const preferred =
-            ws?.activeTabId && matchingTabs.some((t) => t.id === ws.activeTabId)
-              ? ws.activeTabId
-              : matchingTabs[0].id;
-          setLayout(singlePane(matchingTabs.map((t) => t.id), preferred, ROOT_PANE_ID));
-          setFocusedPaneId(ROOT_PANE_ID);
-        } else {
-          setTabs([]);
-          setLayout(singlePane([], '', ROOT_PANE_ID));
-          setFocusedPaneId(ROOT_PANE_ID);
+        // Park the connection we are leaving, then restore the target's own workspace.
+        let stored = workspaceRef.current ?? EMPTY_WORKSPACE;
+        if (currentDbId) {
+          stored = mergeConnectionTabs(stored, currentDbId, tabs, activeTabId || null);
         }
+        const restored = restoreConnectionTabs(stored, id);
+        workspaceRef.current = {
+          ...mergeConnectionTabs(stored, id, restored.tabs, restored.activeTabId),
+          currentConnectionId: id,
+        };
+        setTabs(restored.tabs);
+        setLayout(
+          singlePane(restored.tabs.map((t) => t.id), restored.activeTabId ?? '', ROOT_PANE_ID)
+        );
+        setFocusedPaneId(ROOT_PANE_ID);
         await refreshHistory();
       } catch (e: unknown) {
         const message = invokeErrorMessage(e, 'Failed to connect');
@@ -1005,16 +1020,20 @@ export default function App() {
         setConnectingId(null);
       }
     },
-    [currentDbId, loadSchema, refreshHistory]
+    [activeTabId, currentDbId, loadSchema, refreshHistory, tabs]
   );
 
   const handleBackToConnections = useCallback(async () => {
-    workspaceRef.current = {
-      tabs,
-      activeTabId: activeTabId || null,
-      currentConnectionId: currentDbId,
-    };
     if (currentDbId) {
+      workspaceRef.current = {
+        ...mergeConnectionTabs(
+          workspaceRef.current ?? EMPTY_WORKSPACE,
+          currentDbId,
+          tabs,
+          activeTabId || null
+        ),
+        currentConnectionId: currentDbId,
+      };
       delete fingerprintByConnection.current[currentDbId];
       await connectionsDisconnect(currentDbId).catch(() => undefined);
     }
@@ -1028,11 +1047,22 @@ export default function App() {
       setProfiles((prev) => prev.filter((p) => p.id !== id));
       setDatabases((prev) => prev.filter((d) => d.id !== id));
       delete fingerprintByConnection.current[id];
+      if (workspaceRef.current) {
+        const next = dropConnectionTabs(workspaceRef.current, id);
+        workspaceRef.current = next;
+        setSqlTabStates((prev) =>
+          pruneSqlTabState(
+            prev,
+            (currentDbId === id ? next.tabs : [...tabs, ...next.tabs]).map((tab) => tab.id)
+          )
+        );
+        workspaceSave(next).catch(() => undefined);
+      }
       if (currentDbId === id) {
         setCurrentDbId(null);
       }
     },
-    [currentDbId]
+    [currentDbId, tabs]
   );
 
   const openNewConnection = (folderId?: string | null) => {

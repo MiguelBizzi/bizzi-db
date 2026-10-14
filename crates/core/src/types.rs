@@ -402,6 +402,9 @@ pub struct WorkspaceState {
     pub tabs: Vec<WorkspaceTab>,
     pub active_tab_id: Option<String>,
     pub current_connection_id: Option<String>,
+    /// Last active tab of each connection, keyed by connection id.
+    #[serde(default)]
+    pub active_tab_by_connection: std::collections::HashMap<String, String>,
 }
 
 impl Default for WorkspaceState {
@@ -410,6 +413,7 @@ impl Default for WorkspaceState {
             tabs: Vec::new(),
             active_tab_id: None,
             current_connection_id: None,
+            active_tab_by_connection: std::collections::HashMap::new(),
         }
     }
 }
@@ -417,6 +421,18 @@ impl Default for WorkspaceState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn workspace_state_loads_without_active_tab_by_connection() {
+        let legacy = r#"{"tabs":[],"activeTabId":null,"currentConnectionId":"c1"}"#;
+        let ws: WorkspaceState = serde_json::from_str(legacy).unwrap();
+        assert!(ws.active_tab_by_connection.is_empty());
+
+        let json = r#"{"tabs":[],"activeTabId":null,"currentConnectionId":null,
+            "activeTabByConnection":{"c1":"t1"}}"#;
+        let ws: WorkspaceState = serde_json::from_str(json).unwrap();
+        assert_eq!(ws.active_tab_by_connection.get("c1").map(String::as_str), Some("t1"));
+    }
 
     #[test]
     fn connection_profile_camel_case() {

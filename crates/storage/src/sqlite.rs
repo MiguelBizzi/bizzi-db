@@ -896,11 +896,13 @@ mod tests {
             tabs: vec![],
             active_tab_id: Some("tab1".into()),
             current_connection_id: Some("c1".into()),
+            active_tab_by_connection: [("c1".to_string(), "tab1".to_string())].into(),
         };
         db.save_workspace(&ws).unwrap();
         let loaded = db.load_workspace().unwrap();
         assert_eq!(loaded.current_connection_id.as_deref(), Some("c1"));
         assert_eq!(loaded.active_tab_id.as_deref(), Some("tab1"));
+        assert_eq!(loaded.active_tab_by_connection, ws.active_tab_by_connection);
     }
 
     fn sample_profile(id: &str) -> ConnectionProfile {

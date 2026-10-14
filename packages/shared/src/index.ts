@@ -291,6 +291,8 @@ export interface WorkspaceState {
   tabs: WorkspaceTab[];
   activeTabId: string | null;
   currentConnectionId: string | null;
+  /** Last active tab of each connection, so switching back restores it. */
+  activeTabByConnection?: Record<string, string>;
 }
 
 export const DEFAULT_ROW_CAP = 1000;
