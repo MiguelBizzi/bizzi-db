@@ -10,9 +10,9 @@ import { linter, lintGutter } from '@codemirror/lint';
 import { keymap, EditorView } from '@codemirror/view';
 import { Prec } from '@codemirror/state';
 import { syntaxHighlighting } from '@codemirror/language';
-import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
 import { sqlCompletions, type SqlSchemaTable } from '../../lib/sqlComplete';
 import { sqlDiagnostics } from '../../lib/sqlDiagnostics';
+import { sqlHighlightStyle } from '../../lib/sqlSyntaxTheme';
 
 export interface SqlCodeEditorHandle {
   insertAtCursor: (text: string) => void;
@@ -48,7 +48,7 @@ export const SqlCodeEditor = forwardRef<SqlCodeEditorHandle, SqlCodeEditorProps>
     const extensions = useMemo(
       () => [
         sql({ dialect: PostgreSQL }),
-        syntaxHighlighting(oneDarkHighlightStyle, { fallback: true }),
+        syntaxHighlighting(sqlHighlightStyle),
         lintGutter(),
         linter((view) =>
           sqlDiagnostics(view.state.doc.toString()).map((diag) => ({
@@ -72,6 +72,9 @@ export const SqlCodeEditor = forwardRef<SqlCodeEditorHandle, SqlCodeEditorProps>
               if (items.length === 0 && !context.explicit) return null;
               return {
                 from: word?.from ?? context.pos,
+                // sqlCompletions already filters and ranks; CodeMirror's fuzzy
+                // matcher would also reject quoted identifiers like "shop"."us.
+                filter: false,
                 options: items.map((item) => ({
                   label: item.label,
                   apply: item.apply,
@@ -119,8 +122,33 @@ export const SqlCodeEditor = forwardRef<SqlCodeEditorHandle, SqlCodeEditorProps>
             },
             '.cm-activeLineGutter': { backgroundColor: 'transparent' },
             '.cm-activeLine': { backgroundColor: 'transparent' },
-          },
-          { dark: true }
+            '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection': {
+              backgroundColor: 'color-mix(in oklch, var(--primary) 28%, transparent)',
+            },
+            '.cm-tooltip': {
+              backgroundColor: 'var(--popover)',
+              color: 'var(--popover-foreground)',
+              border: '1px solid var(--border)',
+              borderRadius: 'calc(var(--radius) - 4px)',
+              boxShadow: 'var(--shadow-lg)',
+              overflow: 'hidden',
+            },
+            '.cm-tooltip.cm-tooltip-autocomplete > ul': {
+              fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+              maxHeight: '15em',
+            },
+            '.cm-tooltip-autocomplete ul li[aria-selected]': {
+              backgroundColor: 'var(--accent)',
+              color: 'var(--accent-foreground)',
+            },
+            '.cm-completionIcon': { display: 'none' },
+            '.cm-completionDetail': {
+              color: 'var(--muted-foreground)',
+              fontStyle: 'normal',
+              marginLeft: '1em',
+            },
+            '.cm-completionMatchedText': { textDecoration: 'none', color: 'var(--primary)' },
+          }
         ),
       ],
       []

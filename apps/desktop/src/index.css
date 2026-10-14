@@ -65,6 +65,15 @@
   --motion-slow: 240ms;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  /* SQL editor syntax colours: amber/teal brand hues over neutral text. */
+  --syntax-keyword: oklch(0.52 0.14 48);
+  --syntax-string: oklch(0.48 0.12 150);
+  --syntax-constant: oklch(0.5 0.12 75);
+  --syntax-function: oklch(0.48 0.12 245);
+  --syntax-type: oklch(0.47 0.07 195);
+  --syntax-operator: oklch(0.45 0.03 260);
+  --syntax-punctuation: oklch(0.5 0.01 260);
+  --syntax-comment: oklch(0.52 0.02 260);
 }
 
 .dark {
@@ -123,6 +132,14 @@
   --shadow-xl:
     0px 1px 4px 0px hsl(0 0% 0% / 0.05), 0px 8px 10px -1px hsl(0 0% 0% / 0.05);
   --shadow-2xl: 0px 1px 4px 0px hsl(0 0% 0% / 0.13);
+  --syntax-keyword: oklch(0.76 0.13 52);
+  --syntax-string: oklch(0.78 0.12 150);
+  --syntax-constant: oklch(0.82 0.11 85);
+  --syntax-function: oklch(0.78 0.1 235);
+  --syntax-type: oklch(0.78 0.08 195);
+  --syntax-operator: oklch(0.74 0.03 260);
+  --syntax-punctuation: oklch(0.68 0.01 260);
+  --syntax-comment: oklch(0.64 0.02 260);
 }
 
 @theme inline {

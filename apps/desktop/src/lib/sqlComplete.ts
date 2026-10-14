@@ -1,4 +1,5 @@
 import { DIALECTS } from '@db/database';
+import { analyzeSql, type KeywordHint, type SqlContext, type TableRef } from './sqlContext';
 
 const quoteIdent = DIALECTS.PostgreSQL.quoteIdent;
 
@@ -16,302 +17,194 @@ export interface SqlCompletion {
   boost?: number;
 }
 
-const SQL_KEYWORDS = [
-  'SELECT',
-  'FROM',
-  'WHERE',
-  'JOIN',
-  'LEFT',
-  'RIGHT',
-  'INNER',
-  'OUTER',
-  'FULL',
-  'CROSS',
-  'ON',
-  'AND',
-  'OR',
-  'NOT',
-  'IN',
-  'IS',
-  'NULL',
-  'AS',
-  'ORDER',
-  'GROUP',
-  'BY',
-  'HAVING',
-  'LIMIT',
-  'OFFSET',
-  'INSERT',
-  'INTO',
-  'VALUES',
-  'UPDATE',
-  'SET',
-  'DELETE',
-  'CREATE',
-  'ALTER',
-  'DROP',
-  'TABLE',
-  'INDEX',
-  'VIEW',
-  'WITH',
-  'DISTINCT',
-  'UNION',
-  'ALL',
-  'EXISTS',
-  'CASE',
-  'WHEN',
-  'THEN',
-  'ELSE',
-  'END',
-  'RETURNING',
-  'TRUNCATE',
-  'EXPLAIN',
-];
-
-const TABLE_KEYWORDS = new Set([
-  'FROM',
-  'JOIN',
-  'INTO',
-  'UPDATE',
-  'TABLE',
-]);
-
-const COLUMN_KEYWORDS = new Set([
-  'SELECT',
-  'WHERE',
-  'SET',
-  'ON',
-  'BY',
-  'HAVING',
-  'AND',
-  'OR',
-  'RETURNING',
-]);
+interface Candidate extends SqlCompletion {
+  /** Unqualified name, used to tell when the user has already typed the whole thing. */
+  name: string;
+}
 
 export function sqlCompletions(
   sql: string,
   cursor: number,
   tables: SqlSchemaTable[]
 ): SqlCompletion[] {
-  const at = Math.max(0, Math.min(cursor, sql.length));
-  const before = sql.slice(0, at);
-  const { prefix, keyword, parts, inQuote } = readPrefix(before);
-  const needle = prefix.toLowerCase();
-  const kind = completionKind(keyword);
-
-  if (kind === 'table') {
-    const schemaFilter = parts.length >= 2 ? parts[0]?.toLowerCase() : undefined;
-    const tableNeedle = (parts.length >= 2 ? parts[parts.length - 1] : prefix).toLowerCase();
-    let items = tableCompletions(tables);
-    if (schemaFilter) {
-      items = items.filter(
-        (item) =>
-          item.type === 'table' && item.label.toLowerCase().startsWith(`${schemaFilter}.`)
+  const ctx = analyzeSql(sql, cursor);
+  const needle = ctx.prefix.toLowerCase();
+  switch (ctx.expects) {
+    case 'table':
+      return finish(tableCandidates(ctx, tables), ctx, ctx.parts.join('.').toLowerCase());
+    case 'column':
+      return finish(
+        [...columnCandidates(ctx, tables), ...keywordCandidates(ctx)],
+        ctx,
+        needle
       );
-    }
-    return filterByPrefix(items, tableNeedle || needle);
+    case 'insert-column':
+      return finish(columnsOf(resolveRefs(ctx.refs, tables)), ctx, needle);
+    case 'keyword':
+      return finish(keywordCandidates(ctx), ctx, needle);
+    default:
+      return [];
   }
-  if (kind === 'column') {
-    const qualifier = parts.length >= 2 ? parts[parts.length - 2] : undefined;
-    const columnNeedle = (parts.length >= 2 ? parts[parts.length - 1] : prefix).toLowerCase();
-    const byName = qualifier
-      ? tables.filter(
-          (table) =>
-            table.name.toLowerCase() === qualifier.toLowerCase() ||
-            (table.schema && table.schema.toLowerCase() === qualifier.toLowerCase())
-        )
-      : referencedTables(sql, tables);
-    const source = byName.length > 0 ? byName : referencedTables(sql, tables);
-    const columns = columnCompletions(source.length > 0 ? source : tables);
-    const keywords = inQuote ? [] : keywordCompletions(columnNeedle || needle);
-    return [...filterByPrefix(columns, columnNeedle || needle), ...keywords];
-  }
-  return keywordCompletions(needle);
 }
 
-function completionKind(keyword: string | null): 'table' | 'column' | 'keyword' {
-  if (!keyword) return 'keyword';
-  if (TABLE_KEYWORDS.has(keyword)) return 'table';
-  if (COLUMN_KEYWORDS.has(keyword)) return 'column';
-  return 'keyword';
-}
-
-function tableCompletions(tables: SqlSchemaTable[]): SqlCompletion[] {
+function tableCandidates(ctx: SqlContext, tables: SqlSchemaTable[]): Candidate[] {
+  const schemaFilter = ctx.parts.length >= 2 ? ctx.parts[ctx.parts.length - 2].toLowerCase() : '';
+  const all = allTables(tables);
+  if (schemaFilter) return all.filter((item) => item.detail === 'table' && inSchema(item, schemaFilter));
   const schemas = [...new Set(tables.map((table) => table.schema).filter(Boolean))];
   return [
-    ...schemas.map((schema) => ({
-      label: schema,
-      apply: quoteIdent(schema),
-      type: 'schema' as const,
-      detail: 'schema',
-      boost: 2,
-    })),
-    ...tables.map((table) => ({
-      label: table.schema ? `${table.schema}.${table.name}` : table.name,
-      apply: table.schema
-        ? `${quoteIdent(table.schema)}.${quoteIdent(table.name)}`
-        : quoteIdent(table.name),
-      type: 'table' as const,
-      detail: 'table',
-      boost: 5,
-    })),
+    ...schemas.map(
+      (schema): Candidate => ({
+        label: schema,
+        name: schema,
+        apply: quoteIdent(schema),
+        type: 'schema',
+        detail: 'schema',
+        boost: 2,
+      })
+    ),
+    ...all,
   ];
 }
 
-function columnCompletions(tables: SqlSchemaTable[]): SqlCompletion[] {
-  return tables.flatMap((table) =>
-    table.columns.map((column) => ({
-      label: column.name,
-      apply: quoteIdent(column.name),
-      type: 'column' as const,
-      detail: table.schema ? `${table.schema}.${table.name}` : table.name,
-      boost: 10,
-    }))
-  );
-}
-
-function keywordCompletions(needle: string): SqlCompletion[] {
-  return SQL_KEYWORDS.filter((keyword) => keyword.toLowerCase().startsWith(needle)).map(
-    (keyword) => ({
-      label: keyword,
-      apply: keyword,
-      type: 'keyword' as const,
-      detail: 'keyword',
-      boost: 0,
+function allTables(tables: SqlSchemaTable[]): Candidate[] {
+  return tables.map(
+    (table): Candidate => ({
+      label: table.schema ? `${table.schema}.${table.name}` : table.name,
+      name: table.name,
+      apply: table.schema
+        ? `${quoteIdent(table.schema)}.${quoteIdent(table.name)}`
+        : quoteIdent(table.name),
+      type: 'table',
+      detail: 'table',
+      boost: 5,
     })
   );
 }
 
-function filterByPrefix(items: SqlCompletion[], needle: string): SqlCompletion[] {
-  if (!needle) return items;
-  return items.filter((item) => {
-    const label = item.label.toLowerCase();
-    const apply = item.apply.toLowerCase().replaceAll('"', '');
-    return label.startsWith(needle) || label.includes(`.${needle}`) || apply.startsWith(needle);
+function inSchema(item: Candidate, schema: string): boolean {
+  return item.label.toLowerCase().startsWith(`${schema}.`);
+}
+
+function columnCandidates(ctx: SqlContext, tables: SqlSchemaTable[]): Candidate[] {
+  if (ctx.parts.length >= 2) {
+    const qualifier = ctx.parts[ctx.parts.length - 2];
+    const scoped = resolveQualifier(qualifier, ctx.scopeRefs, tables);
+    if (scoped.length > 0) return columnsOf(scoped, ctx.qualifier);
+    const schema = qualifier.toLowerCase();
+    return allTables(tables).filter((item) => inSchema(item, schema));
+  }
+  const resolved = resolveRefs(ctx.refs, tables);
+  if (resolved.length === 0) return columnsOf(tables);
+  return columnsOf(resolved, '', resolved.length > 1 ? ctx.refs : undefined);
+}
+
+/**
+ * Columns of the given tables. Pass `qualifierFor` refs to prefix names that
+ * more than one of the tables has (`u.id`, `o.id`).
+ */
+function columnsOf(
+  tables: SqlSchemaTable[],
+  qualifier = '',
+  qualifierFor?: TableRef[]
+): Candidate[] {
+  const counts = new Map<string, number>();
+  if (qualifierFor) {
+    for (const table of tables) {
+      for (const column of table.columns) {
+        counts.set(column.name, (counts.get(column.name) ?? 0) + 1);
+      }
+    }
+  }
+  return tables.flatMap((table) => {
+    const owner = table.schema ? `${table.schema}.${table.name}` : table.name;
+    const ref = qualifierFor?.find((r) => matchesTable(r, table));
+    return table.columns.map((column): Candidate => {
+      const ambiguous = !!ref && (counts.get(column.name) ?? 0) > 1;
+      const alias = ref ? refQualifier(ref) : '';
+      return {
+        label: ambiguous ? `${ref.alias ?? ref.name}.${column.name}` : column.name,
+        name: column.name,
+        apply: ambiguous
+          ? `${alias}.${quoteIdent(column.name)}`
+          : `${qualifier}${quoteIdent(column.name)}`,
+        type: 'column',
+        detail: ref?.alias ? `${ref.alias} · ${owner}` : owner,
+        boost: 10,
+      };
+    });
   });
 }
 
-function referencedTables(sql: string, tables: SqlSchemaTable[]): SqlSchemaTable[] {
-  const lower = sql.toLowerCase();
-  return tables.filter((table) => {
-    const name = table.name.toLowerCase();
-    const qualified = table.schema ? `${table.schema.toLowerCase()}.${name}` : name;
-    return lower.includes(name) || lower.includes(qualified);
+function refQualifier(ref: TableRef): string {
+  if (!ref.alias) return quoteIdent(ref.name);
+  return ref.aliasQuoted ? quoteIdent(ref.alias) : ref.alias;
+}
+
+function matchesTable(ref: TableRef, table: SqlSchemaTable): boolean {
+  return (
+    ref.name.toLowerCase() === table.name.toLowerCase() &&
+    (!ref.schema || ref.schema.toLowerCase() === table.schema.toLowerCase())
+  );
+}
+
+function resolveRefs(refs: TableRef[], tables: SqlSchemaTable[]): SqlSchemaTable[] {
+  const found: SqlSchemaTable[] = [];
+  for (const ref of refs) {
+    for (const table of tables) {
+      if (matchesTable(ref, table) && !found.includes(table)) found.push(table);
+    }
+  }
+  return found;
+}
+
+function resolveQualifier(
+  qualifier: string,
+  refs: TableRef[],
+  tables: SqlSchemaTable[]
+): SqlSchemaTable[] {
+  const q = qualifier.toLowerCase();
+  const byAlias = refs.filter((ref) => ref.alias?.toLowerCase() === q);
+  const byName = refs.filter((ref) => ref.name.toLowerCase() === q);
+  const hit = resolveRefs(byAlias.length > 0 ? byAlias : byName, tables);
+  if (hit.length > 0) return hit;
+  return tables.filter((table) => table.name.toLowerCase() === q);
+}
+
+function keywordCandidates(ctx: SqlContext): Candidate[] {
+  if (ctx.inQuote || ctx.parts.length >= 2) return [];
+  return ctx.keywords.map((hint: KeywordHint): Candidate => {
+    const label = ctx.keywordUpper ? hint.label : hint.label.toLowerCase();
+    return {
+      label,
+      name: label,
+      apply: label,
+      type: 'keyword',
+      detail: hint.detail,
+      boost: hint.boost,
+    };
   });
 }
 
-function readPrefix(before: string): {
-  prefix: string;
-  keyword: string | null;
-  parts: string[];
-  inQuote: boolean;
-} {
-  const token = trailingIdentToken(before);
-  const { parts, inQuote } = parseIdentToken(token);
-  const prefix = (parts.at(-1) ?? '').replaceAll('"', '');
-  const rest = before.slice(0, before.length - token.length);
-  const tokens = tokenizeKeywords(rest);
-  return { prefix, keyword: tokens.at(-1) ?? null, parts, inQuote };
+/** 0 when the needle starts the name, 1 when it starts a later word, -1 otherwise. */
+function matchTier(label: string, needle: string): number {
+  if (!needle) return 0;
+  const text = label.toLowerCase();
+  if (text.startsWith(needle) || text.includes(`.${needle}`)) return 0;
+  if (text.includes(`_${needle}`)) return 1;
+  return -1;
 }
 
-function trailingIdentToken(before: string): string {
-  let i = before.length;
-  while (i > 0) {
-    const c = before[i - 1];
-    if (/[A-Za-z0-9_."]/.test(c)) {
-      i -= 1;
-      continue;
-    }
-    break;
+function finish(items: Candidate[], ctx: SqlContext, typed: string): SqlCompletion[] {
+  const needle = ctx.prefix.toLowerCase();
+  const ranked: { item: Candidate; tier: number }[] = [];
+  for (const item of items) {
+    const tier = matchTier(item.label, needle);
+    if (tier < 0) continue;
+    const exact = item.type === 'table' || item.type === 'schema' ? item.label : item.name;
+    if (typed && exact.toLowerCase() === typed) continue;
+    ranked.push({ item, tier });
   }
-  return before.slice(i);
-}
-
-function parseIdentToken(token: string): { parts: string[]; inQuote: boolean } {
-  if (!token) return { parts: [''], inQuote: false };
-  const parts: string[] = [];
-  let i = 0;
-  let inQuote = false;
-  while (i < token.length) {
-    if (token[i] === '.') {
-      if (parts.length === 0) parts.push('');
-      i += 1;
-      if (i >= token.length) {
-        parts.push('');
-        inQuote = false;
-      }
-      continue;
-    }
-    if (token[i] === '"') {
-      inQuote = true;
-      i += 1;
-      let buf = '';
-      while (i < token.length && token[i] !== '"') {
-        buf += token[i];
-        i += 1;
-      }
-      if (i < token.length && token[i] === '"') {
-        inQuote = false;
-        i += 1;
-      }
-      parts.push(buf);
-      continue;
-    }
-    inQuote = false;
-    let buf = '';
-    while (i < token.length && /[A-Za-z0-9_]/.test(token[i])) {
-      buf += token[i];
-      i += 1;
-    }
-    parts.push(buf);
-  }
-  return { parts: parts.length > 0 ? parts : [''], inQuote };
-}
-
-function tokenizeKeywords(sql: string): string[] {
-  const tokens: string[] = [];
-  const chars = [...sql];
-  let i = 0;
-  while (i < chars.length) {
-    const c = chars[i];
-    if (c === '-' && chars[i + 1] === '-') {
-      i += 2;
-      while (i < chars.length && chars[i] !== '\n') i += 1;
-      continue;
-    }
-    if (c === '/' && chars[i + 1] === '*') {
-      i += 2;
-      while (i < chars.length && !(chars[i] === '*' && chars[i + 1] === '/')) i += 1;
-      i += 2;
-      continue;
-    }
-    if (c === '\'' || c === '"') {
-      const quote = c;
-      i += 1;
-      while (i < chars.length) {
-        if (chars[i] === quote) {
-          if (chars[i + 1] === quote) {
-            i += 2;
-            continue;
-          }
-          i += 1;
-          break;
-        }
-        i += 1;
-      }
-      continue;
-    }
-    if (/[A-Za-z_]/.test(c)) {
-      let ident = c;
-      i += 1;
-      while (i < chars.length && /[A-Za-z0-9_]/.test(chars[i])) {
-        ident += chars[i];
-        i += 1;
-      }
-      tokens.push(ident.toUpperCase());
-      continue;
-    }
-    i += 1;
-  }
-  return tokens;
+  ranked.sort((a, b) => (b.item.boost ?? 0) - (a.item.boost ?? 0) || a.tier - b.tier);
+  return ranked.map(({ item: { name: _name, ...item } }) => item);
 }
