@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Modal, ModalPanel } from '../ui/Modal';
 import { format } from 'sql-formatter';
@@ -14,10 +14,18 @@ import {
   Trash2,
 } from 'lucide-react';
 import { QueryExecutionResult, SavedQuery, DatabaseSchema } from '../../types';
-import { QueryResultsView } from './QueryResultsView';
+import { QueryResultsView, type QueryGridActions } from './QueryResultsView';
 import { SqlCodeEditor } from './SqlCodeEditor';
 import { SplitHandle } from '../ui/SplitHandle';
 import { invokeErrorMessage } from '../../lib/invokeError';
+import { toast } from '../../lib/toast';
+import { queryErrorText } from '../../lib/sqlQuery';
+import { analyzeQueryResult } from '../../lib/queryResultTable';
+import {
+  clampResultIndex,
+  replaceResult,
+  type SqlTabState,
+} from '../../lib/sqlTabState';
 import {
   clampResultsFraction,
   DEFAULT_RESULTS_FRACTION,
@@ -27,9 +35,21 @@ import {
 
 interface SqlEditorTabProps {
   initialSql?: string;
+  /** Called (debounced, and on unmount) so the tab's SQL survives tab switches and restarts. */
+  onSqlChange?: (sql: string) => void;
+  /** Results live in the app so they survive this component unmounting. */
+  tabState: SqlTabState;
+  onTabStateChange: (update: (prev: SqlTabState) => SqlTabState) => void;
+  /** Bumped per table whenever its data changes outside this tab. */
+  dataRevisions: Record<string, number>;
+  grid: Omit<QueryGridActions, 'tables' | 'onRerun'>;
   currentDatabase: DatabaseSchema;
   savedQueries: SavedQuery[];
-  onExecuteQuery: (sql: string) => Promise<QueryExecutionResult[]>;
+  /** `silent` skips query history, for background refreshes of an existing result. */
+  onExecuteQuery: (
+    sql: string,
+    options?: { silent?: boolean }
+  ) => Promise<QueryExecutionResult[]>;
   onBookmarkQuery: (title: string, sql: string, description?: string, tags?: string[]) => void;
   onDeleteSavedQuery?: (id: string) => void;
   onUpdateSavedQueryTags?: (id: string, tags: string[]) => void;
@@ -38,6 +58,11 @@ interface SqlEditorTabProps {
 
 export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
   initialSql = 'SELECT * FROM users ORDER BY created_at DESC LIMIT 50;',
+  onSqlChange,
+  tabState,
+  onTabStateChange,
+  dataRevisions,
+  grid,
   currentDatabase,
   savedQueries,
   onExecuteQuery,
@@ -48,7 +73,75 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
 }) => {
   const [sql, setSql] = useState(initialSql);
   const [isRunning, setIsRunning] = useState(false);
-  const [queryResults, setQueryResults] = useState<QueryExecutionResult[]>([]);
+  const queryResults = tabState.results;
+  const onSqlChangeRef = useRef(onSqlChange);
+  onSqlChangeRef.current = onSqlChange;
+  const sqlRef = useRef(sql);
+  sqlRef.current = sql;
+  const dataRevisionsRef = useRef(dataRevisions);
+  dataRevisionsRef.current = dataRevisions;
+  const tablesRef = useRef(currentDatabase.tables);
+  tablesRef.current = currentDatabase.tables;
+  const refreshing = useRef(new Set<string>());
+  const onExecuteQueryRef = useRef(onExecuteQuery);
+  onExecuteQueryRef.current = onExecuteQuery;
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => onSqlChangeRef.current?.(sql), 300);
+    return () => window.clearTimeout(handle);
+  }, [sql]);
+
+  useEffect(() => () => onSqlChangeRef.current?.(sqlRef.current), []);
+
+  const revisionOf = (result: QueryExecutionResult): number => {
+    const source = analyzeQueryResult(result, tablesRef.current).sourceTable;
+    return source ? (dataRevisionsRef.current[source.id] ?? 0) : 0;
+  };
+
+  const commitResults = (results: QueryExecutionResult[]) => {
+    const fetchedRevisions = Object.fromEntries(
+      results.map((result) => [result.id, revisionOf(result)])
+    );
+    onTabStateChange(() => ({ results, activeResultIndex: 0, fetchedRevisions }));
+  };
+
+  const rerunResult = async (result: QueryExecutionResult) => {
+    let fresh: QueryExecutionResult | undefined;
+    try {
+      fresh = (await onExecuteQueryRef.current(result.query, { silent: true }))[0];
+    } catch (e: unknown) {
+      toast.error(invokeErrorMessage(e));
+    }
+    if (fresh?.error) {
+      toast.error(queryErrorText(fresh.error));
+      fresh = undefined;
+    }
+    const revision = revisionOf(result);
+    onTabStateChange((prev) => ({
+      ...prev,
+      results: fresh ? replaceResult(prev.results, result.id, fresh) : prev.results,
+      fetchedRevisions: { ...prev.fetchedRevisions, [result.id]: revision },
+    }));
+  };
+
+  // Re-run results whose source table changed (apply, insert) while they were on screen or away.
+  useEffect(() => {
+    for (const result of queryResults) {
+      if (result.error || refreshing.current.has(result.id)) continue;
+      const source = analyzeQueryResult(result, currentDatabase.tables).sourceTable;
+      if (!source) continue;
+      if ((tabState.fetchedRevisions[result.id] ?? 0) === (dataRevisions[source.id] ?? 0)) continue;
+      refreshing.current.add(result.id);
+      void rerunResult(result).finally(() => refreshing.current.delete(result.id));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataRevisions, queryResults, tabState.fetchedRevisions]);
+
+  const gridActions: QueryGridActions = useMemo(
+    () => ({ ...grid, tables: currentDatabase.tables, onRerun: rerunResult }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [grid, currentDatabase.tables]
+  );
   const [showSavedQueries, setShowSavedQueries] = useState(false);
   const [resultsFraction, setResultsFraction] = useState(() =>
     typeof localStorage === 'undefined'
@@ -78,9 +171,9 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
     setIsRunning(true);
     try {
       const res = await onExecuteQuery(targetSql);
-      setQueryResults(res);
+      commitResults(res);
     } catch (e: unknown) {
-      setQueryResults([
+      commitResults([
         {
           id: 'res_err_' + Date.now(),
           query: targetSql,
@@ -422,7 +515,15 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
           />
 
           <div className="min-h-0 overflow-hidden" style={{ flex: `${resultsFraction} 1 0%` }}>
-            <QueryResultsView results={queryResults} isLoading={isRunning} />
+            <QueryResultsView
+              results={queryResults}
+              isLoading={isRunning}
+              activeIndex={clampResultIndex(tabState.activeResultIndex, queryResults.length)}
+              onActiveIndexChange={(index) =>
+                onTabStateChange((prev) => ({ ...prev, activeResultIndex: index }))
+              }
+              grid={gridActions}
+            />
           </div>
         </div>
       </div>

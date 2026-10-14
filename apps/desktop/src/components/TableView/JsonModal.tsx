@@ -9,6 +9,7 @@ interface JsonModalProps {
   initialValue: any;
   onSave: (val: any) => void;
   onClose: () => void;
+  readOnly?: boolean;
 }
 
 const JsonModalBody: React.FC<JsonModalProps> = ({
@@ -17,6 +18,7 @@ const JsonModalBody: React.FC<JsonModalProps> = ({
   initialValue,
   onSave,
   onClose,
+  readOnly = false,
 }) => {
   const formatJson = (val: any) => {
     try {
@@ -86,6 +88,7 @@ const JsonModalBody: React.FC<JsonModalProps> = ({
               setError(null);
             }}
             rows={12}
+            readOnly={readOnly}
             className="w-full p-3 bg-background border border-border rounded-xl font-mono text-xs text-foreground focus:outline-none focus:border-primary resize-none leading-relaxed"
           />
         </div>
@@ -105,14 +108,16 @@ const JsonModalBody: React.FC<JsonModalProps> = ({
               onClick={onClose}
               className="pressable px-3 py-1.5 rounded-lg hover:bg-accent text-muted-foreground text-xs transition-colors"
             >
-              Cancel
+              {readOnly ? 'Close' : 'Cancel'}
             </button>
-            <button
-              onClick={handleSave}
-              className="pressable px-4 py-1.5 rounded-lg bg-primary hover:opacity-90 text-primary-foreground text-xs font-semibold shadow-md transition-colors"
-            >
-              Update Value
-            </button>
+            {!readOnly && (
+              <button
+                onClick={handleSave}
+                className="pressable px-4 py-1.5 rounded-lg bg-primary hover:opacity-90 text-primary-foreground text-xs font-semibold shadow-md transition-colors"
+              >
+                Update Value
+              </button>
+            )}
           </div>
         </div>
       </ModalPanel>

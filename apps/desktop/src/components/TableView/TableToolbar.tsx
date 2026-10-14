@@ -29,6 +29,12 @@ interface TableToolbarProps {
   hiddenColumns: string[];
   onHiddenColumnsChange: (hidden: string[]) => void;
   selectedRowsCount: number;
+  /** "query" drops search and filters, which make little sense on a SQL result. */
+  variant?: 'table' | 'query';
+  readOnly?: boolean;
+  readOnlyReason?: string;
+  leading?: React.ReactNode;
+  trailing?: React.ReactNode;
   onInsertRow: () => void;
   onDeleteSelectedRows: () => void;
   exportRows: Record<string, unknown>[];
@@ -50,12 +56,24 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
   hiddenColumns,
   onHiddenColumnsChange,
   selectedRowsCount,
+  variant = 'table',
+  readOnly = false,
+  readOnlyReason,
+  leading,
+  trailing,
   onInsertRow,
   onDeleteSelectedRows,
   exportRows,
   onRefresh,
   isLoading = false,
 }) => {
+  const isQuery = variant === 'query';
+  const insertBlocked = table.isView || readOnly;
+  const insertTitle = readOnly
+    ? (readOnlyReason ?? 'This result is read-only')
+    : table.isView
+      ? 'Cannot insert into a view'
+      : 'Add a row';
   const loadingHint = 'Unavailable while table data is loading';
   const [draft, setDraft] = useState('');
   const [expressionError, setExpressionError] = useState<string | null>(null);
@@ -108,7 +126,10 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-2">
         {/* Left Tools */}
         <div className="flex items-center gap-2 flex-wrap">
+          {leading}
+
           {/* Quick Search */}
+          {!isQuery && (
           <div className="relative">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-muted-foreground" />
             <input
@@ -119,8 +140,10 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
               className="pl-8 pr-3 py-1 bg-background border border-border rounded-lg text-xs font-mono text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary w-48 sm:w-60"
             />
           </div>
+          )}
 
           {/* Filter Builder Toggle — first open adds a default condition */}
+          {!isQuery && (
           <button
             type="button"
             onClick={() => (showFilters ? onShowFiltersChange(false) : openFilters())}
@@ -133,6 +156,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
             <Filter className="w-3.5 h-3.5" />
             <span>Filters ({filters.length})</span>
           </button>
+          )}
 
           <ColumnVisibilityMenu
             columns={table.columns}
@@ -144,8 +168,8 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
           {/* Insert Row */}
           <button
             onClick={onInsertRow}
-            disabled={table.isView}
-            title={table.isView ? 'Cannot insert into a view' : 'Add a row'}
+            disabled={insertBlocked}
+            title={insertTitle}
             className="pressable flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-600/20"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -166,12 +190,19 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
 
         {/* Right Tools: Refresh & Export */}
         <div className="flex items-center gap-2">
+          {trailing}
           <button
             type="button"
             onClick={onRefresh}
             disabled={isLoading}
-            title={isLoading ? loadingHint : `Refresh Table (${REFRESH_SHORTCUT})`}
-            aria-label="Refresh Table"
+            title={
+              isLoading
+                ? loadingHint
+                : isQuery
+                  ? 'Re-run query'
+                  : `Refresh Table (${REFRESH_SHORTCUT})`
+            }
+            aria-label={isQuery ? 'Re-run query' : 'Refresh Table'}
             className="p-1.5 rounded-lg bg-background border border-border hover:bg-accent text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-background"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -189,7 +220,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
       </div>
 
       {/* Filter Clauses Builder */}
-      {showFilters && (
+      {!isQuery && showFilters && (
         <div className="p-2.5 bg-background border border-border rounded-xl space-y-2 field-message">
           <div className="flex items-center justify-between text-xs font-mono text-muted-foreground font-semibold">
             <span>Data Filter Rules</span>

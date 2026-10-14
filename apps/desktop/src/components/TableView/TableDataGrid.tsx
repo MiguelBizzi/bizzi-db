@@ -92,6 +92,20 @@ interface TableDataGridProps {
   onLoadRows: (limit: number, offset: number) => Promise<void>;
   onLookup: FkLookupFn;
   onOpenTable: (table: TableSchema) => void;
+  /**
+   * "query" renders a SQL result: no pagination, search or filters, and
+   * `onLoadRows` re-runs the query instead of paging a table.
+   */
+  variant?: "table" | "query";
+  /** Disables selection, editing, inserting and deleting. */
+  readOnly?: boolean;
+  readOnlyReason?: string;
+  /** Result columns that cannot be edited (aliases, expressions). */
+  readOnlyColumns?: ReadonlySet<string>;
+  /** Table that Add Row inserts into when `table` is only a projection of it. */
+  insertTable?: TableSchema;
+  toolbarLeading?: React.ReactNode;
+  toolbarTrailing?: React.ReactNode;
 }
 
 interface GridContextMenu {
@@ -129,7 +143,15 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   onLoadRows,
   onLookup,
   onOpenTable,
+  variant = "table",
+  readOnly = false,
+  readOnlyReason,
+  readOnlyColumns,
+  insertTable,
+  toolbarLeading,
+  toolbarTrailing,
 }) => {
+  const isQuery = variant === "query";
   const [searchInput, setSearchInput] = useState("");
   const searchTerm = useDebouncedValue(searchInput);
   const [filters, setFilters] = useState<FilterClause[]>([]);
@@ -162,6 +184,9 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     (col) => !hiddenColumns.includes(col.name),
   );
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
+  const isCellLocked = (columnName: string) =>
+    readOnly || Boolean(readOnlyColumns?.has(columnName));
+  const dataColSpan = visibleColumns.length + (readOnly ? 0 : 1);
 
   const onLoadRowsRef = useRef(onLoadRows);
   onLoadRowsRef.current = onLoadRows;
@@ -171,6 +196,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   const safePage = Math.min(page, pageCount);
 
   useEffect(() => {
+    if (isQuery) return;
     let cancelled = false;
     void onLoadRowsRef
       .current(pageSize, (safePage - 1) * pageSize)
@@ -180,7 +206,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [pageSize, safePage, table.id]);
+  }, [pageSize, safePage, table.id, isQuery]);
 
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
@@ -340,6 +366,8 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
           rowPk: contextMenu.rowPk,
           row: contextMenu.row ?? {},
           isPendingDelete: Boolean(contextMenu.isPendingDelete),
+          locked: isCellLocked(contextMenu.column.name),
+          allowFilter: !isQuery,
           pendingModifications,
           onFilter: applyCellFilter,
           onSetValue: (newValue) => {
@@ -449,6 +477,11 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
         hiddenColumns={hiddenColumns}
         onHiddenColumnsChange={setHiddenColumns}
         selectedRowsCount={selectedRowPks.length}
+        variant={variant}
+        readOnly={readOnly}
+        readOnlyReason={readOnlyReason}
+        leading={toolbarLeading}
+        trailing={toolbarTrailing}
         onInsertRow={() => setInsertOpen(true)}
         onDeleteSelectedRows={() => {
           onDeleteSelectedRows(selectedRowPks);
@@ -472,13 +505,15 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
           <thead>
             <tr>
               {/* Checkbox column */}
-              <th className="w-10 px-3 py-2 text-center border-r border-b border-border bg-card">
-                <Checkbox
-                  checked={allSelected}
-                  onCheckedChange={handleToggleSelectAll}
-                  aria-label="Select all rows"
-                />
-              </th>
+              {!readOnly && (
+                <th className="w-10 px-3 py-2 text-center border-r border-b border-border bg-card">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={handleToggleSelectAll}
+                    aria-label="Select all rows"
+                  />
+                </th>
+              )}
 
               {/* Data Columns */}
               {visibleColumns.map((col) => {
@@ -503,12 +538,14 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
                           <Link className="w-3.5 h-3.5 text-primary shrink-0" />
                         )}
                         <span className="truncate">{col.name}</span>
-                        <span
-                          className="text-[10px] text-muted-foreground font-normal font-sans"
-                          title={col.type}
-                        >
-                          ({shortColumnType(col.type)})
-                        </span>
+                        {col.type !== "unknown" && (
+                          <span
+                            className="text-[10px] text-muted-foreground font-normal font-sans"
+                            title={col.type}
+                          >
+                            ({shortColumnType(col.type)})
+                          </span>
+                        )}
                       </div>
 
                       {/* Sort Icon */}
@@ -531,7 +568,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
           {/* Body */}
           <tbody className="divide-y divide-border bg-background">
             {loading ? (
-              <TableSkeletonRows columns={visibleColumns} />
+              <TableSkeletonRows columns={visibleColumns} selectable={!readOnly} />
             ) : (
               <>
                 {filteredRows.map((row, idx) => {
@@ -553,15 +590,17 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
                       }`}
                     >
                       {/* Select Checkbox */}
-                      <td className="px-3 py-2 text-center border-r border-border">
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() =>
-                            handleToggleRowSelect(rowPkVal)
-                          }
-                          aria-label="Select row"
-                        />
-                      </td>
+                      {!readOnly && (
+                        <td className="px-3 py-2 text-center border-r border-border">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() =>
+                              handleToggleRowSelect(rowPkVal)
+                            }
+                            aria-label="Select row"
+                          />
+                        </td>
+                      )}
 
                       {/* Cells */}
                       {visibleColumns.map((col) => {
@@ -607,7 +646,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
                                   rowPk: rowPkVal,
                                   value: displayVal,
                                 });
-                              } else {
+                              } else if (!isCellLocked(col.name)) {
                                 setEditingCell({
                                   rowPk: rowPkVal,
                                   column: col.name,
@@ -744,12 +783,14 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
 
                 {pendingModifications.inserts.map((insert) => (
                   <tr key={insert.tempId} className="bg-emerald-500/10">
-                    <td className="px-3 py-2 text-center border-r border-border">
-                      <span className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">
-                        <Plus className="w-3 h-3" />
-                        New
-                      </span>
-                    </td>
+                    {!readOnly && (
+                      <td className="px-3 py-2 text-center border-r border-border">
+                        <span className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">
+                          <Plus className="w-3 h-3" />
+                          New
+                        </span>
+                      </td>
+                    )}
                     {visibleColumns.map((col) => (
                       <td
                         key={col.name}
@@ -772,10 +813,12 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
                   pendingModifications.inserts.length === 0 && (
                     <tr>
                       <td
-                        colSpan={visibleColumns.length + 1}
+                        colSpan={dataColSpan}
                         className="py-12 text-center text-muted-foreground font-sans"
                       >
-                        No records found matching filters or search queries.
+                        {isQuery
+                          ? "Query returned 0 rows."
+                          : "No records found matching filters or search queries."}
                       </td>
                     </tr>
                   )}
@@ -785,7 +828,15 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
         </table>
       </div>
 
+      {isQuery && (
+        <div className="px-3 py-1.5 bg-card border-t border-border text-xs font-mono text-muted-foreground shrink-0">
+          {rows.length.toLocaleString()} row{rows.length === 1 ? "" : "s"}
+          {selectedRowPks.length > 0 && ` (${selectedRowPks.length} selected)`}
+        </div>
+      )}
+
       {/* Grid Bottom Footer: pagination */}
+      {!isQuery && (
       <div className="px-3 py-1.5 bg-card border-t border-border text-xs font-mono text-muted-foreground flex items-center justify-between gap-3 shrink-0">
         <div className="min-w-0 truncate">
           {tableFooterRange({
@@ -858,10 +909,11 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
           </div>
         </div>
       </div>
+      )}
 
       <InsertRowDrawer
         isOpen={insertOpen}
-        table={table}
+        table={insertTable ?? table}
         tables={tables}
         onClose={() => setInsertOpen(false)}
         onInsert={onInsertRow}
@@ -906,7 +958,9 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
         isOpen={jsonModalState.isOpen}
         columnName={jsonModalState.columnName}
         initialValue={jsonModalState.value}
+        readOnly={isCellLocked(jsonModalState.columnName)}
         onSave={(updatedJson) => {
+          if (isCellLocked(jsonModalState.columnName)) return;
           onUpdateCell(
             jsonModalState.rowPk,
             jsonModalState.columnName,
@@ -920,14 +974,22 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   );
 };
 
-function TableSkeletonRows({ columns }: { columns: ColumnDefinition[] }) {
+function TableSkeletonRows({
+  columns,
+  selectable,
+}: {
+  columns: ColumnDefinition[];
+  selectable: boolean;
+}) {
   return (
     <>
       {Array.from({ length: SKELETON_ROW_COUNT }, (_, row) => (
         <tr key={row} aria-hidden>
-          <td className="w-10 px-3 py-2.5 text-center border-r border-border">
-            <span className="table-skeleton-bar inline-block h-3.5 w-3.5 rounded" />
-          </td>
+          {selectable && (
+            <td className="w-10 px-3 py-2.5 text-center border-r border-border">
+              <span className="table-skeleton-bar inline-block h-3.5 w-3.5 rounded" />
+            </td>
+          )}
           {columns.map((col, colIdx) => (
             <td key={col.name} className="px-3 py-2.5 border-r border-border">
               <span
@@ -998,12 +1060,14 @@ function cellMenuItems(opts: {
   rowPk: unknown;
   row: Record<string, unknown>;
   isPendingDelete: boolean;
+  locked: boolean;
+  allowFilter: boolean;
   pendingModifications: PendingModifications;
   onFilter: (column: string, op: CellFilterOp, value: unknown) => void;
   onSetValue: (value: unknown) => void;
 }): ContextMenuItem[] {
   const ctx = {
-    isView: Boolean(opts.table.isView),
+    isView: Boolean(opts.table.isView) || opts.locked,
     isPendingDelete: opts.isPendingDelete,
   };
   const quoted = quotedFilterValue(opts.displayValue);
@@ -1077,11 +1141,15 @@ function cellMenuItems(opts: {
           .catch(() => toast.error("Could not copy to clipboard"));
       },
     },
-    {
-      id: "filter",
-      label: "Filter by this column",
-      submenu: filterItems,
-    },
+    ...(opts.allowFilter
+      ? [
+          {
+            id: "filter",
+            label: "Filter by this column",
+            submenu: filterItems,
+          },
+        ]
+      : []),
     {
       id: "set-as",
       label: "Set as",

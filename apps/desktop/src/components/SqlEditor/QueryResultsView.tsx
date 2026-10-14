@@ -1,27 +1,60 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { fade } from '../../lib/motion';
-import { QueryExecutionResult } from '../../types';
+import { PendingModifications, QueryExecutionResult, TableSchema } from '../../types';
 import { ExplainPlanView } from './ExplainPlanView';
-import { AlertCircle, Table, Network } from 'lucide-react';
+import { AlertCircle, Lock, Table, Network } from 'lucide-react';
 import { DataExportMenu } from '../DataExport/DataExportMenu';
 import { inferQualifiedTable } from '../../lib/dataExport';
 import { queryErrorText, resultTabLabel } from '../../lib/sqlQuery';
+import { analyzeQueryResult } from '../../lib/queryResultTable';
+import { emptyPending } from '../../lib/pendingChanges';
+import { TableDataGrid } from '../TableView/TableDataGrid';
+import type { FkLookupFn } from '../TableView/ForeignKeyPicker';
 
 const SKELETON_ROWS = 8;
 const SKELETON_COLS = 5;
 const SKELETON_WIDTHS = ['w-[38%]', 'w-[55%]', 'w-[46%]', 'w-[62%]', 'w-[42%]', 'w-[70%]'];
 
+/** Hooks the result grid into the app's pending-changes pipeline. */
+export interface QueryGridActions {
+  tables: TableSchema[];
+  getPending: (tableId: string) => PendingModifications;
+  onUpdateCell: (
+    tableId: string,
+    primaryKeyValue: unknown,
+    columnName: string,
+    oldValue: unknown,
+    newValue: unknown
+  ) => void;
+  onDeleteRows: (
+    table: TableSchema,
+    primaryKeyValues: unknown[],
+    rows: Record<string, unknown>[]
+  ) => void;
+  onInsertRow: (table: TableSchema, sql: string) => Promise<{ error?: string }>;
+  onLookup: FkLookupFn;
+  onOpenTable: (table: TableSchema) => void;
+  /** Re-runs the result's query and swaps the fresh rows in. */
+  onRerun: (result: QueryExecutionResult) => Promise<void>;
+}
+
 interface QueryResultsViewProps {
   results: QueryExecutionResult[];
   isLoading?: boolean;
+  activeIndex: number;
+  onActiveIndexChange: (index: number) => void;
+  grid: QueryGridActions;
 }
 
 export const QueryResultsView: React.FC<QueryResultsViewProps> = ({
   results,
   isLoading = false,
+  activeIndex,
+  onActiveIndexChange,
+  grid,
 }) => {
-  const [activeIndex, setActiveIndex] = useState(0);
+  const setActiveIndex = onActiveIndexChange;
   const result = results[Math.min(activeIndex, Math.max(results.length - 1, 0))];
 
   if (isLoading && results.length === 0) {
@@ -75,7 +108,7 @@ export const QueryResultsView: React.FC<QueryResultsViewProps> = ({
         </div>
       )}
       {result ? (
-        <SingleResultView key={result.id} result={result} isLoading={isLoading} />
+        <SingleResultView key={result.id} result={result} isLoading={isLoading} grid={grid} />
       ) : null}
     </div>
   );
@@ -96,47 +129,18 @@ function ResultsToolbar({
 }) {
   const sqlTarget = inferQualifiedTable(result?.query);
   return (
-    <div className="px-4 py-2 bg-card border-b border-border flex items-center justify-between shrink-0 z-10">
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => onSubTab?.('grid')}
-          className={`pressable flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
-            (activeSubTab ?? 'grid') === 'grid'
-              ? 'bg-primary/20 text-primary border border-primary/30'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Table className="w-3.5 h-3.5" />
-          <span>Results Grid ({rows})</span>
-        </button>
-
-        {result?.explainPlan && (
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => onSubTab?.('explain')}
-            className={`pressable flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
-              activeSubTab === 'explain'
-                ? 'bg-primary/20 text-primary border border-primary/30'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Network className="w-3.5 h-3.5" />
-            <span>EXPLAIN Plan</span>
-          </button>
-        )}
-      </div>
+    // Sits above the grid's sticky headers (z-20) so its menus are never covered.
+    <div className="relative z-30 px-4 py-2 bg-card border-b border-border flex items-center justify-between shrink-0">
+      <ResultSubTabs
+        disabled={disabled}
+        rows={rows}
+        result={result}
+        activeSubTab={activeSubTab}
+        onSubTab={onSubTab}
+      />
 
       <div className="flex items-center gap-3">
-        {result && !disabled && (
-          <div className="text-[11px] text-muted-foreground font-mono">
-            Executed in <span className="text-emerald-400 font-bold">{result.executionTimeMs}ms</span>
-            {result.affectedRows !== undefined && ` • ${result.affectedRows} rows affected`}
-            {result.truncated && ' • truncated'}
-          </div>
-        )}
+        {result && !disabled && <ExecutionSummary result={result} />}
         {disabled && (
           <div className="text-[11px] text-muted-foreground font-mono">Running query…</div>
         )}
@@ -149,6 +153,64 @@ function ResultsToolbar({
           disabledReason="Unavailable while the query is running"
         />
       </div>
+    </div>
+  );
+}
+
+function ResultSubTabs({
+  disabled,
+  rows,
+  result,
+  activeSubTab,
+  onSubTab,
+}: {
+  disabled: boolean;
+  rows: number;
+  result?: QueryExecutionResult;
+  activeSubTab?: 'grid' | 'explain';
+  onSubTab?: (tab: 'grid' | 'explain') => void;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onSubTab?.('grid')}
+        className={`pressable flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
+          (activeSubTab ?? 'grid') === 'grid'
+            ? 'bg-primary/20 text-primary border border-primary/30'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        <Table className="w-3.5 h-3.5" />
+        <span>Results Grid ({rows})</span>
+      </button>
+
+      {result?.explainPlan && (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onSubTab?.('explain')}
+          className={`pressable flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
+            activeSubTab === 'explain'
+              ? 'bg-primary/20 text-primary border border-primary/30'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Network className="w-3.5 h-3.5" />
+          <span>EXPLAIN Plan</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ExecutionSummary({ result }: { result: QueryExecutionResult }) {
+  return (
+    <div className="text-[11px] text-muted-foreground font-mono whitespace-nowrap">
+      Executed in <span className="text-emerald-400 font-bold">{result.executionTimeMs}ms</span>
+      {result.affectedRows !== undefined && ` • ${result.affectedRows} rows affected`}
+      {result.truncated && ' • truncated'}
     </div>
   );
 }
@@ -189,11 +251,17 @@ function ResultsSkeleton() {
 function SingleResultView({
   result,
   isLoading,
+  grid,
 }: {
   result: QueryExecutionResult;
   isLoading: boolean;
+  grid: QueryGridActions;
 }) {
   const [activeSubTab, setActiveSubTab] = useState<'grid' | 'explain'>('grid');
+  const analysis = useMemo(
+    () => analyzeQueryResult(result, grid.tables),
+    [result, grid.tables]
+  );
 
   if (result.error && !isLoading) {
     return (
@@ -228,6 +296,72 @@ function SingleResultView({
     result.columns ||
     (result.rows && result.rows.length > 0 ? Object.keys(result.rows[0]) : []);
   const rows = result.rows || [];
+  const showGrid =
+    !isLoading && activeSubTab === 'grid' && (rows.length > 0 || analysis.editable);
+
+  if (showGrid) {
+    const { table, sourceTable, editable } = analysis;
+    return (
+      <div className="flex-1 flex flex-col bg-background overflow-hidden font-mono text-xs select-none min-h-0">
+        <motion.div
+          key="rows"
+          variants={fade}
+          initial="initial"
+          animate="animate"
+          className="flex-1 flex flex-col min-h-0"
+        >
+          <TableDataGrid
+            variant="query"
+            table={table}
+            rows={rows}
+            readOnly={!editable}
+            readOnlyReason={analysis.readOnlyReason}
+            readOnlyColumns={analysis.readOnlyColumns}
+            insertTable={sourceTable}
+            pendingModifications={editable ? grid.getPending(table.id) : emptyPending()}
+            tables={grid.tables}
+            onUpdateCell={(pk, col, oldVal, newVal) =>
+              grid.onUpdateCell(table.id, pk, col, oldVal, newVal)
+            }
+            onInsertRow={(sql) =>
+              sourceTable
+                ? grid.onInsertRow(sourceTable, sql)
+                : Promise.resolve({ error: 'This result is read-only.' })
+            }
+            onDeleteSelectedRows={(pks) => {
+              if (sourceTable) grid.onDeleteRows(sourceTable, pks, rows);
+            }}
+            onLoadRows={() => grid.onRerun(result)}
+            onLookup={grid.onLookup}
+            onOpenTable={grid.onOpenTable}
+            toolbarLeading={
+              <ResultSubTabs
+                disabled={false}
+                rows={rows.length}
+                result={result}
+                activeSubTab={activeSubTab}
+                onSubTab={setActiveSubTab}
+              />
+            }
+            toolbarTrailing={
+              <>
+                {!editable && analysis.readOnlyReason && (
+                  <span
+                    title={analysis.readOnlyReason}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted text-muted-foreground border border-border text-[10px] font-sans font-medium cursor-help"
+                  >
+                    <Lock className="w-3 h-3" />
+                    Read-only
+                  </span>
+                )}
+                <ExecutionSummary result={result} />
+              </>
+            }
+          />
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col bg-background overflow-hidden font-mono text-xs select-none min-h-0">

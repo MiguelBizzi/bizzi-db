@@ -99,6 +99,7 @@ import {
   type CloseTabKind,
 } from './lib/tabPaneActions';
 import { defaultQuerySql, nextUntitledQueryTitle } from './lib/sqlQuery';
+import { emptySqlTabState, pruneSqlTabState, type SqlTabState } from './lib/sqlTabState';
 import { refreshConnectionSchemas } from './lib/refreshSchemas';
 import {
   createSchemaSyncQueue,
@@ -144,6 +145,9 @@ export default function App() {
   const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>([]);
   const [tableRows, setTableRows] = useState<Record<string, Record<string, unknown>[]>>({});
   const [pendingByTable, setPendingByTable] = useState<Record<string, PendingModifications>>({});
+  const [sqlTabStates, setSqlTabStates] = useState<Record<string, SqlTabState>>({});
+  // Bumped per table when its rows change, so open query results can refresh themselves.
+  const [dataRevisions, setDataRevisions] = useState<Record<string, number>>({});
   const [bootstrapped, setBootstrapped] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [connectingId, setConnectingId] = useState<string | null>(null);
@@ -714,6 +718,88 @@ export default function App() {
 
   const getPending = (tableId: string) => pendingByTable[tableId] || emptyPending();
 
+  useEffect(() => {
+    setSqlTabStates((prev) =>
+      pruneSqlTabState(
+        prev,
+        tabs.map((tab) => tab.id)
+      )
+    );
+  }, [tabs]);
+
+  const bumpDataRevisions = (tableIds: string[]) => {
+    setDataRevisions((prev) => {
+      const next = { ...prev };
+      for (const id of tableIds) next[id] = (next[id] ?? 0) + 1;
+      return next;
+    });
+  };
+
+  const handleSqlChange = (tabId: string, sql: string) => {
+    setTabs((prev) => {
+      const tab = prev.find((item) => item.id === tabId);
+      if (!tab || tab.sqlContent === sql) return prev;
+      return prev.map((item) => (item.id === tabId ? { ...item, sqlContent: sql } : item));
+    });
+  };
+
+  const stageRowDeletes = (
+    table: TableSchema,
+    pks: unknown[],
+    rows: Record<string, unknown>[]
+  ) => {
+    const pkCol = primaryKeyColumn(table);
+    setPendingByTable((prev) => {
+      const pendingNow = prev[table.id] ? { ...prev[table.id] } : emptyPending();
+      const existing = new Set(pendingNow.deletes.map((row) => String(row.primaryKeyValue)));
+      const additions = pks
+        .filter((pk) => !existing.has(String(pk)))
+        .map((pk) => {
+          const row = rows.find((candidate) => String(candidate[pkCol]) === String(pk));
+          return {
+            rowId: pk as string | number,
+            primaryKeyValue: pk,
+            rowData: row ? { ...row } : {},
+          };
+        });
+      return {
+        ...prev,
+        [table.id]: {
+          ...pendingNow,
+          deletes: [...pendingNow.deletes, ...additions],
+        },
+      };
+    });
+  };
+
+  const runLookup = async (sql: string) => {
+    if (!currentDatabase) return { rows: [] as Record<string, unknown>[], error: 'Not connected' };
+    const res = await queryExecute({
+      connectionId: currentDatabase.id,
+      sql,
+      recordHistory: false,
+    });
+    const result = res.results[0];
+    return {
+      rows: (result?.rows || []) as Record<string, unknown>[],
+      error: result?.error,
+    };
+  };
+
+  const insertTableRow = async (table: TableSchema, sql: string): Promise<{ error?: string }> => {
+    if (!currentDatabase) return { error: 'Not connected' };
+    try {
+      const res = await queryExecute({ connectionId: currentDatabase.id, sql });
+      if (res.results[0]?.error) return { error: res.results[0].error };
+      await refreshTableRows(table);
+      bumpDataRevisions([table.id]);
+      await refreshHistory();
+      return {};
+    } catch (e: unknown) {
+      return { error: e instanceof Error ? e.message : 'Failed to insert row' };
+    }
+  };
+
   const openPendingChanges = () => {
     setIsActivityLogOpen(false);
     setPendingError(null);
@@ -802,6 +888,7 @@ export default function App() {
       } else if (bundle.table) {
         await refreshTableRows(bundle.table);
       }
+      bumpDataRevisions([ref.tableId]);
       await refreshHistory();
       setPendingStatus('Change applied');
     } catch (e: unknown) {
@@ -842,6 +929,7 @@ export default function App() {
           .filter((bundle) => bundle.table && bundle.tableAction !== 'drop')
           .map((bundle) => refreshTableRows(bundle.table as TableSchema))
       );
+      bumpDataRevisions(bundles.map((bundle) => bundle.tableId));
       await refreshHistory();
       setPendingStatus(`Applied ${total} change${total === 1 ? '' : 's'}`);
     } catch (e: unknown) {
@@ -1047,65 +1135,13 @@ export default function App() {
             pendingModifications={pending}
             tables={currentDatabase.tables}
             onOpenTable={handleSelectTableData}
-            onLookup={async (sql) => {
-              const res = await queryExecute({
-                connectionId: currentDatabase.id,
-                sql,
-                recordHistory: false,
-              });
-              const result = res.results[0];
-              return {
-                rows: (result?.rows || []) as Record<string, unknown>[],
-                error: result?.error,
-              };
-            }}
+            onLookup={runLookup}
             onLoadRows={(limit, offset) => loadTableRows(table, limit, offset)}
             onUpdateCell={(pk, col, oldV, newV) =>
               handleUpdateCell(table.id, pk, col, oldV, newV)
             }
-            onInsertRow={async (sql) => {
-              try {
-                const res = await queryExecute({
-                  connectionId: currentDatabase.id,
-                  sql,
-                });
-                if (res.results[0]?.error) return { error: res.results[0].error };
-                await refreshTableRows(table);
-                await refreshHistory();
-                return {};
-              } catch (e: unknown) {
-                return {
-                  error: e instanceof Error ? e.message : 'Failed to insert row',
-                };
-              }
-            }}
-            onDeleteSelectedRows={(pks) => {
-              const rows = tableRows[table.id] || [];
-              const pkCol = primaryKeyColumn(table);
-              setPendingByTable((prev) => {
-                const pendingNow = prev[table.id] ? { ...prev[table.id] } : emptyPending();
-                const existing = new Set(
-                  pendingNow.deletes.map((row) => String(row.primaryKeyValue))
-                );
-                const additions = pks
-                  .filter((pk) => !existing.has(String(pk)))
-                  .map((pk) => {
-                    const row = rows.find((candidate) => String(candidate[pkCol]) === String(pk));
-                    return {
-                      rowId: pk,
-                      primaryKeyValue: pk,
-                      rowData: row ? { ...row } : {},
-                    };
-                  });
-                return {
-                  ...prev,
-                  [table.id]: {
-                    ...pendingNow,
-                    deletes: [...pendingNow.deletes, ...additions],
-                  },
-                };
-              });
-            }}
+            onInsertRow={(sql) => insertTableRow(table, sql)}
+            onDeleteSelectedRows={(pks) => stageRowDeletes(table, pks, tableRows[table.id] || [])}
           />
         );
       }
@@ -1113,16 +1149,36 @@ export default function App() {
         return (
           <SqlEditorTab
             key={tab.id}
-            initialSql={tab.sqlContent || tab.sqlQuery}
+            initialSql={tab.sqlContent ?? tab.sqlQuery ?? ''}
+            onSqlChange={(sql) => handleSqlChange(tab.id, sql)}
+            tabState={sqlTabStates[tab.id] ?? emptySqlTabState()}
+            onTabStateChange={(update) =>
+              setSqlTabStates((prev) => ({
+                ...prev,
+                [tab.id]: update(prev[tab.id] ?? emptySqlTabState()),
+              }))
+            }
+            dataRevisions={dataRevisions}
+            grid={{
+              getPending,
+              onUpdateCell: handleUpdateCell,
+              onDeleteRows: stageRowDeletes,
+              onInsertRow: insertTableRow,
+              onLookup: runLookup,
+              onOpenTable: handleSelectTableData,
+            }}
             currentDatabase={currentDatabase}
             savedQueries={savedQueries}
-            onExecuteQuery={async (sql) => {
+            onExecuteQuery={async (sql, options) => {
               const res = await queryExecute({
                 connectionId: currentDatabase.id,
                 sql,
+                ...(options?.silent ? { recordHistory: false } : {}),
               });
-              await refreshHistory();
-              void enqueueSchemaCheck();
+              if (!options?.silent) {
+                await refreshHistory();
+                void enqueueSchemaCheck();
+              }
               return res.results;
             }}
             onBookmarkQuery={async (title, sql, description, tags) => {
