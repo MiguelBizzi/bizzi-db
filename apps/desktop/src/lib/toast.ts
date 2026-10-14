@@ -1,4 +1,4 @@
-export type ToastKind = 'default' | 'success' | 'error';
+export type ToastKind = 'default' | 'success' | 'error' | 'loading';
 
 export interface Toast {
   id: string;
@@ -7,6 +7,8 @@ export interface Toast {
 }
 
 export type ToastListener = (toasts: Toast[]) => void;
+
+const ERROR_DURATION_MS = 5000;
 
 let seq = 0;
 let toasts: Toast[] = [];
@@ -40,7 +42,7 @@ export function clearToasts(): void {
 export function toast(
   message: string,
   kind: ToastKind = 'success',
-  durationMs = 2400
+  durationMs = kind === 'error' ? ERROR_DURATION_MS : 2400
 ): string {
   const id = `toast_${++seq}`;
   toasts = [...toasts, { id, message, kind }];
@@ -53,3 +55,5 @@ export function toast(
 
 toast.success = (message: string, durationMs?: number) => toast(message, 'success', durationMs);
 toast.error = (message: string, durationMs?: number) => toast(message, 'error', durationMs);
+/** Stays up until dismissed with `dismissToast`, for work that is still running. */
+toast.loading = (message: string) => toast(message, 'loading', 0);

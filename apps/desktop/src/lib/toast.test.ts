@@ -26,4 +26,18 @@ describe('toast store', () => {
     stop();
     clearToasts();
   });
+
+  test('toast.loading stays until dismissed', () => {
+    clearToasts();
+    let seen: { kind: string; message: string }[] = [];
+    const stop = subscribeToasts((toasts) => {
+      seen = toasts.map(({ kind, message }) => ({ kind, message }));
+    });
+    const id = toast.loading('Loading all rows…');
+    expect(seen).toEqual([{ kind: 'loading', message: 'Loading all rows…' }]);
+    dismissToast(id);
+    expect(seen).toEqual([]);
+    stop();
+    clearToasts();
+  });
 });

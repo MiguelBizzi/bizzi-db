@@ -11,14 +11,16 @@ import {
   FileText,
 } from 'lucide-react';
 import {
-  copyExport,
   COPY_CSV_SHORTCUT,
   DATA_EXPORT_FORMATS,
   DataExportFormat,
   DataExportInput,
   downloadExport,
+  formatExport,
+  writeClipboard,
 } from '../../lib/dataExport';
-import { toast } from '../../lib/toast';
+import { invokeErrorMessage } from '../../lib/invokeError';
+import { dismissToast, toast } from '../../lib/toast';
 
 export const FORMAT_ICONS: Record<
   DataExportFormat,
@@ -37,9 +39,21 @@ interface DataExportMenuProps {
   schema?: string;
   disabled?: boolean;
   disabledReason?: string;
+  /**
+   * Fetches every row when `rows` is only the loaded page. Leave unset to export
+   * `rows` as given (a row selection, or data that is already complete).
+   */
+  loadAllRows?: () => Promise<Record<string, unknown>[]>;
 }
 
 type OpenMenu = 'copy' | 'export' | null;
+
+/** The all-rows fetch failed, as opposed to the clipboard or download. */
+class LoadRowsError extends Error {
+  constructor(cause: unknown) {
+    super('Could not load all rows', { cause });
+  }
+}
 
 export function DataExportMenu({
   columns,
@@ -48,9 +62,11 @@ export function DataExportMenu({
   schema,
   disabled = false,
   disabledReason,
+  loadAllRows,
 }: DataExportMenuProps) {
   const [open, setOpen] = useState<OpenMenu>(null);
   const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState<'copy' | 'export' | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const input: DataExportInput = { columns, rows, tableName, schema };
   const empty = columns.length === 0 || rows.length === 0;
@@ -62,29 +78,64 @@ export function DataExportMenu({
       : undefined;
   const inputRef = useRef(input);
   inputRef.current = input;
+  const loadAllRef = useRef(loadAllRows);
+  loadAllRef.current = loadAllRows;
+  const busyRef = useRef(false);
 
   useEffect(() => {
     if (idle) setOpen(null);
   }, [idle]);
 
-  const handleCopy = async (format: DataExportFormat) => {
+  /** The rows to export: every row when a loader is set, else what the grid holds. */
+  const resolveInput = async (): Promise<DataExportInput> => {
+    const loadAll = loadAllRef.current;
+    if (!loadAll) return inputRef.current;
+    return { ...inputRef.current, rows: await loadAll() };
+  };
+
+  // Not awaiting anything before the clipboard write starts keeps it inside the
+  // click that asked for it; the rows are handed over as a promise.
+  const runExport = async (kind: 'copy' | 'export', format: DataExportFormat) => {
+    if (busyRef.current) return false;
+    busyRef.current = true;
+    setBusy(kind);
+    setOpen(null);
+    const progress = loadAllRef.current ? toast.loading('Loading all rows…') : null;
+    let loadFailed = false;
+    const data = resolveInput().catch((error: unknown) => {
+      loadFailed = true;
+      throw error;
+    });
+    data.catch(() => {});
     try {
-      await copyExport(inputRef.current, format);
-      setCopied(true);
-      setOpen(null);
-      const label = DATA_EXPORT_FORMATS.find((item) => item.id === format)?.label ?? format;
-      toast(`Copied as ${label}`);
-      window.setTimeout(() => setCopied(false), 1600);
-    } catch {
-      toast.error('Could not copy to clipboard');
-      setOpen(null);
+      if (kind === 'copy') {
+        await writeClipboard(data.then((input) => formatExport(input, format)));
+      } else {
+        downloadExport(await data, format);
+      }
+      return true;
+    } catch (error) {
+      const reason = invokeErrorMessage(error, 'unknown error');
+      if (loadFailed) toast.error(`Could not load all rows: ${reason}`);
+      else if (kind === 'copy') toast.error(`Could not copy to the clipboard: ${reason}`);
+      else toast.error(`Could not export the rows: ${reason}`);
+      return false;
+    } finally {
+      if (progress) dismissToast(progress);
+      busyRef.current = false;
+      setBusy(null);
     }
   };
 
-  const handleExport = (format: DataExportFormat) => {
-    downloadExport(inputRef.current, format);
-    setOpen(null);
+  const handleCopy = async (format: DataExportFormat) => {
+    if (!(await runExport('copy', format))) return;
+    setCopied(true);
+    const label = DATA_EXPORT_FORMATS.find((item) => item.id === format)?.label ?? format;
+    toast(`Copied as ${label}`);
+    window.setTimeout(() => setCopied(false), 1600);
   };
+
+  const handleExport = (format: DataExportFormat) => runExport('export', format);
 
   useEffect(() => {
     if (!open) return;
@@ -120,21 +171,21 @@ export function DataExportMenu({
   return (
     <div ref={rootRef} className="flex items-center gap-2">
       <FormatDropdown
-        label={copied ? 'Copied' : 'Copy'}
-        icon={copied ? Check : Copy}
-        iconClass={copied ? 'text-emerald-400' : undefined}
+        label={busy === 'copy' ? 'Copying…' : copied ? 'Copied' : 'Copy'}
+        icon={copied && !busy ? Check : Copy}
+        iconClass={copied && !busy ? 'text-emerald-400' : undefined}
         title={idle ? idleReason : `Copy (${COPY_CSV_SHORTCUT} for CSV)`}
         open={open === 'copy'}
-        disabled={idle}
+        disabled={idle || busy !== null}
         onToggle={() => setOpen(open === 'copy' ? null : 'copy')}
         onSelect={handleCopy}
       />
       <FormatDropdown
-        label="Export"
+        label={busy === 'export' ? 'Exporting…' : 'Export'}
         icon={Download}
         title={idle ? idleReason : 'Download as a file'}
         open={open === 'export'}
-        disabled={idle}
+        disabled={idle || busy !== null}
         onToggle={() => setOpen(open === 'export' ? null : 'export')}
         onSelect={handleExport}
       />

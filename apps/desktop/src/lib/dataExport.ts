@@ -59,11 +59,29 @@ export function exportFileName(input: DataExportInput, format: DataExportFormat)
   return `${base}_export.${ext}`;
 }
 
+/**
+ * Writes text to the clipboard. Webviews only allow that inside the user
+ * gesture that asked for it, so text that is still being produced (rows being
+ * fetched) goes in as a promise and the write is started right away.
+ */
+export async function writeClipboard(text: string | Promise<string>): Promise<void> {
+  if (typeof text === 'string') {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+    const blob = text.then((value) => new Blob([value], { type: 'text/plain' }));
+    await navigator.clipboard.write([new ClipboardItem({ 'text/plain': blob })]);
+    return;
+  }
+  await navigator.clipboard.writeText(await text);
+}
+
 export async function copyExport(
   input: DataExportInput,
   format: DataExportFormat
 ): Promise<void> {
-  await navigator.clipboard.writeText(formatExport(input, format));
+  await writeClipboard(formatExport(input, format));
 }
 
 export function downloadExport(input: DataExportInput, format: DataExportFormat): void {
