@@ -5,6 +5,7 @@ import {
   alterWarnings,
   buildAddColumnSql,
   buildAlterColumnSql,
+  buildCreateTableSql,
   buildDropColumnSql,
   buildDropTableSql,
   buildTableDdlPreview,
@@ -12,10 +13,12 @@ import {
   canConfirmDelete,
   draftFromColumn,
   emptyColumnDraft,
+  emptyNewTableColumn,
   formatColumnType,
   typeChangeRisk,
   uniqueIndexName,
   validateColumnDraft,
+  validateNewTable,
   type ColumnDraft,
 } from './schemaChange';
 
@@ -328,5 +331,36 @@ describe('buildTruncateTableSql / buildDropTableSql', () => {
     const odd = table('we"ird', [column('id')], { schema: 'sch"ema' });
     expect(buildTruncateTableSql(odd)).toBe('TRUNCATE TABLE "sch""ema"."we""ird";');
     expect(buildDropTableSql(odd)).toBe('DROP TABLE "sch""ema"."we""ird";');
+  });
+});
+
+describe('create table', () => {
+  const col = (name: string, extras = {}) => ({ ...emptyNewTableColumn(), name, ...extras });
+
+  test('builds CREATE TABLE with primary key', () => {
+    const sql = buildCreateTableSql(
+      { schema: 'public', name: 'users' },
+      [
+        col('id', { typeId: 'bigserial', nullable: false, primaryKey: true }),
+        col('active', { typeId: 'boolean', defaultValue: 'true' }),
+      ],
+      types
+    );
+    expect(sql).toBe(
+      'CREATE TABLE "public"."users" (\n  "id" bigserial NOT NULL,\n  "active" boolean DEFAULT true,\n  PRIMARY KEY ("id")\n);'
+    );
+  });
+
+  test('validates name, duplicates and existing tables', () => {
+    const existing = [table('users', [])].map((t) => ({ ...t, schema: 'shop' }));
+    const result = validateNewTable(
+      { schema: 'shop', name: 'users' },
+      [col('a'), col('a')],
+      types,
+      existing
+    );
+    expect(result.table).toBeDefined();
+    expect(result.columns[1].name).toBeDefined();
+    expect(validateNewTable({ schema: 'shop', name: '' }, [], types, []).form).toBeDefined();
   });
 });

@@ -5,6 +5,7 @@ import { WorkspacePanes } from './components/WorkspacePanes';
 import { TableDataGrid } from './components/TableView/TableDataGrid';
 import { SqlEditorTab } from './components/SqlEditor/SqlEditorTab';
 import { InteractiveErd } from './components/SchemaView/InteractiveErd';
+import { CreateTableDesigner } from './components/SchemaView/CreateTableDesigner';
 import { TableSchemaDesigner } from './components/SchemaView/TableSchemaDesigner';
 import { ConfirmTableActionModal } from './components/SchemaView/ConfirmTableActionModal';
 import { DatabaseMetrics } from './components/MetricsView/DatabaseMetrics';
@@ -1152,6 +1153,24 @@ export default function App() {
         );
       case 'schema_designer': {
         const table = findTable(tab.tableId);
+        if (!tab.tableId) {
+          return (
+            <CreateTableDesigner
+              key={tab.id}
+              tables={currentDatabase.tables}
+              dialect={currentDatabase.dialect}
+              disabled={currentDatabase.status !== 'connected'}
+              onExecute={async (sql) => {
+                const res = await queryExecute({ connectionId: currentDatabase.id, sql });
+                if (res.results[0]?.error) return { error: res.results[0].error };
+                await loadSchema(currentDatabase.id);
+                await refreshHistory();
+                return {};
+              }}
+              onCreated={({ schema, name }) => toast.success(`Table ${schema}.${name} created`)}
+            />
+          );
+        }
         if (!table) {
           return (
             <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">

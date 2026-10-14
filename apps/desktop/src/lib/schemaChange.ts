@@ -268,15 +268,8 @@ function referencesClause(fk: ForeignKeyDraft): string {
   return ` REFERENCES ${target} (${quoteIdent(fk.targetColumn)})${onDelete}`;
 }
 
-export function buildAddColumnSql(
-  table: TableRef,
-  draft: ColumnDraft,
-  types: ColumnTypeDef[]
-): string {
-  const typeSql = formatColumnType(draft, types);
-  const parts = [
-    `ALTER TABLE ${qualifyTable(table.schema, table.name)} ADD COLUMN ${quoteIdent(draft.name.trim())} ${typeSql}`,
-  ];
+function columnDefinitionParts(draft: ColumnDraft, types: ColumnTypeDef[]): string[] {
+  const parts = [`${quoteIdent(draft.name.trim())} ${formatColumnType(draft, types)}`];
   if (!draft.nullable) parts.push('NOT NULL');
   const fallback = defaultSql(draft.defaultValue);
   if (fallback) parts.push(`DEFAULT ${fallback}`);
@@ -284,7 +277,63 @@ export function buildAddColumnSql(
   const check = draft.checkExpression.trim();
   if (check) parts.push(`CHECK (${check})`);
   if (draft.foreignKey) parts.push(referencesClause(draft.foreignKey).trimStart());
-  return `${parts.join(' ')};`;
+  return parts;
+}
+
+export function buildAddColumnSql(
+  table: TableRef,
+  draft: ColumnDraft,
+  types: ColumnTypeDef[]
+): string {
+  const definition = columnDefinitionParts(draft, types).join(' ');
+  return `ALTER TABLE ${qualifyTable(table.schema, table.name)} ADD COLUMN ${definition};`;
+}
+
+export interface NewTableColumn extends ColumnDraft {
+  primaryKey: boolean;
+}
+
+export function emptyNewTableColumn(): NewTableColumn {
+  return { ...emptyColumnDraft(), primaryKey: false };
+}
+
+export function validateNewTable(
+  table: TableRef,
+  columns: NewTableColumn[],
+  types: ColumnTypeDef[],
+  tables: TableSchema[]
+): { table?: string; columns: Record<string, string>[]; form?: string } {
+  const result: { table?: string; columns: Record<string, string>[]; form?: string } = {
+    columns: [],
+  };
+  const name = table.name.trim();
+  if (!name) {
+    result.table = 'Table name is required';
+  } else if (tables.some((t) => t.schema === table.schema && t.name === name)) {
+    result.table = 'A table with this name already exists';
+  }
+  if (columns.length === 0) result.form = 'Add at least one column';
+  const seen = new Set<string>();
+  const empty: TableSchema = { columns: [] } as unknown as TableSchema;
+  result.columns = columns.map((column) => {
+    const errors = validateColumnDraft(column, empty, types, { tables });
+    const key = column.name.trim();
+    if (key && seen.has(key)) errors.name = 'A column with this name already exists';
+    seen.add(key);
+    return errors;
+  });
+  return result;
+}
+
+export function buildCreateTableSql(
+  table: TableRef,
+  columns: NewTableColumn[],
+  types: ColumnTypeDef[]
+): string {
+  const lines = columns.map((column) => `  ${columnDefinitionParts(column, types).join(' ')}`);
+  const pk = columns.filter((column) => column.primaryKey).map((c) => quoteIdent(c.name.trim()));
+  if (pk.length > 0) lines.push(`  PRIMARY KEY (${pk.join(', ')})`);
+  return `CREATE TABLE ${qualifyTable(table.schema, table.name.trim())} (\n${lines.join(',\n')}\n);`;
 }
 
 export function uniqueIndexName(table: TableSchema, columnName: string): string | undefined {
