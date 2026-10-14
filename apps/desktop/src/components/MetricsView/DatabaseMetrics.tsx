@@ -6,12 +6,10 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
 } from "recharts";
 import { DatabaseSchema } from "../../types";
 import { formatSizeMb } from "../../lib/format";
+import { StorageDistribution } from "./StorageDistribution";
 import {
   Activity,
   Server,
@@ -35,20 +33,6 @@ export const DatabaseMetrics: React.FC<DatabaseMetricsProps> = ({
     { time: "16:15", qps: 342, latency: 12 },
     { time: "16:20", qps: 390, latency: 14 },
     { time: "16:25", qps: 355, latency: 13 },
-  ];
-
-  const storageData = database.tables.map((t) => ({
-    name: t.name,
-    value: t.sizeMb,
-  }));
-
-  const COLORS = [
-    "#6366f1",
-    "#a855f7",
-    "#ec4899",
-    "#3b82f6",
-    "#10b981",
-    "#f59e0b",
   ];
 
   return (
@@ -129,7 +113,7 @@ export const DatabaseMetrics: React.FC<DatabaseMetricsProps> = ({
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-mono text-xs">
         {/* QPS Line Chart */}
-        <div className="lg:col-span-2 p-4 rounded-2xl bg-card border border-border space-y-3">
+        <div className="lg:col-span-3 p-4 rounded-2xl bg-card border border-border space-y-3">
           <div className="font-bold text-foreground flex items-center justify-between">
             <span>Queries Per Second & Latency Trend</span>
             <span className="text-muted-foreground text-[10px]">
@@ -171,37 +155,8 @@ export const DatabaseMetrics: React.FC<DatabaseMetricsProps> = ({
           </div>
         </div>
 
-        {/* Table Storage Pie Chart */}
-        <div className="p-4 rounded-2xl bg-card border border-border space-y-3">
-          <div className="font-bold text-foreground">
-            Storage Distribution (MB)
-          </div>
-          <div className="h-60 w-full flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={storageData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={75}
-                  label={({ name }) => name}
-                >
-                  {storageData.map((_, index) => (
-                    <Cell key={index} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "var(--popover, #0f172a)",
-                    borderColor: "var(--border, #334155)",
-                    color: "var(--popover-foreground, #fff)",
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+        <div className="lg:col-span-3">
+          <StorageDistribution tables={database.tables} />
         </div>
       </div>
     </div>
