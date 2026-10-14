@@ -694,7 +694,7 @@ export default function App() {
   };
 
   const handleSelectPaneTab = (paneId: string, tabId: string) => {
-    setLayout(setPaneActiveTab(layout, paneId, tabId));
+    setLayout((prev) => setPaneActiveTab(prev, paneId, tabId));
     setFocusedPaneId(paneId);
   };
 
