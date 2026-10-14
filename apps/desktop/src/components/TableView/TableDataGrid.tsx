@@ -1,12 +1,16 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { AnimatePresence } from 'motion/react';
 import {
   Key,
   Link,
-  ExternalLink,
   ArrowUp,
   ArrowDown,
-  Code,
   Plus,
   ChevronLeft,
   ChevronRight,
@@ -54,6 +58,30 @@ import { FORMAT_ICONS } from "../DataExport/DataExportMenu";
 import { useDebouncedValue } from "../../lib/useDebouncedValue";
 import { Select, SelectOption } from "../ui/Select";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
+import {
+  GRID_ROW_HEIGHT,
+  GRID_SELECT_COLUMN_WIDTH,
+  columnOffsets,
+  fitColumnWidths,
+} from "../../lib/gridWindow";
+import {
+  editingCellWidth,
+  estimateColumnWidths,
+} from "../../lib/gridColumnWidths";
+import {
+  GridRow,
+  ROW_STYLE,
+  SPACER_CELL,
+  type CellMenuTarget,
+  type GridRowActions,
+} from "./GridRow";
+import {
+  useElementWidth,
+  useGridWindow,
+  useMonoCharWidth,
+} from "./useGridWindow";
+
+const HEADER_SPACER = "p-0 border-b border-border bg-card";
 
 const SKELETON_ROW_COUNT = 8;
 const SKELETON_BAR_WIDTHS = [
@@ -180,13 +208,17 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   const [contextMenu, setContextMenu] = useState<GridContextMenu | null>(null);
   const fkLookupGen = useRef(0);
   const loading = isLoading || pendingLoad;
-  const visibleColumns = table.columns.filter(
-    (col) => !hiddenColumns.includes(col.name),
+  const visibleColumns = useMemo(
+    () => table.columns.filter((col) => !hiddenColumns.includes(col.name)),
+    [table.columns, hiddenColumns],
   );
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
   const isCellLocked = (columnName: string) =>
     readOnly || Boolean(readOnlyColumns?.has(columnName));
   const dataColSpan = visibleColumns.length + (readOnly ? 0 : 1);
+  const leadingWidth = readOnly ? 0 : GRID_SELECT_COLUMN_WIDTH;
+  const portRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
 
   const onLoadRowsRef = useRef(onLoadRows);
   onLoadRowsRef.current = onLoadRows;
@@ -226,13 +258,94 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     }
   };
 
-  // Filter & Search processing
-  const filteredRows = applyTableView(rows, { searchTerm, filters, sort });
+  // Filter & Search processing. Memoised: scrolling re-renders this component.
+  const filteredRows = useMemo(
+    () => applyTableView(rows, { searchTerm, filters, sort }),
+    [rows, searchTerm, filters, sort],
+  );
 
-  const exportRows =
-    selectedRowPks.length > 0
-      ? filteredRows.filter((row) => selectedRowPks.includes(row[pkCol]))
-      : filteredRows;
+  const selectedPkSet = useMemo(
+    () => new Set<unknown>(selectedRowPks),
+    [selectedRowPks],
+  );
+  const pendingByRow = useMemo(() => {
+    const byRow = new Map<
+      string,
+      Record<string, (typeof pendingModifications.updates)[number]>
+    >();
+    for (const update of pendingModifications.updates) {
+      const pk = String(update.primaryKeyValue);
+      let cells = byRow.get(pk);
+      if (!cells) byRow.set(pk, (cells = {}));
+      if (!cells[update.columnName]) cells[update.columnName] = update;
+    }
+    return byRow;
+  }, [pendingModifications.updates]);
+  const pendingDeletePks = useMemo(
+    () =>
+      new Set(pendingModifications.deletes.map((d) => String(d.primaryKeyValue))),
+    [pendingModifications.deletes],
+  );
+
+  const exportRows = useMemo(
+    () =>
+      selectedPkSet.size > 0
+        ? filteredRows.filter((row) => selectedPkSet.has(row[pkCol]))
+        : filteredRows,
+    [filteredRows, selectedPkSet, pkCol],
+  );
+
+  // Only rows and columns near the viewport are mounted, so column widths
+  // are computed from the data instead of measured from a full table.
+  const charWidth = useMonoCharWidth(tableRef);
+  const baseColumnWidths = useMemo(
+    () =>
+      estimateColumnWidths(visibleColumns, rows, {
+        charWidth,
+        pending: pendingModifications.updates,
+      }),
+    [visibleColumns, rows, charWidth, pendingModifications.updates],
+  );
+  const editingColumn = editingCell?.column;
+  const editingText = editingCell?.value ?? "";
+  const naturalColumnWidths = useMemo(() => {
+    if (editingColumn === undefined) return baseColumnWidths;
+    const index = visibleColumns.findIndex((c) => c.name === editingColumn);
+    if (index < 0) return baseColumnWidths;
+    const widened = [...baseColumnWidths];
+    widened[index] = Math.max(
+      widened[index],
+      editingCellWidth(editingText, charWidth),
+    );
+    return widened;
+  }, [baseColumnWidths, visibleColumns, editingColumn, editingText, charWidth]);
+
+  const portWidth = useElementWidth(portRef);
+  const columnWidths = useMemo(
+    () => fitColumnWidths(naturalColumnWidths, portWidth - leadingWidth),
+    [naturalColumnWidths, portWidth, leadingWidth],
+  );
+  const offsets = useMemo(() => columnOffsets(columnWidths), [columnWidths]);
+  const tableWidth = leadingWidth + offsets[offsets.length - 1];
+
+  const itemCount = filteredRows.length + pendingModifications.inserts.length;
+  const range = useGridWindow({
+    portRef,
+    rowCount: itemCount,
+    offsets,
+    leadingWidth,
+  });
+  const colStart = Math.min(range.colStart, visibleColumns.length);
+  const colEnd = Math.min(range.colEnd, visibleColumns.length);
+  const windowColumns = visibleColumns.slice(colStart, colEnd);
+  const leftSpan = colStart;
+  const rightSpan = visibleColumns.length - colEnd;
+  const dataRowStart = Math.min(range.rowStart, filteredRows.length);
+  const dataRowEnd = Math.min(range.rowEnd, filteredRows.length);
+  const insertRowStart = Math.max(range.rowStart - filteredRows.length, 0);
+  const insertRowEnd = Math.max(range.rowEnd - filteredRows.length, 0);
+  const topSpacerHeight = range.rowStart * GRID_ROW_HEIGHT;
+  const bottomSpacerHeight = Math.max(0, itemCount - range.rowEnd) * GRID_ROW_HEIGHT;
 
   const rangeStart = table.rowCount === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const rangeEnd = Math.min(safePage * pageSize, table.rowCount);
@@ -263,7 +376,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   // Checkbox row select all
   const allSelected =
     filteredRows.length > 0 &&
-    filteredRows.every((r) => selectedRowPks.includes(r[pkCol]));
+    filteredRows.every((r) => selectedPkSet.has(r[pkCol]));
 
   const handleToggleSelectAll = () => {
     if (loading) return;
@@ -295,13 +408,6 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     }
   };
 
-  // Helper to check if a cell is pending update
-  const getCellPendingUpdate = (rowPk: any, colName: string) => {
-    return pendingModifications.updates.find(
-      (u) =>
-        String(u.primaryKeyValue) === String(rowPk) && u.columnName === colName,
-    );
-  };
 
   const applyCellFilter = (
     columnName: string,
@@ -312,17 +418,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     setShowFilters(true);
   };
 
-  const openCellMenu = (
-    event: React.MouseEvent,
-    opts: {
-      column: ColumnDefinition;
-      rowPk: unknown;
-      rawValue: unknown;
-      displayValue: unknown;
-      row: Record<string, unknown>;
-      isPendingDelete: boolean;
-    },
-  ) => {
+  const openCellMenu = (event: React.MouseEvent, opts: CellMenuTarget) => {
     event.preventDefault();
     if (editingCell) return;
     setContextMenu({
@@ -451,6 +547,37 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     }
   };
 
+  // Rows are memoised, so they get stable callbacks that always call the
+  // latest handlers instead of closures that change on every render.
+  const latestActions = useRef<GridRowActions>(null as never);
+  latestActions.current = {
+    toggleSelect: handleToggleRowSelect,
+    openCellMenu,
+    openJson: (columnName, rowPk, value) =>
+      setJsonModalState({ isOpen: true, columnName, rowPk, value }),
+    startEdit: (rowPk, column, value) =>
+      setEditingCell({ rowPk, column, value }),
+    changeEdit: (value) =>
+      setEditingCell((prev) => (prev ? { ...prev, value } : prev)),
+    submitEdit: handleCellEditSubmit,
+    cancelEdit: () => setEditingCell(null),
+    openForeignKey: (event, fk, value) =>
+      void handleOpenForeignKey(event, fk, value),
+  };
+  const rowActions = useMemo<GridRowActions>(
+    () => ({
+      toggleSelect: (pk) => latestActions.current.toggleSelect(pk),
+      openCellMenu: (e, t) => latestActions.current.openCellMenu(e, t),
+      openJson: (c, pk, v) => latestActions.current.openJson(c, pk, v),
+      startEdit: (pk, c, v) => latestActions.current.startEdit(pk, c, v),
+      changeEdit: (v) => latestActions.current.changeEdit(v),
+      submitEdit: (pk, c, o, n) => latestActions.current.submitEdit(pk, c, o, n),
+      cancelEdit: () => latestActions.current.cancelEdit(),
+      openForeignKey: (e, fk, v) => latestActions.current.openForeignKey(e, fk, v),
+    }),
+    [],
+  );
+
   return (
     <div className="flex flex-col h-full min-h-0 min-w-0 bg-background overflow-hidden font-sans select-none text-foreground">
       {/* Toolbar */}
@@ -496,11 +623,22 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
 
       {/* Spreadsheet Grid Canvas */}
       <div
+        ref={portRef}
         className="flex-1 table-scroll-port"
         aria-busy={loading}
         aria-live="polite"
       >
-        <table className="text-left text-xs font-mono">
+        <table
+          ref={tableRef}
+          className="text-left text-xs font-mono"
+          style={{ tableLayout: "fixed", width: tableWidth }}
+        >
+          <colgroup>
+            {!readOnly && <col style={{ width: GRID_SELECT_COLUMN_WIDTH }} />}
+            {visibleColumns.map((col, i) => (
+              <col key={col.name} style={{ width: columnWidths[i] }} />
+            ))}
+          </colgroup>
           {/* Header */}
           <thead>
             <tr>
@@ -515,8 +653,10 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
                 </th>
               )}
 
-              {/* Data Columns */}
-              {visibleColumns.map((col) => {
+              {leftSpan > 0 && <th colSpan={leftSpan} className={HEADER_SPACER} />}
+
+              {/* Data Columns (only those near the viewport are mounted) */}
+              {windowColumns.map((col) => {
                 const isSorted = sort?.column === col.name;
                 return (
                   <th
@@ -562,239 +702,82 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
                   </th>
                 );
               })}
+
+              {rightSpan > 0 && (
+                <th colSpan={rightSpan} className={HEADER_SPACER} />
+              )}
             </tr>
           </thead>
 
           {/* Body */}
           <tbody className="divide-y divide-border bg-background">
             {loading ? (
-              <TableSkeletonRows columns={visibleColumns} selectable={!readOnly} />
+              <TableSkeletonRows
+                columns={windowColumns}
+                selectable={!readOnly}
+                leftSpan={leftSpan}
+                rightSpan={rightSpan}
+              />
             ) : (
               <>
-                {filteredRows.map((row, idx) => {
+                {topSpacerHeight > 0 && (
+                  <tr aria-hidden style={{ height: topSpacerHeight }}>
+                    <td colSpan={dataColSpan} className={SPACER_CELL} />
+                  </tr>
+                )}
+
+                {filteredRows.slice(dataRowStart, dataRowEnd).map((row, offset) => {
                   const rowPkVal = row[pkCol];
-                  const isSelected = selectedRowPks.includes(rowPkVal);
-                  const isPendingDelete = pendingModifications.deletes.some(
-                    (d) => String(d.primaryKeyValue) === String(rowPkVal),
-                  );
-
                   return (
-                    <tr
-                      key={rowPkVal ?? idx}
-                      className={`hover:bg-accent/50 transition-colors ${
-                        isPendingDelete
-                          ? "bg-rose-500/10"
-                          : isSelected
-                            ? "bg-primary/10"
-                            : ""
-                      }`}
-                    >
-                      {/* Select Checkbox */}
-                      {!readOnly && (
-                        <td className="px-3 py-2 text-center border-r border-border">
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={() =>
-                              handleToggleRowSelect(rowPkVal)
-                            }
-                            aria-label="Select row"
-                          />
-                        </td>
-                      )}
-
-                      {/* Cells */}
-                      {visibleColumns.map((col) => {
-                        const rawVal = row[col.name];
-                        const pendingUpd = getCellPendingUpdate(
-                          rowPkVal,
-                          col.name,
-                        );
-                        const isPending = !!pendingUpd;
-                        const displayVal = isPending
-                          ? pendingUpd.newValue
-                          : rawVal;
-
-                        const isEditing =
-                          editingCell?.rowPk === rowPkVal &&
-                          editingCell?.column === col.name;
-
-                        const isJson =
-                          typeof displayVal === "object" &&
-                          displayVal !== null &&
-                          !isSetColumnDefault(displayVal);
-                        const fk = col.foreignKey;
-
-                        return (
-                          <td
-                            key={col.name}
-                            onContextMenu={(event) =>
-                              openCellMenu(event, {
-                                column: col,
-                                rowPk: rowPkVal,
-                                rawValue: rawVal,
-                                displayValue: displayVal,
-                                row,
-                                isPendingDelete,
-                              })
-                            }
-                            onDoubleClick={() => {
-                              if (isPendingDelete) return;
-                              if (isJson) {
-                                setJsonModalState({
-                                  isOpen: true,
-                                  columnName: col.name,
-                                  rowPk: rowPkVal,
-                                  value: displayVal,
-                                });
-                              } else if (!isCellLocked(col.name)) {
-                                setEditingCell({
-                                  rowPk: rowPkVal,
-                                  column: col.name,
-                                  value: isSetColumnDefault(displayVal)
-                                    ? ""
-                                    : String(displayVal ?? ""),
-                                });
-                              }
-                            }}
-                            className={`border-r border-border whitespace-nowrap font-mono relative transition-colors ${
-                              isEditing ? "p-0 overflow-hidden" : "px-3 py-2"
-                            } ${
-                              isPendingDelete
-                                ? "text-rose-300/80 line-through"
-                                : isPending
-                                  ? "bg-amber-500/10 text-amber-200 font-semibold"
-                                  : "text-foreground"
-                            }`}
-                          >
-                            {/* Cell Contents */}
-                            {isEditing ? (
-                              <>
-                                <span className="invisible px-3 py-2 pointer-events-none">
-                                  {editingCell.value || " "}
-                                </span>
-                                <input
-                                  type="text"
-                                  autoFocus
-                                  value={editingCell.value}
-                                  onChange={(e) =>
-                                    setEditingCell({
-                                      ...editingCell,
-                                      value: e.target.value,
-                                    })
-                                  }
-                                  onBlur={() =>
-                                    handleCellEditSubmit(
-                                      rowPkVal,
-                                      col.name,
-                                      rawVal,
-                                      editingCell.value,
-                                    )
-                                  }
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      handleCellEditSubmit(
-                                        rowPkVal,
-                                        col.name,
-                                        rawVal,
-                                        editingCell.value,
-                                      );
-                                    } else if (e.key === "Escape") {
-                                      setEditingCell(null);
-                                    }
-                                  }}
-                                  className="absolute inset-0 box-border w-full h-full bg-background border-2 border-primary rounded-none px-3 py-2 text-xs text-foreground outline-none z-10"
-                                />
-                              </>
-                            ) : isJson ? (
-                              <button
-                                onClick={() =>
-                                  setJsonModalState({
-                                    isOpen: true,
-                                    columnName: col.name,
-                                    rowPk: rowPkVal,
-                                    value: displayVal,
-                                  })
-                                }
-                                className="flex items-center gap-1 px-2 py-0.5 rounded bg-muted hover:bg-accent text-primary text-[11px] font-mono border border-border"
-                              >
-                                <Code className="w-3 h-3 text-primary" />
-                                <span>
-                                  {JSON.stringify(displayVal).slice(0, 24)}...
-                                </span>
-                              </button>
-                            ) : displayVal === null ||
-                              displayVal === undefined ? (
-                              <span className="text-muted-foreground italic">
-                                NULL
-                              </span>
-                            ) : isSetColumnDefault(displayVal) ? (
-                              <span className="text-muted-foreground italic">
-                                DEFAULT
-                              </span>
-                            ) : typeof displayVal === "boolean" ? (
-                              <span
-                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                  displayVal
-                                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                                    : "bg-rose-500/10 text-rose-400 border border-rose-500/30"
-                                }`}
-                              >
-                                {displayVal ? "TRUE" : "FALSE"}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5">
-                                <span>{String(displayVal)}</span>
-                                {fk && (
-                                  <button
-                                    type="button"
-                                    title={`View ${fk.targetTable}.${fk.targetColumn}`}
-                                    aria-label={`Look up ${fk.targetTable} row`}
-                                    onClick={(event) =>
-                                      void handleOpenForeignKey(
-                                        event,
-                                        fk,
-                                        displayVal,
-                                      )
-                                    }
-                                    onDoubleClick={(event) =>
-                                      event.stopPropagation()
-                                    }
-                                    className="p-0.5 rounded hover:bg-primary/15 text-primary shrink-0"
-                                  >
-                                    <ExternalLink className="w-3 h-3" />
-                                  </button>
-                                )}
-                              </span>
-                            )}
-
-                            {/* Pending Edit Badge indicator */}
-                            {isPending && (
-                              <span
-                                title={`Original: ${pendingUpd.oldValue}`}
-                                className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-400"
-                              />
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
+                    <GridRow
+                      key={(rowPkVal as React.Key | undefined) ?? dataRowStart + offset}
+                      row={row}
+                      pkCol={pkCol}
+                      columns={visibleColumns}
+                      colStart={colStart}
+                      colEnd={colEnd}
+                      readOnly={readOnly}
+                      readOnlyColumns={readOnlyColumns}
+                      isSelected={selectedPkSet.has(rowPkVal)}
+                      isPendingDelete={pendingDeletePks.has(String(rowPkVal))}
+                      rowPending={pendingByRow.get(String(rowPkVal))}
+                      editing={
+                        editingCell && editingCell.rowPk === rowPkVal
+                          ? editingCell
+                          : null
+                      }
+                      actions={rowActions}
+                    />
                   );
                 })}
 
-                {pendingModifications.inserts.map((insert) => (
-                  <tr key={insert.tempId} className="bg-emerald-500/10">
+                {pendingModifications.inserts
+                  .slice(insertRowStart, insertRowEnd)
+                  .map((insert) => (
+                  <tr
+                    key={insert.tempId}
+                    style={ROW_STYLE}
+                    className="bg-emerald-500/10"
+                  >
                     {!readOnly && (
-                      <td className="px-3 py-2 text-center border-r border-border">
+                      <td
+                        style={ROW_STYLE}
+                        className="px-3 py-0 text-center border-r border-border"
+                      >
                         <span className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">
                           <Plus className="w-3 h-3" />
                           New
                         </span>
                       </td>
                     )}
-                    {visibleColumns.map((col) => (
+                    {leftSpan > 0 && (
+                      <td colSpan={leftSpan} className={SPACER_CELL} />
+                    )}
+                    {windowColumns.map((col) => (
                       <td
                         key={col.name}
-                        className="px-3 py-2 border-r border-border whitespace-nowrap font-mono text-emerald-200"
+                        style={ROW_STYLE}
+                        className="px-3 py-0 border-r border-border whitespace-nowrap font-mono text-emerald-200"
                       >
                         {insert.data[col.name] === null ||
                         insert.data[col.name] === undefined ? (
@@ -806,8 +789,17 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
                         )}
                       </td>
                     ))}
+                    {rightSpan > 0 && (
+                      <td colSpan={rightSpan} className={SPACER_CELL} />
+                    )}
                   </tr>
                 ))}
+
+                {bottomSpacerHeight > 0 && (
+                  <tr aria-hidden style={{ height: bottomSpacerHeight }}>
+                    <td colSpan={dataColSpan} className={SPACER_CELL} />
+                  </tr>
+                )}
 
                 {filteredRows.length === 0 &&
                   pendingModifications.inserts.length === 0 && (
@@ -977,9 +969,13 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
 function TableSkeletonRows({
   columns,
   selectable,
+  leftSpan,
+  rightSpan,
 }: {
   columns: ColumnDefinition[];
   selectable: boolean;
+  leftSpan: number;
+  rightSpan: number;
 }) {
   return (
     <>
@@ -990,6 +986,7 @@ function TableSkeletonRows({
               <span className="table-skeleton-bar inline-block h-3.5 w-3.5 rounded" />
             </td>
           )}
+          {leftSpan > 0 && <td colSpan={leftSpan} className={SPACER_CELL} />}
           {columns.map((col, colIdx) => (
             <td key={col.name} className="px-3 py-2.5 border-r border-border">
               <span
@@ -1001,6 +998,7 @@ function TableSkeletonRows({
               />
             </td>
           ))}
+          {rightSpan > 0 && <td colSpan={rightSpan} className={SPACER_CELL} />}
         </tr>
       ))}
     </>
