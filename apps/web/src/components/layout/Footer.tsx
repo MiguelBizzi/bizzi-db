@@ -1,6 +1,11 @@
 import { BrandMark } from '../BrandMark';
 import { Wordmark } from '../Wordmark';
-import { PRODUCT_NAME, RELEASES_URL, REPO_URL } from '../../lib/site';
+import {
+  PRODUCT_NAME,
+  RELEASES_URL,
+  REPO_URL,
+  SUPPORT_URL,
+} from '../../lib/site';
 
 export function Footer() {
   return (
@@ -23,6 +28,14 @@ export function Footer() {
             className="hover:text-foreground transition-colors"
           >
             GitHub
+          </a>
+          <a
+            href={SUPPORT_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-foreground transition-colors"
+          >
+            Buy me a coffee
           </a>
         </div>
 

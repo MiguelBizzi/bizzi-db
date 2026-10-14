@@ -1,6 +1,7 @@
 import { DownloadButtons } from '../DownloadButtons';
 import { BrandMark } from '../BrandMark';
 import { CTA } from '../../lib/content';
+import { SUPPORT_URL } from '../../lib/site';
 
 export function Cta() {
   return (
@@ -21,6 +22,15 @@ export function Cta() {
         </div>
 
         <DownloadButtons />
+
+        <a
+          href={SUPPORT_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          Enjoying Bizzi DB? Buy me a coffee ☕
+        </a>
 
         <div className="pt-4 flex flex-wrap items-center justify-center gap-6 text-xs text-muted-foreground font-mono">
           <span>macOS 12+ (Apple Silicon & Intel)</span>
