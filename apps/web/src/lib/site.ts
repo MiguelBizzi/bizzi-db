@@ -1,7 +1,13 @@
+import rootPackage from '../../../../package.json';
+
 export const PRODUCT_NAME = 'Bizzi DB';
-export const VERSION = '0.1.0';
+// Build-time fallback. The live release (see useLatestRelease) overrides it once GitHub answers.
+export const VERSION: string = rootPackage.version;
 export const REPO_URL = 'https://github.com/MiguelBizzi/bizzi-db';
 export const RELEASES_URL = `${REPO_URL}/releases/latest`;
+export const ALL_RELEASES_URL = `${REPO_URL}/releases`;
+export const LATEST_RELEASE_API =
+  'https://api.github.com/repos/MiguelBizzi/bizzi-db/releases/latest';
 export const SUPPORT_URL = 'https://buymeacoffee.com/miguelbizzi';
 
 export const SITE_TITLE =

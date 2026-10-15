@@ -5,6 +5,7 @@ import {
   detectPreferredPlatform,
   type DownloadPlatformId,
 } from '../lib/site';
+import { useLatestRelease } from '../lib/useLatestRelease';
 
 const ICONS: Record<DownloadPlatformId, typeof Apple> = {
   macos: Apple,
@@ -15,6 +16,7 @@ export function DownloadButtons({
 }: {
   size?: 'sm' | 'md';
 }) {
+  const { version } = useLatestRelease();
   const preferred = useMemo(
     () =>
       detectPreferredPlatform(
@@ -54,7 +56,7 @@ export function DownloadButtons({
                   : 'text-muted-foreground'
               }`}
             >
-              {platform.detail}
+              {platform.detail} · v{version}
             </span>
           </a>
         );

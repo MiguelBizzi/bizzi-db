@@ -1,18 +1,21 @@
 import { Download } from 'lucide-react';
 import { BrandMark } from '../BrandMark';
 import { Wordmark } from '../Wordmark';
-import { RELEASES_URL, VERSION } from '../../lib/site';
+import { RELEASES_URL } from '../../lib/site';
+import { useLatestRelease } from '../../lib/useLatestRelease';
 
 const NAV = [
   { href: '#showcase', label: 'Showcase' },
   { href: '#pillars', label: 'Philosophy' },
   { href: '#features', label: 'Features' },
   { href: '#architecture', label: 'Architecture' },
+  { href: '#changelog', label: 'Changelog' },
   { href: '#faq', label: 'FAQ' },
   // { href: '#testimonials', label: 'Testimonials' },
 ];
 
 export function Header() {
+  const { version } = useLatestRelease();
   return (
     <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border/70">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr]">
@@ -22,7 +25,7 @@ export function Header() {
             <Wordmark />
           </span>
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-mono font-semibold hidden sm:inline-block">
-            v{VERSION}
+            v{version}
           </span>
         </a>
 

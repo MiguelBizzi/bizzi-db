@@ -5,6 +5,7 @@ import { Showcase } from './components/sections/Showcase';
 import { Pillars } from './components/sections/Pillars';
 import { Features } from './components/sections/Features';
 import { Architecture } from './components/sections/Architecture';
+import { Changelog } from './components/sections/Changelog';
 import { Testimonials } from './components/sections/Testimonials';
 import { Faq } from './components/sections/Faq';
 import { Cta } from './components/sections/Cta';
@@ -22,6 +23,7 @@ export default function App() {
         <Pillars />
         <Features />
         <Architecture />
+        <Changelog />
         {/* Testimonials are commented in Testimonials.tsx — do not delete. */}
         <Testimonials />
         <Faq />

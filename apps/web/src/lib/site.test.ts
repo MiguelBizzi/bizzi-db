@@ -9,7 +9,9 @@ import {
   VERSION,
   detectPreferredPlatform,
 } from './site';
+import rootPackage from '../../../../package.json';
 import { ARCHITECTURE, CTA, FAQ, FEATURES, PILLARS } from './content';
+import { CHANGELOG } from './changelog';
 
 const BANNED = [
   'homebrew',
@@ -43,15 +45,20 @@ function publishedCopy(): string {
     CTA.title,
     CTA.emphasis,
     CTA.body,
+    ...CHANGELOG.flatMap((entry) => [
+      entry.title,
+      entry.summary,
+      ...entry.changes.map((change) => change.text),
+    ]),
   ]
     .join('\n')
     .toLowerCase();
 }
 
 describe('site', () => {
-  test('ships lockstep version 0.1.0', () => {
+  test('falls back to the lockstep release version', () => {
     expect(PRODUCT_NAME).toBe('Bizzi DB');
-    expect(VERSION).toBe('0.1.0');
+    expect(VERSION).toBe(rootPackage.version);
   });
 
   test('download URLs point at GitHub latest releases', () => {
@@ -112,11 +119,11 @@ describe('content', () => {
 });
 
 describe('index.html SEO', () => {
-  test('declares version 0.1.0, JSON-LD, and GitHub releases', async () => {
+  test('declares a build-time version, JSON-LD, and GitHub releases', async () => {
     const html = await Bun.file(
       new URL('../../index.html', import.meta.url),
     ).text();
-    expect(html).toContain('softwareVersion": "0.1.0"');
+    expect(html).toContain('softwareVersion": "%APP_VERSION%"');
     expect(html).toContain('SoftwareApplication');
     expect(html).toContain(
       'https://github.com/MiguelBizzi/bizzi-db/releases/latest',

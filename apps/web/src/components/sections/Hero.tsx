@@ -1,7 +1,9 @@
 import { DownloadButtons } from '../DownloadButtons';
-import { PRODUCT_NAME, VERSION } from '../../lib/site';
+import { PRODUCT_NAME } from '../../lib/site';
+import { useLatestRelease } from '../../lib/useLatestRelease';
 
 export function Hero() {
+  const { version } = useLatestRelease();
   return (
     <section className="relative pt-12 pb-8 md:pt-20 md:pb-12 overflow-hidden">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[450px] bg-gradient-to-b from-primary/15 to-transparent blur-3xl -z-10 pointer-events-none" />
@@ -18,7 +20,7 @@ export function Hero() {
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-card border border-border shadow-sm text-xs text-muted-foreground">
           <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
           <span className="text-foreground font-semibold">
-            {PRODUCT_NAME} v{VERSION}
+            {PRODUCT_NAME} v{version}
           </span>
           <span>—</span>
           <span>Postgres · Rust · Tauri 2</span>

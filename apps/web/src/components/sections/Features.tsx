@@ -1,4 +1,5 @@
 import { FEATURES } from '../../lib/content';
+import { useLatestRelease } from '../../lib/useLatestRelease';
 
 function TablePreview() {
   const cols = ['email', 'status', 'total'];
@@ -57,6 +58,7 @@ function SqlPreview() {
 }
 
 export function Features() {
+  const { version } = useLatestRelease();
   const featured = FEATURES.slice(0, 2);
   const rest = FEATURES.slice(2);
 
@@ -66,7 +68,7 @@ export function Features() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20">
           <div className="lg:col-span-4 lg:sticky lg:top-24 self-start">
             <span className="text-xs uppercase tracking-widest font-mono text-primary font-bold">
-              What ships in v0.1.0
+              What ships in v{version}
             </span>
             <h2 className="mt-3 text-3xl sm:text-4xl font-extrabold text-foreground tracking-tight leading-[1.1]">
               The workspace you actually get
