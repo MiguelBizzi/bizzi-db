@@ -3,10 +3,11 @@ import { motion } from 'motion/react';
 import { fade } from '../../lib/motion';
 import { PendingModifications, QueryExecutionResult, TableSchema } from '../../types';
 import { ExplainPlanView } from './ExplainPlanView';
-import { AlertCircle, Lock, Table, Network } from 'lucide-react';
+import { QueryErrorCard } from './QueryErrorCard';
+import { Lock, Table, Network } from 'lucide-react';
 import { DataExportMenu } from '../DataExport/DataExportMenu';
 import { inferQualifiedTable } from '../../lib/dataExport';
-import { queryErrorText, resultTabLabel } from '../../lib/sqlQuery';
+import { resultTabLabel } from '../../lib/sqlQuery';
 import { analyzeQueryResult } from '../../lib/queryResultTable';
 import { hasUnloadedRows } from '../../lib/queryPaging';
 import { emptyPending } from '../../lib/pendingChanges';
@@ -277,22 +278,7 @@ function SingleResultView({
         animate="animate"
         className="p-4 bg-background flex-1 overflow-auto"
       >
-        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/40 text-red-400 space-y-3 font-mono text-xs shadow-lg">
-          <div className="flex items-center gap-2 font-bold text-red-400">
-            <AlertCircle className="w-5 h-5 shrink-0" />
-            <span>SQL Execution Error</span>
-          </div>
-
-          <p className="bg-background p-3 rounded-lg border border-red-500/30 leading-relaxed text-red-400">
-            {queryErrorText(result.error)}
-          </p>
-
-          <div className="pt-1 flex items-center justify-between">
-            <span className="text-[11px] text-muted-foreground">
-              Query failed in {result.executionTimeMs}ms
-            </span>
-          </div>
-        </div>
+        <QueryErrorCard result={result} />
       </motion.div>
     );
   }
