@@ -160,6 +160,38 @@ export interface ExplainPlanNode {
   children?: ExplainPlanNode[];
 }
 
+export type QueryErrorCategory =
+  | 'syntax'
+  | 'reference'
+  | 'constraint'
+  | 'permission'
+  | 'connection'
+  | 'timeout'
+  | 'other';
+
+/** 1-based, counted in characters, relative to the statement that failed. */
+export interface QueryErrorPosition {
+  offset: number;
+  line: number;
+  column: number;
+}
+
+/** A query failure as the database reported it. */
+export interface QueryErrorInfo {
+  category: QueryErrorCategory;
+  severity?: string;
+  /** SQLSTATE for Postgres. */
+  code?: string;
+  message: string;
+  detail?: string;
+  hint?: string;
+  position?: QueryErrorPosition;
+  schema?: string;
+  table?: string;
+  column?: string;
+  constraint?: string;
+}
+
 export interface QueryExecutionResult {
   id: string;
   query: string;
@@ -169,6 +201,8 @@ export interface QueryExecutionResult {
   columns?: string[];
   rows?: Record<string, unknown>[];
   error?: string;
+  /** Structured form of `error`, when the database reported it. */
+  errorInfo?: QueryErrorInfo;
   /** Set when `rows` is one page of a larger result (see `ExecuteQueryRequest.pageSize`). */
   pageSize?: number;
   pageOffset?: number;
