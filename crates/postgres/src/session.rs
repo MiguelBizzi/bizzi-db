@@ -5,7 +5,7 @@ use chrono::Utc;
 use db_core::{
     clamp_pool_size, clamp_preview_page, count_select_sql, paged_select_sql, split_sql_statements,
     Adapter, AdapterError, ConnectConfig, ConnectionStatus, DatabaseDialect, DatabaseSchema,
-    QueryExecutionResult, Session, TableFilter,
+    QueryError, QueryErrorCategory, QueryExecutionResult, Session, TableFilter,
 };
 use deadpool_postgres::{ManagerConfig, Pool, RecyclingMethod, Runtime};
 use native_tls::TlsConnector;
@@ -13,6 +13,7 @@ use postgres_native_tls::MakeTlsConnector;
 use tokio_postgres::{config::SslMode, NoTls};
 use uuid::Uuid;
 
+use crate::error::query_error_from;
 use crate::filter::where_clause;
 use crate::ident::qualify_table;
 use crate::values::{collect_simple, first_count};
@@ -223,7 +224,18 @@ async fn run_script(
     if statements.is_empty() {
         return Ok(Vec::new());
     }
-    let client = session.client().await?;
+    let client = match session.client().await {
+        Ok(client) => client,
+        Err(err) => {
+            let error = QueryError::new(QueryErrorCategory::Connection, err.to_string());
+            return Ok(vec![error_result(
+                sql,
+                Utc::now().to_rfc3339(),
+                Instant::now(),
+                error,
+            )]);
+        }
+    };
     let mut results = Vec::with_capacity(statements.len());
     for stmt in statements {
         let page = page_size.map(|limit| PageRequest {
@@ -271,7 +283,7 @@ async fn run_statement(
     let bool_columns = bool_column_flags(client, stmt).await;
     match client.simple_query(stmt).await {
         Ok(messages) => success_result(stmt, timestamp, started, messages, &bool_columns),
-        Err(err) => error_result(stmt, timestamp, started, err.to_string()),
+        Err(err) => error_result(stmt, timestamp, started, query_error_from(&err, stmt)),
     }
 }
 
@@ -326,7 +338,7 @@ fn error_result(
     sql: &str,
     timestamp: String,
     started: Instant,
-    error: String,
+    error: QueryError,
 ) -> QueryExecutionResult {
     QueryExecutionResult {
         id: format!("res_{}", Uuid::new_v4()),
@@ -336,8 +348,8 @@ fn error_result(
         affected_rows: None,
         columns: None,
         rows: None,
-        error: Some(error),
-        error_info: None,
+        error: Some(error.message.clone()),
+        error_info: Some(error),
         page_size: None,
         page_offset: None,
         total_rows: None,

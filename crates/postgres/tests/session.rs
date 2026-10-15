@@ -377,3 +377,78 @@ async fn preview_filter_errors_are_reported_not_swallowed() {
         .expect("preview returns an error result");
     assert!(result.error.is_some());
 }
+
+#[tokio::test]
+#[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
+async fn syntax_error_is_structured() {
+    let session = connect().await;
+    let results = session.execute("SELEC 1", None).await.expect("execute");
+    assert_eq!(results.len(), 1);
+    let info = results[0].error_info.as_ref().expect("error_info");
+    assert_eq!(info.category, db_core::QueryErrorCategory::Syntax);
+    assert_eq!(info.code.as_deref(), Some("42601"));
+    assert!(info.position.is_some(), "{info:?}");
+    assert_eq!(results[0].error.as_deref(), Some(info.message.as_str()));
+    assert!(!info.message.starts_with("db error"), "{}", info.message);
+}
+
+#[tokio::test]
+#[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
+async fn missing_table_is_a_reference_error() {
+    let session = connect().await;
+    let results = session
+        .execute("SELECT * FROM no_such_table_xyz", None)
+        .await
+        .expect("execute");
+    let info = results[0].error_info.as_ref().expect("error_info");
+    assert_eq!(info.category, db_core::QueryErrorCategory::Reference);
+    assert_eq!(info.code.as_deref(), Some("42P01"));
+    let position = info.position.as_ref().expect("position");
+    assert_eq!((position.line, position.column), (1, 15));
+}
+
+#[tokio::test]
+#[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
+async fn unique_violation_is_a_constraint_error() {
+    let session = connect().await;
+    let results = session
+        .execute(
+            "CREATE TEMP TABLE qe_t (id int PRIMARY KEY); INSERT INTO qe_t VALUES (1); INSERT INTO qe_t VALUES (1);",
+            None,
+        )
+        .await
+        .expect("execute");
+    assert_eq!(results.len(), 3);
+    assert!(results[0].error_info.is_none() && results[1].error_info.is_none());
+    let info = results[2].error_info.as_ref().expect("error_info");
+    assert_eq!(info.category, db_core::QueryErrorCategory::Constraint);
+    assert_eq!(info.code.as_deref(), Some("23505"));
+    assert_eq!(info.constraint.as_deref(), Some("qe_t_pkey"));
+}
+
+#[tokio::test]
+#[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
+async fn failing_second_statement_position_is_statement_relative() {
+    let session = connect().await;
+    let results = session
+        .execute("SELECT 1; SELEC 2;", None)
+        .await
+        .expect("execute");
+    assert_eq!(results.len(), 2);
+    assert!(results[0].error.is_none());
+    let position = results[1]
+        .error_info
+        .as_ref()
+        .and_then(|info| info.position.as_ref())
+        .expect("position");
+    assert_eq!((position.line, position.column), (1, 1));
+}
+
+#[tokio::test]
+#[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
+async fn success_has_no_error_info() {
+    let session = connect().await;
+    let results = session.execute("SELECT 1", None).await.expect("execute");
+    assert!(results[0].error.is_none());
+    assert!(results[0].error_info.is_none());
+}
