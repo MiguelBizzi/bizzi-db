@@ -5,8 +5,6 @@ import {
   FIRST_RELEASE_DATE,
   UPCOMING,
   compareVersions,
-  totalChanges,
-  totalReleases,
   type Change,
   type ChangeKind,
   type ChangelogEntry,
@@ -254,19 +252,6 @@ function UpcomingCard({ entry }: { entry: UpcomingEntry }) {
   );
 }
 
-function Stat({ value, label }: { value: string; label: string }) {
-  return (
-    <div className="px-5 py-4 sm:px-7 sm:py-5">
-      <div className="font-mono text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
-        {value}
-      </div>
-      <div className="mt-1 text-[11px] uppercase tracking-[0.16em] font-mono text-muted-foreground">
-        {label}
-      </div>
-    </div>
-  );
-}
-
 export function Changelog() {
   const release = useLatestRelease();
   const [showAll, setShowAll] = useState(false);
@@ -316,10 +301,6 @@ export function Changelog() {
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 divide-x divide-border/70">
-                <Stat value={String(totalReleases())} label="Releases" />
-                <Stat value={String(totalChanges())} label="Changes" />
-              </div>
             </div>
 
             <p className="text-xs font-mono text-muted-foreground">
@@ -340,7 +321,9 @@ export function Changelog() {
                 className="absolute left-[11px] top-8 bottom-4 w-px bg-gradient-to-b from-primary/70 via-border to-border/0"
               />
               {unwritten && <PendingCard version={release.version} />}
+              {/* "Next release" card is hidden for now. Re-enable by restoring:
               {!unwritten && UPCOMING && <UpcomingCard entry={UPCOMING} />}
+              */}
               {visible.map((entry) => (
                 <Card
                   key={entry.version}

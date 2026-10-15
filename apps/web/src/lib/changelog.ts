@@ -28,29 +28,37 @@ export type UpcomingEntry = Pick<ChangelogEntry, 'title' | 'summary' | 'changes'
  * Merged on main but not released yet. Shown as "Next release" above the timeline.
  * Move it into CHANGELOG with a version and date when you cut the release, then set this back to null.
  */
-export const UPCOMING: UpcomingEntry | null = {
-  title: 'Run exactly the SQL you mean',
-  summary:
-    'Run a selection or just the statement you are on, instead of the whole editor every time.',
-  changes: [
-    {
-      kind: 'new',
-      text: 'Cmd+Enter runs the selected SQL, or the statement under the cursor when nothing is selected.',
-    },
-    {
-      kind: 'new',
-      text: 'Cmd+Shift+Enter, or the run button menu, runs the whole script.',
-    },
-    {
-      kind: 'better',
-      text: 'The editor and the database agree on where each statement starts and ends, so what you see highlighted is what runs.',
-    },
-  ],
-};
+export const UPCOMING: UpcomingEntry | null = null;
 
 // Newest first. Add an entry here whenever you cut a release (see RELEASING.md).
 // Write for people who use the app, not for people who read the commits.
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '0.1.17',
+    date: '2026-10-15',
+    releases: 1,
+    title: 'Errors that tell you what went wrong',
+    summary:
+      'When a query fails you now see what the database actually said, what kind of problem it is, and where it happened. You can also run just part of your script.',
+    changes: [
+      {
+        kind: 'new',
+        text: 'Failed queries show the database\'s own message with its error code and a category: syntax, missing table or column, constraint, permission, connection or timeout.',
+      },
+      {
+        kind: 'new',
+        text: 'The error card points at the line and column, shows the offending line with a caret under it, and includes the database\'s hint, detail and the table, column or constraint involved.',
+      },
+      {
+        kind: 'new',
+        text: 'Cmd+Enter runs the selected SQL, or the statement under the cursor when nothing is selected. Cmd+Shift+Enter, or the run button menu, runs the whole script.',
+      },
+      {
+        kind: 'better',
+        text: 'The editor and the database agree on where each statement starts and ends, so what you see highlighted is what runs.',
+      },
+    ],
+  },
   {
     version: '0.1.16',
     date: '2026-10-14',
@@ -227,14 +235,6 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
 ];
-
-export function totalReleases(entries: ChangelogEntry[] = CHANGELOG): number {
-  return entries.reduce((sum, entry) => sum + entry.releases, 0);
-}
-
-export function totalChanges(entries: ChangelogEntry[] = CHANGELOG): number {
-  return entries.reduce((sum, entry) => sum + entry.changes.length, 0);
-}
 
 /** Negative when a < b, positive when a > b. Compares major.minor.patch numerically. */
 export function compareVersions(a: string, b: string): number {

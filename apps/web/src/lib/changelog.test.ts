@@ -3,8 +3,6 @@ import {
   CHANGELOG,
   UPCOMING,
   compareVersions,
-  totalChanges,
-  totalReleases,
 } from './changelog';
 import { parseRelease } from './useLatestRelease';
 import rootPackage from '../../../../package.json';
@@ -38,11 +36,6 @@ describe('changelog', () => {
     if (!UPCOMING) return;
     expect(UPCOMING.title.length).toBeGreaterThan(0);
     expect(UPCOMING.changes.length).toBeGreaterThan(0);
-  });
-
-  test('counts every tagged release from v0.1.0', () => {
-    expect(totalReleases()).toBe(17);
-    expect(totalChanges()).toBeGreaterThan(0);
   });
 });
 
