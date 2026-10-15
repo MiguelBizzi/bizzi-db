@@ -1,5 +1,6 @@
 mod adapter;
 mod profiles;
+mod query_error;
 mod sql;
 mod types;
 
@@ -18,4 +19,5 @@ pub use sql::{
     clamp_preview_page, classify_sql, count_select_sql, paged_select_sql, split_sql_ranges,
     split_sql_statements, QueryKind, SqlRange, DEFAULT_PREVIEW_LIMIT,
 };
+pub use query_error::*;
 pub use types::*;

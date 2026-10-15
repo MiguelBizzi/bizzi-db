@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::query_error::QueryError;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DatabaseDialect {
     PostgreSQL,
@@ -205,6 +207,9 @@ pub struct QueryExecutionResult {
     pub rows: Option<Vec<Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Structured form of `error`; set whenever `error` comes from the database.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_info: Option<QueryError>,
     /// Set when `rows` is one page of a larger result: the page's size and
     /// offset, and, when it was counted, how many rows the query returns in all.
     #[serde(skip_serializing_if = "Option::is_none")]
