@@ -384,7 +384,13 @@ async fn table_preview(
 ) -> Result<QueryExecutionResult, String> {
     let session = session_for(&state, &input.connection_id).await?;
     session
-        .preview(&input.schema, &input.table, input.limit, input.offset)
+        .preview(
+            &input.schema,
+            &input.table,
+            input.limit,
+            input.offset,
+            &input.filters,
+        )
         .await
         .map_err(map_err)
 }

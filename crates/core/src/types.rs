@@ -371,6 +371,44 @@ pub struct TablePreviewRequest {
     pub table: String,
     pub limit: i64,
     pub offset: i64,
+    /// Row conditions, ANDed together and evaluated by the database.
+    #[serde(default)]
+    pub filters: Vec<TableFilter>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FilterOperator {
+    #[serde(rename = "=")]
+    Eq,
+    #[serde(rename = "!=")]
+    NotEq,
+    #[serde(rename = ">")]
+    Gt,
+    #[serde(rename = "<")]
+    Lt,
+    #[serde(rename = ">=")]
+    Gte,
+    #[serde(rename = "<=")]
+    Lte,
+    #[serde(rename = "LIKE")]
+    Like,
+    #[serde(rename = "ILIKE")]
+    ILike,
+    #[serde(rename = "IS NULL")]
+    IsNull,
+    #[serde(rename = "IS NOT NULL")]
+    IsNotNull,
+    #[serde(rename = "IN")]
+    In,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TableFilter {
+    pub column: String,
+    pub operator: FilterOperator,
+    #[serde(default)]
+    pub value: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

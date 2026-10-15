@@ -272,6 +272,8 @@ export interface TablePreviewRequest {
   table: string;
   limit: number;
   offset: number;
+  /** Conditions the database applies; only matching rows are returned and counted. */
+  filters?: Pick<FilterClause, 'column' | 'operator' | 'value'>[];
 }
 
 export interface ExecuteQueryRequest {

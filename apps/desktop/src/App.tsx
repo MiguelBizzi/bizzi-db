@@ -23,6 +23,7 @@ import {
   SavedQuery,
   ActivityLogItem,
   PendingModifications,
+  FilterClause,
   SaveConnectionInput,
   ConnectionProfile,
   ConnectionFolder,
@@ -115,6 +116,7 @@ import {
 } from './lib/schemaSync';
 import { shouldConnectAfterSave } from './lib/connectionForm';
 import { toast } from './lib/toast';
+import { activeFilters } from './lib/tableFilters';
 import { buildTableDdlPreview } from './lib/schemaChange';
 import { getVersion } from '@tauri-apps/api/app';
 import { check, type Update } from '@tauri-apps/plugin-updater';
@@ -157,6 +159,8 @@ export default function App() {
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>([]);
   const [tableRows, setTableRows] = useState<Record<string, Record<string, unknown>[]>>({});
+  /** Rows matching each table's active filters; absent while the table is unfiltered. */
+  const [tableMatches, setTableMatches] = useState<Record<string, number | undefined>>({});
   const [pendingByTable, setPendingByTable] = useState<Record<string, PendingModifications>>({});
   const [sqlTabStates, setSqlTabStates] = useState<Record<string, SqlTabState>>({});
   // Bumped per table when its rows change, so open query results can refresh themselves.
@@ -205,9 +209,14 @@ export default function App() {
   const workspaceRef = useRef<WorkspaceState | null>(null);
   /** Page each table's rows were last fetched for, so a reopened tab can reuse them. */
   const tableFetchRef = useRef<
-    Record<string, { limit: number; offset: number; connectionId: string }>
+    Record<
+      string,
+      { limit: number; offset: number; connectionId: string; filters: FilterClause[] }
+    >
   >({});
   const tableLoadInflight = useRef<Record<string, number>>({});
+  /** Latest load per table, so a slow earlier response can't overwrite a newer one. */
+  const tableLoadSeq = useRef<Record<string, number>>({});
   const fingerprintByConnection = useRef<Record<string, string>>({});
   const currentDbIdRef = useRef<string | null>(null);
   const [tableLoading, setTableLoading] = useState<Record<string, boolean>>({});
@@ -224,9 +233,17 @@ export default function App() {
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
   const loadTableRows = useCallback(
-    async (table: TableSchema, limit: number, offset: number) => {
+    async (table: TableSchema, limit: number, offset: number, filters: FilterClause[] = []) => {
       if (!currentDatabase) return;
-      tableFetchRef.current[table.id] = { limit, offset, connectionId: currentDatabase.id };
+      const applied = activeFilters(filters);
+      tableFetchRef.current[table.id] = {
+        limit,
+        offset,
+        connectionId: currentDatabase.id,
+        filters,
+      };
+      const seq = (tableLoadSeq.current[table.id] ?? 0) + 1;
+      tableLoadSeq.current[table.id] = seq;
       tableLoadInflight.current[table.id] = (tableLoadInflight.current[table.id] ?? 0) + 1;
       setTableLoading((prev) => ({ ...prev, [table.id]: true }));
       try {
@@ -236,16 +253,32 @@ export default function App() {
           table: table.name,
           limit,
           offset,
+          ...(applied.length > 0
+            ? {
+                filters: applied.map(({ column, operator, value }) => ({
+                  column,
+                  operator,
+                  value,
+                })),
+              }
+            : {}),
         });
+        if (tableLoadSeq.current[table.id] !== seq) return;
+        if (res.error) {
+          toast(res.error, 'error');
+          return;
+        }
         setTableRows((prev) => ({
           ...prev,
           [table.id]: (res.rows || []) as Record<string, unknown>[],
         }));
-      } catch {
-        setTableRows((prev) => ({
+        setTableMatches((prev) => ({
           ...prev,
-          [table.id]: prev[table.id] ?? [],
+          [table.id]: applied.length > 0 ? (res.totalRows ?? undefined) : undefined,
         }));
+      } catch (err) {
+        if (tableLoadSeq.current[table.id] !== seq) return;
+        toast(err instanceof Error ? err.message : String(err), 'error');
       } finally {
         const remaining = (tableLoadInflight.current[table.id] ?? 1) - 1;
         tableLoadInflight.current[table.id] = remaining;
@@ -262,8 +295,9 @@ export default function App() {
       const params = tableFetchRef.current[table.id] || {
         limit: DEFAULT_PREVIEW_LIMIT,
         offset: 0,
+        filters: [],
       };
-      await loadTableRows(table, params.limit, params.offset);
+      await loadTableRows(table, params.limit, params.offset, params.filters);
     },
     [loadTableRows]
   );
@@ -1173,14 +1207,21 @@ export default function App() {
             table={table}
             rows={rows}
             pagination={
-              cachedPage ? { pageSize: cachedPage.limit, offset: cachedPage.offset } : undefined
+              cachedPage
+                ? {
+                    pageSize: cachedPage.limit,
+                    offset: cachedPage.offset,
+                    filters: cachedPage.filters,
+                  }
+                : undefined
             }
+            matchCount={tableMatches[table.id]}
             isLoading={isLoading}
             pendingModifications={pending}
             tables={currentDatabase.tables}
             onOpenTable={handleSelectTableData}
             onLookup={runLookup}
-            onLoadRows={(limit, offset) => loadTableRows(table, limit, offset)}
+            onLoadRows={(limit, offset, filters) => loadTableRows(table, limit, offset, filters)}
             onFetchAllRows={async () => {
               const res = await tablePreview({
                 connectionId: currentDatabase.id,
@@ -1188,6 +1229,7 @@ export default function App() {
                 table: table.name,
                 limit: Number.MAX_SAFE_INTEGER,
                 offset: 0,
+                filters: activeFilters(tableFetchRef.current[table.id]?.filters ?? []),
               });
               if (res.error) throw new Error(res.error);
               return (res.rows ?? []) as Record<string, unknown>[];

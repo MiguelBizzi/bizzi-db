@@ -23,64 +23,23 @@ export function applySearch<T extends Record<string, unknown>>(
   );
 }
 
-function cellMatches(row: Record<string, unknown>, filter: FilterClause): boolean {
-  const raw = row[filter.column];
-  if (filter.operator === 'IS NULL') {
-    return raw === null || raw === undefined;
-  }
-  if (filter.operator === 'IS NOT NULL') {
-    return raw !== null && raw !== undefined;
-  }
-
-  const cellVal = String(raw ?? '').toLowerCase();
-  const targetVal = filter.value.toLowerCase();
-  switch (filter.operator) {
-    case '=':
-      return cellVal === targetVal;
-    case '!=':
-      return cellVal !== targetVal;
-    case 'LIKE':
-    case 'ILIKE':
-      return cellVal.includes(targetVal);
-    case '>':
-    case '<':
-    case '>=':
-    case '<=': {
-      const left = Number(cellVal);
-      const right = Number(targetVal);
-      if (!Number.isFinite(left) || !Number.isFinite(right)) return false;
-      if (filter.operator === '>') return left > right;
-      if (filter.operator === '<') return left < right;
-      if (filter.operator === '>=') return left >= right;
-      return left <= right;
-    }
-    case 'IN': {
-      const wanted = filter.value
-        .split(',')
-        .map((part) => part.trim().toLowerCase())
-        .filter(Boolean);
-      return wanted.includes(cellVal);
-    }
-    default:
-      return true;
-  }
-}
-
 export function filterNeedsValue(operator: FilterClause['operator']): boolean {
   return operator !== 'IS NULL' && operator !== 'IS NOT NULL';
 }
 
-export function applyFilters<T extends Record<string, unknown>>(
-  rows: T[],
-  filters: FilterClause[]
-): T[] {
-  return rows.filter((row) =>
-    filters.every((filter) => {
-      if (!filter.enabled) return true;
-      if (filterNeedsValue(filter.operator) && !filter.value) return true;
-      return cellMatches(row, filter);
-    })
+/**
+ * The rules the database should apply: enabled ones that have what they need.
+ * Filtering runs in the query (like the SQL editor), not on the loaded page.
+ */
+export function activeFilters(filters: FilterClause[]): FilterClause[] {
+  return filters.filter(
+    (filter) => filter.enabled && (!filterNeedsValue(filter.operator) || Boolean(filter.value))
   );
+}
+
+/** Identifies the conditions a set of rules applies, ignoring rule ids. */
+export function filtersKey(filters: FilterClause[]): string {
+  return JSON.stringify(filters.map(({ column, operator, value }) => [column, operator, value]));
 }
 
 export function applySort<T extends Record<string, unknown>>(
@@ -106,13 +65,11 @@ export function applyTableView<T extends Record<string, unknown>>(
   rows: T[],
   options: {
     searchTerm?: string;
-    filters?: FilterClause[];
     sort?: SortClause | null;
   }
 ): T[] {
   const searched = applySearch(rows, options.searchTerm ?? '');
-  const filtered = applyFilters(searched, options.filters ?? []);
-  return applySort(filtered, options.sort ?? null);
+  return applySort(searched, options.sort ?? null);
 }
 
 export function setFilterEnabled(

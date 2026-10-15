@@ -1,3 +1,4 @@
+mod filter;
 mod ident;
 mod session;
 mod values;

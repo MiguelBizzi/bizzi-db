@@ -5,7 +5,7 @@ use chrono::Utc;
 use db_core::{
     clamp_pool_size, clamp_preview_page, count_select_sql, paged_select_sql, split_sql_statements,
     Adapter, AdapterError, ConnectConfig, ConnectionStatus, DatabaseDialect, DatabaseSchema,
-    QueryExecutionResult, Session,
+    QueryExecutionResult, Session, TableFilter,
 };
 use deadpool_postgres::{ManagerConfig, Pool, RecyclingMethod, Runtime};
 use native_tls::TlsConnector;
@@ -13,6 +13,7 @@ use postgres_native_tls::MakeTlsConnector;
 use tokio_postgres::{config::SslMode, NoTls};
 use uuid::Uuid;
 
+use crate::filter::where_clause;
 use crate::ident::qualify_table;
 use crate::values::{collect_simple, first_count};
 
@@ -106,15 +107,21 @@ impl Session for PostgresSession {
         table: &str,
         limit: i64,
         offset: i64,
+        filters: &[TableFilter],
     ) -> Result<QueryExecutionResult, AdapterError> {
         let (limit, offset) = clamp_preview_page(limit, offset);
-        let sql = format!(
-            "SELECT * FROM {} LIMIT {} OFFSET {}",
-            qualify_table(schema, table),
-            limit,
-            offset
-        );
-        run_sql(self, &sql).await
+        let table = qualify_table(schema, table);
+        let filter = where_clause(filters);
+        let sql = format!("SELECT * FROM {table}{filter} LIMIT {limit} OFFSET {offset}");
+        let client = self.client().await?;
+        let mut result = run_statement(&client, &sql, None).await;
+        if !filter.is_empty() && result.error.is_none() {
+            let count_sql = format!("SELECT COUNT(*) FROM {table}{filter}");
+            if let Ok(messages) = client.simple_query(&count_sql).await {
+                result.total_rows = first_count(&messages);
+            }
+        }
+        Ok(result)
     }
 }
 
@@ -204,14 +211,6 @@ struct PageRequest {
     limit: i64,
     offset: i64,
     with_count: bool,
-}
-
-async fn run_sql(
-    session: &PostgresSession,
-    sql: &str,
-) -> Result<QueryExecutionResult, AdapterError> {
-    let client = session.client().await?;
-    Ok(run_statement(&client, sql, None).await)
 }
 
 async fn run_script(

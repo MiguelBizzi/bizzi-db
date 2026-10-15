@@ -1,4 +1,4 @@
-use db_core::{Adapter, ConnectConfig, Session};
+use db_core::{Adapter, ConnectConfig, FilterOperator, Session, TableFilter};
 use db_postgres::PostgresAdapter;
 
 fn pg_config() -> ConnectConfig {
@@ -97,7 +97,7 @@ async fn execute_returns_every_row_and_pages_on_request() {
 async fn preview_accepts_the_largest_limit_the_ui_sends() {
     let session = connect().await;
     let result = session
-        .preview("shop", "users", 9_007_199_254_740_991, 0)
+        .preview("shop", "users", 9_007_199_254_740_991, 0, &[])
         .await
         .expect("preview");
     assert!(result.error.is_none(), "{:?}", result.error);
@@ -109,7 +109,7 @@ async fn preview_accepts_the_largest_limit_the_ui_sends() {
 async fn preview_quotes_schema_and_table() {
     let session = connect().await;
     let result = session
-        .preview("shop", "users", 5, 0)
+        .preview("shop", "users", 5, 0, &[])
         .await
         .expect("preview");
     assert!(result.error.is_none(), "{:?}", result.error);
@@ -259,4 +259,121 @@ async fn schema_fingerprint_ignores_row_changes_and_detects_ddl() {
 
     let drop = format!("DROP TABLE shop.{table}");
     session.execute(&drop, None).await.expect("drop");
+}
+
+fn filter(column: &str, operator: FilterOperator, value: &str) -> TableFilter {
+    TableFilter {
+        column: column.into(),
+        operator,
+        value: value.into(),
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
+async fn preview_filters_find_rows_far_beyond_the_first_page() {
+    let session = connect().await;
+    let first_page = session
+        .preview("shop", "users", 50, 0, &[])
+        .await
+        .expect("first page");
+    let loaded_ids: Vec<String> = first_page
+        .rows
+        .unwrap_or_default()
+        .iter()
+        .map(|row| row["id"].to_string())
+        .collect();
+    assert!(!loaded_ids.contains(&"1100".to_string()));
+
+    let found = session
+        .preview(
+            "shop",
+            "users",
+            50,
+            0,
+            &[filter("id", FilterOperator::Eq, "1100")],
+        )
+        .await
+        .expect("filtered preview");
+    assert!(found.error.is_none(), "{:?}", found.error);
+    assert_eq!(found.total_rows, Some(1));
+    assert_eq!(found.rows.as_ref().map(|rows| rows.len()), Some(1));
+
+    let range = [filter("id", FilterOperator::Gte, "1000")];
+    let page = session
+        .preview("shop", "users", 150, 100, &range)
+        .await
+        .expect("paged filtered preview");
+    assert_eq!(page.total_rows, Some(201));
+    assert_eq!(page.rows.as_ref().map(|rows| rows.len()), Some(101));
+}
+
+#[tokio::test]
+#[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
+async fn preview_filter_on_a_numeric_column_behaves_like_a_query() {
+    let session = connect().await;
+    let sample = session
+        .preview("shop", "users", 1, 0, &[])
+        .await
+        .expect("sample");
+    let id = sample
+        .rows
+        .as_ref()
+        .and_then(|rows| rows.first())
+        .map(|row| row["id"].clone());
+    let id = id
+        .expect("a user row")
+        .to_string()
+        .trim_matches('"')
+        .to_string();
+
+    let filtered = session
+        .preview(
+            "shop",
+            "users",
+            50,
+            0,
+            &[filter("id", FilterOperator::Eq, &id)],
+        )
+        .await
+        .expect("filtered preview");
+    assert!(filtered.error.is_none(), "{:?}", filtered.error);
+    assert_eq!(filtered.total_rows, Some(1));
+    assert_eq!(filtered.rows.as_ref().map(|rows| rows.len()), Some(1));
+
+    let by_query = session
+        .execute(&format!("SELECT * FROM shop.users WHERE id = {id}"), None)
+        .await
+        .expect("query");
+    assert_eq!(by_query[0].rows, filtered.rows);
+
+    let none = session
+        .preview(
+            "shop",
+            "users",
+            50,
+            0,
+            &[filter("id", FilterOperator::Eq, "-1")],
+        )
+        .await
+        .expect("empty preview");
+    assert_eq!(none.total_rows, Some(0));
+    assert_eq!(none.rows.as_ref().map(|rows| rows.len()), Some(0));
+}
+
+#[tokio::test]
+#[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
+async fn preview_filter_errors_are_reported_not_swallowed() {
+    let session = connect().await;
+    let result = session
+        .preview(
+            "shop",
+            "users",
+            5,
+            0,
+            &[filter("id", FilterOperator::Eq, "not a number")],
+        )
+        .await
+        .expect("preview returns an error result");
+    assert!(result.error.is_some());
 }

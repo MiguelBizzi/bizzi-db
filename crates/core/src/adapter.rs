@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::types::{DatabaseSchema, QueryExecutionResult, SslMode};
+use crate::types::{DatabaseSchema, QueryExecutionResult, SslMode, TableFilter};
 
 #[derive(Clone)]
 pub struct ConnectConfig {
@@ -92,12 +92,15 @@ pub trait Session: Send + Sync {
         offset: i64,
         with_count: bool,
     ) -> Result<QueryExecutionResult, AdapterError>;
+    /// One page of a table's rows. With `filters`, only matching rows are
+    /// returned and `total_rows` counts every match, not just this page.
     async fn preview(
         &self,
         schema: &str,
         table: &str,
         limit: i64,
         offset: i64,
+        filters: &[TableFilter],
     ) -> Result<QueryExecutionResult, AdapterError>;
 }
 

@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import type { FilterClause } from '../types';
 import {
-  applyFilters,
+  activeFilters,
   applySearch,
   applySort,
   applyTableView,
   createDefaultFilter,
+  filtersKey,
   DEFAULT_FILTER_OPERATOR,
   filterRuleFieldsClass,
   setFilterEnabled,
@@ -59,52 +60,48 @@ describe('applySearch', () => {
   });
 });
 
-describe('applyFilters', () => {
-  test('equals, not-equals, like/ilike, and numeric compares', () => {
-    expect(applyFilters(rows, [filter({ column: 'name', operator: '=', value: 'Ada' })]).map((r) => r.id)).toEqual([1]);
-    expect(applyFilters(rows, [filter({ column: 'name', operator: '!=', value: 'Ada' })]).map((r) => r.id)).toEqual([
-      2, 3,
-    ]);
-    expect(applyFilters(rows, [filter({ column: 'name', operator: 'LIKE', value: 'a' })]).map((r) => r.id)).toEqual([
-      1, 2, 3,
-    ]);
-    expect(applyFilters(rows, [filter({ column: 'name', operator: 'ILIKE', value: 'GRACE' })]).map((r) => r.id)).toEqual([
-      3,
-    ]);
-    expect(applyFilters(rows, [filter({ column: 'age', operator: '>', value: '35' })]).map((r) => r.id)).toEqual([2]);
-    expect(applyFilters(rows, [filter({ column: 'age', operator: '<', value: '35' })]).map((r) => r.id)).toEqual([1]);
-    expect(applyFilters(rows, [filter({ column: 'age', operator: '>=', value: '35' })]).map((r) => r.id)).toEqual([
-      2, 3,
-    ]);
-    expect(applyFilters(rows, [filter({ column: 'age', operator: '<=', value: '35' })]).map((r) => r.id)).toEqual([
-      1, 3,
-    ]);
+describe('activeFilters', () => {
+  test('keeps enabled rules that are complete, in order', () => {
+    const rules = [
+      filter({ id: 'a', column: 'id', operator: '=', value: '4477' }),
+      filter({ id: 'b', column: 'role', operator: 'IS NULL' }),
+      filter({ id: 'c', column: 'role', operator: 'IS NOT NULL' }),
+    ];
+    expect(activeFilters(rules).map((rule) => rule.id)).toEqual(['a', 'b', 'c']);
   });
 
-  test('IS NULL, IN, disabled filters, empty values, and NaN compares', () => {
-    expect(applyFilters(rows, [filter({ column: 'role', operator: 'IS NULL' })]).map((r) => r.id)).toEqual([3]);
-    expect(applyFilters(rows, [filter({ column: 'role', operator: 'IS NOT NULL' })]).map((r) => r.id)).toEqual([
-      1, 2,
-    ]);
-    expect(
-      applyFilters(rows, [filter({ column: 'name', operator: 'IN', value: 'Ada, Grace' })]).map((r) => r.id)
-    ).toEqual([1, 3]);
-    expect(
-      applyFilters(rows, [filter({ column: 'name', operator: '=', value: 'Ada', enabled: false })]).map((r) => r.id)
-    ).toEqual([1, 2, 3]);
-    const mixed = [
-      filter({ id: 'on', column: 'role', operator: '=', value: 'admin' }),
+  test('drops disabled rules and rules still missing a value', () => {
+    const rules = [
       filter({ id: 'off', column: 'name', operator: '=', value: 'Ada', enabled: false }),
+      filter({ id: 'blank', column: 'name', operator: '=', value: '' }),
+      filter({ id: 'on', column: 'role', operator: '=', value: 'admin' }),
     ];
-    expect(applyFilters(rows, mixed).map((r) => r.id)).toEqual([1]);
-    expect(applyFilters(rows, setFilterEnabled(mixed, 'off', true)).map((r) => r.id)).toEqual([1]);
-    expect(applyFilters(rows, setFilterEnabled(mixed, 'on', false)).map((r) => r.id)).toEqual([1, 2, 3]);
-    expect(
-      applyFilters(rows, [filter({ column: 'name', operator: '=', value: '' })]).map((r) => r.id)
-    ).toEqual([1, 2, 3]);
-    expect(
-      applyFilters(rows, [filter({ column: 'name', operator: '>', value: 'abc' })]).map((r) => r.id)
-    ).toEqual([]);
+    expect(activeFilters(rules).map((rule) => rule.id)).toEqual(['on']);
+    expect(activeFilters(setFilterEnabled(rules, 'off', true)).map((rule) => rule.id)).toEqual([
+      'off',
+      'on',
+    ]);
+    expect(activeFilters(setFilterEnabled(rules, 'on', false))).toEqual([]);
+  });
+});
+
+describe('filtersKey', () => {
+  test('is the same for the same conditions whatever the rule ids', () => {
+    const a = [filter({ id: 'x', column: 'id', operator: '=', value: '1' })];
+    const b = [filter({ id: 'y', column: 'id', operator: '=', value: '1' })];
+    expect(filtersKey(a)).toBe(filtersKey(b));
+  });
+
+  test('changes when a column, operator or value changes', () => {
+    const base = filter({ column: 'id', operator: '=', value: '1' });
+    const keys = new Set([
+      filtersKey([base]),
+      filtersKey([{ ...base, column: 'age' }]),
+      filtersKey([{ ...base, operator: '>' }]),
+      filtersKey([{ ...base, value: '2' }]),
+      filtersKey([]),
+    ]);
+    expect(keys.size).toBe(5);
   });
 });
 
@@ -136,7 +133,7 @@ describe('filterRuleFieldsClass', () => {
 });
 
 describe('applySort / applyTableView', () => {
-  test('sorts and combines search with filters', () => {
+  test('sorts and searches the rows already loaded', () => {
     expect(applySort(rows, { column: 'name', direction: 'ASC' }).map((r) => r.name)).toEqual([
       'Ada',
       'Alan',
@@ -146,9 +143,8 @@ describe('applySort / applyTableView', () => {
     expect(
       applyTableView(rows, {
         searchTerm: 'a',
-        filters: [filter({ column: 'age', operator: '>=', value: '35' })],
-        sort: { column: 'name', direction: 'ASC' },
+        sort: { column: 'name', direction: 'DESC' },
       }).map((r) => r.name)
-    ).toEqual(['Alan', 'Grace']);
+    ).toEqual(['Grace', 'Alan', 'Ada']);
   });
 });

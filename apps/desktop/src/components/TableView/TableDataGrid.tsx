@@ -39,7 +39,12 @@ import {
   foreignKeyPreviewSql,
   resolveReferencedTable,
 } from "../../lib/foreignKeyLookup";
-import { createDefaultFilter, applyTableView } from "../../lib/tableFilters";
+import {
+  activeFilters,
+  applyTableView,
+  createDefaultFilter,
+  filtersKey,
+} from "../../lib/tableFilters";
 import { shortColumnType } from "../../lib/columnTypeDisplay";
 import {
   canSetDefault,
@@ -117,7 +122,11 @@ interface TableDataGridProps {
   ) => void;
   onInsertRow: (sql: string) => Promise<{ error?: string }>;
   onDeleteSelectedRows: (selectedRowPkValues: any[]) => void;
-  onLoadRows: (limit: number, offset: number) => Promise<void>;
+  onLoadRows: (
+    limit: number,
+    offset: number,
+    filters: FilterClause[],
+  ) => Promise<void>;
   onLookup: FkLookupFn;
   onOpenTable: (table: TableSchema) => void;
   /**
@@ -130,7 +139,12 @@ interface TableDataGridProps {
    * again; a query result is paged only when this is set, and shown whole
    * (no pagination footer) otherwise.
    */
-  pagination?: { pageSize: number; offset: number };
+  pagination?: { pageSize: number; offset: number; filters?: FilterClause[] };
+  /**
+   * How many rows match the active filters, once the database has counted
+   * them. Unset, the table's own row count is used.
+   */
+  matchCount?: number;
   /** Fetches every row of the table or query; Copy and Export use it unless rows are selected. */
   onFetchAllRows?: () => Promise<Record<string, unknown>[]>;
   /** Disables selection, editing, inserting and deleting. */
@@ -181,6 +195,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   onOpenTable,
   variant = "table",
   pagination,
+  matchCount,
   onFetchAllRows,
   readOnly = false,
   readOnlyReason,
@@ -193,7 +208,9 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   const paged = !isQuery || pagination !== undefined;
   const [searchInput, setSearchInput] = useState("");
   const searchTerm = useDebouncedValue(searchInput);
-  const [filters, setFilters] = useState<FilterClause[]>([]);
+  const [filters, setFilters] = useState<FilterClause[]>(
+    () => pagination?.filters ?? [],
+  );
   const [sort, setSort] = useState<SortClause | null>(null);
   const [selectedRowPks, setSelectedRowPks] = useState<any[]>([]);
   const [editingCell, setEditingCell] = useState<{
@@ -207,9 +224,20 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     rowPk: any;
     value: any;
   }>({ isOpen: false, columnName: "", rowPk: null, value: null });
-  const [page, setPage] = useState(() =>
-    pagination ? Math.floor(pagination.offset / pagination.pageSize) + 1 : 1,
-  );
+  // Filters run in the database, so a rule edit refetches (debounced while typing).
+  const completeFilters = useMemo(() => activeFilters(filters), [filters]);
+  const appliedFilters = useDebouncedValue(completeFilters);
+  const appliedFiltersRef = useRef(appliedFilters);
+  appliedFiltersRef.current = appliedFilters;
+  const appliedKey = useMemo(() => filtersKey(appliedFilters), [appliedFilters]);
+  // A different set of filters is a different result: back to its first page.
+  const [pageState, setPageState] = useState(() => ({
+    page: pagination ? Math.floor(pagination.offset / pagination.pageSize) + 1 : 1,
+    filterKey: appliedKey,
+  }));
+  const page = pageState.filterKey === appliedKey ? pageState.page : 1;
+  const setPage = (next: number) =>
+    setPageState({ page: next, filterKey: appliedKey });
   const [pageSize, setPageSize] = useState(
     pagination?.pageSize ?? DEFAULT_PAGE_SIZE,
   );
@@ -239,29 +267,33 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   onLoadRowsRef.current = onLoadRows;
 
   const pkCol = table.columns.find((c) => c.isPrimary)?.name || "id";
-  const pageCount = Math.max(1, Math.ceil((table.rowCount || 0) / pageSize));
+  const totalRows =
+    appliedFilters.length > 0 && matchCount !== undefined
+      ? matchCount
+      : table.rowCount;
+  const pageCount = Math.max(1, Math.ceil((totalRows || 0) / pageSize));
   const safePage = Math.min(page, pageCount);
 
   // Rows handed in with `pagination` are already loaded; only a different page is fetched.
   const loadedPage = useRef(
-    pagination ? `${table.id}:${pageSize}:${safePage}` : null,
+    pagination ? `${table.id}:${pageSize}:${safePage}:${appliedKey}` : null,
   );
 
   useEffect(() => {
     if (!paged) return;
-    const key = `${table.id}:${pageSize}:${safePage}`;
+    const key = `${table.id}:${pageSize}:${safePage}:${appliedKey}`;
     if (loadedPage.current === key) return;
     loadedPage.current = key;
     let cancelled = false;
     void onLoadRowsRef
-      .current(pageSize, (safePage - 1) * pageSize)
+      .current(pageSize, (safePage - 1) * pageSize, appliedFiltersRef.current)
       .finally(() => {
         if (!cancelled) setPendingLoad(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [pageSize, safePage, table.id, paged]);
+  }, [pageSize, safePage, table.id, paged, appliedKey]);
 
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
@@ -283,8 +315,8 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
 
   // Filter & Search processing. Memoised: scrolling re-renders this component.
   const filteredRows = useMemo(
-    () => applyTableView(rows, { searchTerm, filters, sort }),
-    [rows, searchTerm, filters, sort],
+    () => applyTableView(rows, { searchTerm, sort }),
+    [rows, searchTerm, sort],
   );
 
   const selectedPkSet = useMemo(
@@ -370,15 +402,15 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   const topSpacerHeight = range.rowStart * GRID_ROW_HEIGHT;
   const bottomSpacerHeight = Math.max(0, itemCount - range.rowEnd) * GRID_ROW_HEIGHT;
 
-  const rangeStart = table.rowCount === 0 ? 0 : (safePage - 1) * pageSize + 1;
-  const rangeEnd = Math.min(safePage * pageSize, table.rowCount);
+  const rangeStart = totalRows === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(safePage * pageSize, totalRows);
 
   const handleRefresh = async () => {
     if (loading) return;
     setEditingCell(null);
     setPendingLoad(true);
     try {
-      await onLoadRows(pageSize, (safePage - 1) * pageSize);
+      await onLoadRows(pageSize, (safePage - 1) * pageSize, appliedFilters);
     } finally {
       setPendingLoad(false);
     }
@@ -856,7 +888,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
       <div className="px-3 py-1.5 bg-card border-t border-border text-xs font-mono text-muted-foreground flex items-center justify-between gap-3 shrink-0">
         <div className="min-w-0 truncate">
           {tableFooterRange({
-            rowCount: table.rowCount,
+            rowCount: totalRows,
             rangeStart,
             rangeEnd,
             selectedCount: selectedRowPks.length,
