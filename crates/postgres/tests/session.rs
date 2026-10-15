@@ -409,21 +409,23 @@ async fn missing_table_is_a_reference_error() {
 
 #[tokio::test]
 #[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
-async fn unique_violation_is_a_constraint_error() {
+async fn not_null_violation_is_a_constraint_error() {
     let session = connect().await;
+    // Seeded table, no DDL: catalog changes would race the schema fingerprint test.
     let results = session
         .execute(
-            "CREATE TEMP TABLE qe_t (id int PRIMARY KEY); INSERT INTO qe_t VALUES (1); INSERT INTO qe_t VALUES (1);",
+            "SELECT 1; INSERT INTO shop.users (organization_id, email, full_name) VALUES (1, NULL, 'x');",
             None,
         )
         .await
         .expect("execute");
-    assert_eq!(results.len(), 3);
-    assert!(results[0].error_info.is_none() && results[1].error_info.is_none());
-    let info = results[2].error_info.as_ref().expect("error_info");
+    assert_eq!(results.len(), 2);
+    assert!(results[0].error_info.is_none());
+    let info = results[1].error_info.as_ref().expect("error_info");
     assert_eq!(info.category, db_core::QueryErrorCategory::Constraint);
-    assert_eq!(info.code.as_deref(), Some("23505"));
-    assert_eq!(info.constraint.as_deref(), Some("qe_t_pkey"));
+    assert_eq!(info.code.as_deref(), Some("23502"));
+    assert_eq!(info.table.as_deref(), Some("users"));
+    assert_eq!(info.column.as_deref(), Some("email"));
 }
 
 #[tokio::test]
