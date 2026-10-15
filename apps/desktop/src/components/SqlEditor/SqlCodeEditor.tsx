@@ -13,27 +13,47 @@ import { syntaxHighlighting } from '@codemirror/language';
 import { sqlCompletions, type SqlSchemaTable } from '../../lib/sqlComplete';
 import { sqlDiagnostics } from '../../lib/sqlDiagnostics';
 import { sqlHighlightStyle } from '../../lib/sqlSyntaxTheme';
+import type { RunMode, RunSelection } from '../../lib/runTarget';
 
 export interface SqlCodeEditorHandle {
   insertAtCursor: (text: string) => void;
+  /** The current selection and script, as a run would see them. */
+  runRequest: (mode: RunMode) => SqlRunRequest | null;
+}
+
+export interface SqlRunRequest {
+  mode: RunMode;
+  doc: string;
+  selection: RunSelection;
+}
+
+function runRequest(view: EditorView, mode: RunMode): SqlRunRequest {
+  const { from, to } = view.state.selection.main;
+  return { mode, doc: view.state.doc.toString(), selection: { from, to } };
 }
 
 interface SqlCodeEditorProps {
   value: string;
   tables: SqlSchemaTable[];
   onChange: (value: string) => void;
-  onRun: () => void;
+  onRun: (request: SqlRunRequest) => void;
+  /** Fires when the editor gains or loses a non-blank selection. */
+  onSelectionChange?: (hasSelection: boolean) => void;
 }
 
 export const SqlCodeEditor = forwardRef<SqlCodeEditorHandle, SqlCodeEditorProps>(
-  function SqlCodeEditor({ value, tables, onChange, onRun }, ref) {
+  function SqlCodeEditor({ value, tables, onChange, onRun, onSelectionChange }, ref) {
     const viewRef = useRef<EditorView | null>(null);
     const onRunRef = useRef(onRun);
+    const onSelectionChangeRef = useRef(onSelectionChange);
     const tablesRef = useRef(tables);
     onRunRef.current = onRun;
+    onSelectionChangeRef.current = onSelectionChange;
     tablesRef.current = tables;
 
     useImperativeHandle(ref, () => ({
+      runRequest: (mode: RunMode) =>
+        viewRef.current ? runRequest(viewRef.current, mode) : null,
       insertAtCursor: (text: string) => {
         const view = viewRef.current;
         if (!view) {
@@ -90,8 +110,15 @@ export const SqlCodeEditor = forwardRef<SqlCodeEditorHandle, SqlCodeEditorProps>
           keymap.of([
             {
               key: 'Mod-Enter',
-              run: () => {
-                onRunRef.current();
+              run: (view) => {
+                onRunRef.current(runRequest(view, 'auto'));
+                return true;
+              },
+            },
+            {
+              key: 'Mod-Shift-Enter',
+              run: (view) => {
+                onRunRef.current(runRequest(view, 'all'));
                 return true;
               },
             },
@@ -168,6 +195,11 @@ export const SqlCodeEditor = forwardRef<SqlCodeEditorHandle, SqlCodeEditorProps>
         onChange={onChange}
         onCreateEditor={(view) => {
           viewRef.current = view;
+        }}
+        onUpdate={(update) => {
+          if (!update.selectionSet && !update.docChanged) return;
+          const { from, to } = update.state.selection.main;
+          onSelectionChangeRef.current?.(update.state.sliceDoc(from, to).trim() !== '');
         }}
         className="h-full w-full text-xs bg-background"
       />

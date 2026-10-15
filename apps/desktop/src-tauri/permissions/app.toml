@@ -17,6 +17,7 @@ commands.allow = [
   "table_preview",
   "query_execute",
   "query_page",
+  "sql_statement_ranges",
   "history_list",
   "saved_queries_list",
   "saved_queries_save",

@@ -293,6 +293,12 @@ export interface QueryPageRequest {
   withCount?: boolean;
 }
 
+/** Half-open statement range in a script, in UTF-16 units (editor offsets). */
+export interface SqlRange {
+  start: number;
+  end: number;
+}
+
 export interface SchemaSyncRequest {
   connectionId: string;
   lastFingerprint?: string | null;

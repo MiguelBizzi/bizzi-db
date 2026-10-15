@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
+import type { SqlRange } from '@db/shared';
 import { Modal, ModalPanel } from '../ui/Modal';
+import { Popover } from '../ui/Popover';
 import { format } from 'sql-formatter';
 import {
   Play,
+  ChevronDown,
   Code,
   Save,
   Bookmark,
@@ -15,7 +18,8 @@ import {
 } from 'lucide-react';
 import { QueryExecutionResult, SavedQuery, DatabaseSchema } from '../../types';
 import { QueryResultsView, type QueryGridActions } from './QueryResultsView';
-import { SqlCodeEditor } from './SqlCodeEditor';
+import { SqlCodeEditor, type SqlCodeEditorHandle, type SqlRunRequest } from './SqlCodeEditor';
+import { hasRunnableSelection, resolveRunTarget, type RunMode } from '../../lib/runTarget';
 import { SplitHandle } from '../ui/SplitHandle';
 import { invokeErrorMessage } from '../../lib/invokeError';
 import { toast } from '../../lib/toast';
@@ -54,6 +58,8 @@ interface SqlEditorTabProps {
     sql: string,
     options?: { silent?: boolean; unpaged?: boolean }
   ) => Promise<QueryExecutionResult[]>;
+  /** Where each statement of a script sits, to run the one under the caret. */
+  onStatementRanges: (sql: string) => Promise<SqlRange[]>;
   /** One page of a single statement, for paging and refreshing a result. */
   onQueryPage: (
     sql: string,
@@ -78,6 +84,7 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
   savedQueries,
   onExecuteQuery,
   onQueryPage,
+  onStatementRanges,
   onBookmarkQuery,
   onDeleteSavedQuery,
   onUpdateSavedQueryTags,
@@ -85,6 +92,10 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
 }) => {
   const [sql, setSql] = useState(initialSql);
   const [isRunning, setIsRunning] = useState(false);
+  const [hasSelection, setHasSelection] = useState(false);
+  const [runMenuOpen, setRunMenuOpen] = useState(false);
+  const editorRef = useRef<SqlCodeEditorHandle>(null);
+  const runMenuRef = useRef<HTMLDivElement>(null);
   const queryResults = tabState.results;
   const onSqlChangeRef = useRef(onSqlChange);
   onSqlChangeRef.current = onSqlChange;
@@ -239,6 +250,37 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
     }
   };
 
+  const handleRunRequest = async ({ mode, doc, selection }: SqlRunRequest) => {
+    // A selection or "run all" needs no statement ranges, so skip the round trip.
+    const needsRanges = mode === 'auto' && !hasRunnableSelection(doc, selection);
+    const ranges = needsRanges ? await onStatementRanges(doc).catch(() => null) : null;
+    const target = resolveRunTarget({ doc, selection, ranges, mode });
+    if (target) await handleRunQuery(target.sql);
+  };
+
+  const runFromButton = (mode: RunMode) => {
+    setRunMenuOpen(false);
+    const request = editorRef.current?.runRequest(mode);
+    if (request) void handleRunRequest(request);
+    else void handleRunQuery();
+  };
+
+  useEffect(() => {
+    if (!runMenuOpen) return;
+    const onPointer = (event: MouseEvent) => {
+      if (!runMenuRef.current?.contains(event.target as Node)) setRunMenuOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setRunMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [runMenuOpen]);
+
   const handleFormatQuery = () => {
     try {
       const formatted = format(sql, {
@@ -325,14 +367,52 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
         <div className="p-2.5 bg-card border-b border-border flex flex-wrap items-center justify-between gap-2 shrink-0 font-mono text-xs">
           {/* Left Action Buttons */}
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => handleRunQuery()}
-              disabled={isRunning}
-              className="pressable flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold font-sans text-xs shadow-md transition-colors cursor-pointer"
-            >
-              <Play className="w-3.5 h-3.5 fill-white" />
-              <span>{isRunning ? 'Running...' : 'Run Query (⌘↵)'}</span>
-            </button>
+            <div ref={runMenuRef} className="relative flex items-stretch">
+              <button
+                onClick={() => runFromButton('auto')}
+                disabled={isRunning}
+                title={
+                  hasSelection
+                    ? 'Run the selected SQL'
+                    : 'Run the statement under the cursor'
+                }
+                className="pressable flex items-center gap-1.5 pl-3 pr-2.5 py-1.5 rounded-l-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold font-sans text-xs shadow-md transition-colors cursor-pointer"
+              >
+                <Play className="w-3.5 h-3.5 fill-white" />
+                <span>
+                  {isRunning
+                    ? 'Running...'
+                    : hasSelection
+                      ? 'Run Selection (⌘↵)'
+                      : 'Run Statement (⌘↵)'}
+                </span>
+              </button>
+              <button
+                onClick={() => setRunMenuOpen((open) => !open)}
+                disabled={isRunning}
+                aria-label="More run options"
+                className="pressable flex items-center px-1.5 rounded-r-lg border-l border-emerald-500 bg-emerald-600 hover:bg-emerald-500 text-white shadow-md transition-colors cursor-pointer"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+              <AnimatePresence>
+                {runMenuOpen && (
+                  <Popover
+                    origin="top"
+                    className="absolute left-0 top-full mt-1 min-w-44 bg-popover border border-border rounded-xl shadow-2xl p-1.5 z-40 text-xs text-popover-foreground"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => runFromButton('all')}
+                      className="w-full flex items-center justify-between gap-4 px-2.5 py-1.5 rounded-lg hover:bg-accent text-foreground font-sans text-left"
+                    >
+                      <span>Run All</span>
+                      <span className="text-muted-foreground font-mono">⌘⇧↵</span>
+                    </button>
+                  </Popover>
+                )}
+              </AnimatePresence>
+            </div>
 
             <button
               onClick={handleFormatQuery}
@@ -546,12 +626,14 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
             style={{ flex: `${1 - resultsFraction} 1 0%` }}
           >
             <SqlCodeEditor
+              ref={editorRef}
               value={sql}
               tables={currentDatabase.tables}
               onChange={setSql}
-              onRun={() => {
-                void handleRunQuery();
+              onRun={(request) => {
+                void handleRunRequest(request);
               }}
+              onSelectionChange={setHasSelection}
             />
           </div>
 

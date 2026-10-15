@@ -11,7 +11,7 @@ use db_core::{
     validate_save_input, ActivityLogItem, Adapter, AppSettings, ConnectionFolder,
     ConnectionProfile, ConnectionStatus, DatabaseSchema, ExecuteQueryRequest, QueryExecuteResponse,
     QueryExecutionResult, QueryPageRequest, SaveConnectionInput, SaveFolderInput, SavedQuery,
-    SchemaSyncRequest, SchemaSyncResponse, Session, SshAuthMethod, TablePreviewRequest,
+    SchemaSyncRequest, SchemaSyncResponse, Session, SqlRange, SshAuthMethod, TablePreviewRequest,
     TestConnectionResult, WorkspaceState,
 };
 use db_postgres::PostgresAdapter;
@@ -407,6 +407,11 @@ async fn query_page(
         .map_err(map_err)
 }
 
+#[tauri::command]
+fn sql_statement_ranges(sql: String) -> Vec<SqlRange> {
+    db_core::split_sql_ranges(&sql)
+}
+
 fn record_history(
     state: &AppState,
     profile: &ConnectionProfile,
@@ -636,6 +641,7 @@ pub fn run() {
             table_preview,
             query_execute,
             query_page,
+            sql_statement_ranges,
             history_list,
             saved_queries_list,
             saved_queries_save,

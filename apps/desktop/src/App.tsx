@@ -45,6 +45,7 @@ import {
   historyList,
   queryExecute,
   queryPage,
+  sqlStatementRanges,
   schemaSync,
   settingsGet,
   settingsSave,
@@ -1279,6 +1280,7 @@ export default function App() {
               }
               return res.results;
             }}
+            onStatementRanges={sqlStatementRanges}
             onQueryPage={(sql, limit, offset, withCount) =>
               queryPage({ connectionId: currentDatabase.id, sql, limit, offset, withCount })
             }

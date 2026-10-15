@@ -15,7 +15,7 @@ pub use profiles::{
     MAX_POOL_SIZE, MIN_POOL_SIZE,
 };
 pub use sql::{
-    clamp_preview_page, classify_sql, count_select_sql, paged_select_sql, split_sql_statements,
-    QueryKind, DEFAULT_PREVIEW_LIMIT,
+    clamp_preview_page, classify_sql, count_select_sql, paged_select_sql, split_sql_ranges,
+    split_sql_statements, QueryKind, SqlRange, DEFAULT_PREVIEW_LIMIT,
 };
 pub use types::*;
