@@ -41,6 +41,8 @@ import {
 } from '../../lib/sqlEditorLayout';
 
 interface SqlEditorTabProps {
+  /** True when this tab is the active tab of the focused pane; menu runs then go to this editor. */
+  isFocusedPane: boolean;
   initialSql?: string;
   /** Called (debounced, and on unmount) so the tab's SQL survives tab switches and restarts. */
   onSqlChange?: (sql: string) => void;
@@ -76,6 +78,7 @@ interface SqlEditorTabProps {
 }
 
 export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
+  isFocusedPane,
   initialSql = 'SELECT * FROM users ORDER BY created_at DESC LIMIT 50;',
   onSqlChange,
   tabState,
@@ -290,6 +293,12 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
     };
   }, [scopeId]);
 
+  // The focused pane is the source of truth for which editor the menu runs in. Declared after
+  // the registration effect so a pane focused at mount (restored workspace) claims once registered.
+  useEffect(() => {
+    if (isFocusedPane) scopeRef.current?.claim();
+  }, [isFocusedPane]);
+
   useEffect(() => {
     if (!runMenuOpen) return;
     const onPointer = (event: MouseEvent) => {
@@ -388,6 +397,7 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
     <div
       className="flex-1 flex h-full bg-background overflow-hidden font-sans text-foreground relative"
       onFocus={() => scopeRef.current?.claim()}
+      onMouseDownCapture={() => scopeRef.current?.claim()}
     >
       {/* Main Editor & Results Pane Column */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -661,9 +671,6 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
               onSelectionChange={(has) => {
                 setHasSelection(has);
                 scopeRef.current?.setContext({ sqlSelectionPresent: has });
-              }}
-              onViewReady={(view) => {
-                if (view) scopeRef.current?.claim();
               }}
             />
           </div>

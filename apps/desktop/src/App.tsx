@@ -1233,6 +1233,7 @@ export default function App() {
         return (
           <SqlEditorTab
             key={tab.id}
+            isFocusedPane={tab.id === activeTabId}
             initialSql={tab.sqlContent ?? tab.sqlQuery ?? ''}
             onSqlChange={(sql) => handleSqlChange(tab.id, sql)}
             tabState={sqlTabStates[tab.id] ?? emptySqlTabState()}
