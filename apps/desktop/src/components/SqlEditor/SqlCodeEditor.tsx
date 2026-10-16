@@ -1,11 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { sql, PostgreSQL } from '@codemirror/lang-sql';
-import {
-  autocompletion,
-  startCompletion,
-  type CompletionContext,
-} from '@codemirror/autocomplete';
+import { autocompletion, type CompletionContext } from '@codemirror/autocomplete';
 import { linter, lintGutter } from '@codemirror/lint';
 import { keymap, EditorView } from '@codemirror/view';
 import { Prec } from '@codemirror/state';
@@ -13,6 +9,7 @@ import { syntaxHighlighting } from '@codemirror/language';
 import { sqlCompletions, type SqlSchemaTable } from '../../lib/sqlComplete';
 import { sqlDiagnostics } from '../../lib/sqlDiagnostics';
 import { sqlHighlightStyle } from '../../lib/sqlSyntaxTheme';
+import { BASIC_SETUP_WITHOUT_KEYMAPS, EDITOR_KEYMAP, editorShortcuts } from '../../lib/editorKeymap';
 import type { RunMode, RunSelection } from '../../lib/runTarget';
 
 export interface SqlCodeEditorHandle {
@@ -40,17 +37,21 @@ interface SqlCodeEditorProps {
   onSelectionChange?: (hasSelection: boolean) => void;
   /** The editor view once it exists, and `null` when it is destroyed. */
   onViewReady?: (view: EditorView | null) => void;
+  /** Cmd/Ctrl+Enter (`'auto'`) and Cmd/Ctrl+Shift+Enter (`'all'`) pressed in the editor. */
+  onRunKey?: (mode: RunMode) => void;
 }
 
 export const SqlCodeEditor = forwardRef<SqlCodeEditorHandle, SqlCodeEditorProps>(
-  function SqlCodeEditor({ value, tables, onChange, onSelectionChange, onViewReady }, ref) {
+  function SqlCodeEditor({ value, tables, onChange, onSelectionChange, onViewReady, onRunKey }, ref) {
     const viewRef = useRef<EditorView | null>(null);
     const onSelectionChangeRef = useRef(onSelectionChange);
     const onViewReadyRef = useRef(onViewReady);
+    const onRunKeyRef = useRef(onRunKey);
     const hasSelectionRef = useRef(false);
     const tablesRef = useRef(tables);
     onSelectionChangeRef.current = onSelectionChange;
     onViewReadyRef.current = onViewReady;
+    onRunKeyRef.current = onRunKey;
     tablesRef.current = tables;
 
     useEffect(
@@ -116,14 +117,23 @@ export const SqlCodeEditor = forwardRef<SqlCodeEditorHandle, SqlCodeEditorProps>
             },
           ],
         }),
+        // Ctrl-Space, plus Mod-Enter / Mod-Shift-Enter, which run the query rather than
+        // defaultKeymap's insertBlankLine. The page sees these keys before the native menu, so the
+        // editor handles them itself (through the same path as Query > Run) and preventDefaults
+        // them: the menu item does not also fire, and the query runs exactly once.
         Prec.highest(
-          keymap.of([
-            {
-              key: 'Ctrl-Space',
-              run: startCompletion,
-            },
-          ])
+          keymap.of(
+            editorShortcuts((mode) => {
+              const run = onRunKeyRef.current;
+              if (!run) return false;
+              run(mode);
+              return true;
+            })
+          )
         ),
+        // basicSetup's keymaps (turned off below) minus bindings on menu accelerators, which would
+        // otherwise pre-empt the menu (e.g. Mod-Alt-\ indentSelection vs Split Pane Right).
+        keymap.of(EDITOR_KEYMAP),
         EditorView.theme(
           {
             '&': {
@@ -186,6 +196,7 @@ export const SqlCodeEditor = forwardRef<SqlCodeEditorHandle, SqlCodeEditorProps>
           lineNumbers: true,
           foldGutter: true,
           autocompletion: false,
+          ...BASIC_SETUP_WITHOUT_KEYMAPS,
         }}
         extensions={extensions}
         onChange={onChange}

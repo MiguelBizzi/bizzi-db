@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import type { SqlRange } from '@db/shared';
 import { Modal, ModalPanel } from '../ui/Modal';
@@ -294,11 +294,13 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
     !isRunning && Boolean(activeResult && !activeResult.error && (activeResult.rows?.length ?? 0) > 0);
   const sqlResultPresentRef = useRef(sqlResultPresent);
   sqlResultPresentRef.current = sqlResultPresent;
+  // Query > Run / Run All and the editor's own Cmd+Enter / Cmd+Shift+Enter all go through here,
+  // so selection vs caret and auto vs all behave identically from the menu and the keyboard.
+  const runFromMenu = useCallback((mode: RunMode) => {
+    const request = editorRef.current?.runRequest(mode);
+    if (request) void handleRunRequestRef.current(request);
+  }, []);
   useEffect(() => {
-    const runFromMenu = (mode: RunMode) => {
-      const request = editorRef.current?.runRequest(mode);
-      if (request) void handleRunRequestRef.current(request);
-    };
     const scope = registerScope('sql:' + scopeId, {
       'query.run': () => runFromMenu('auto'),
       'query.runAll': () => runFromMenu('all'),
@@ -322,7 +324,7 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
       scopeRef.current = null;
       scope.dispose();
     };
-  }, [scopeId]);
+  }, [scopeId, runFromMenu]);
 
   // The focused pane is the source of truth for which editor the menu runs in; the bus prefers
   // active scopes, so mount order cannot steal the menu from the highlighted pane.
@@ -710,6 +712,7 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
               value={sql}
               tables={currentDatabase.tables}
               onChange={setSql}
+              onRunKey={runFromMenu}
               onViewReady={(view) => {
                 viewRef.current = view;
               }}
