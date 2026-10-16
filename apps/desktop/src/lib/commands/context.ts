@@ -28,7 +28,14 @@ export const EMPTY_CONTEXT: CommandContext = {
   closedTabCount: 0,
 };
 
-const TEXT_INPUT_SELECTOR = 'input, textarea, select, [contenteditable="true"], .cm-content';
+/** Input types that take no typed text (a focused row checkbox is not typing). */
+const NON_TEXT_INPUT_TYPES = ['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file', 'image'];
+
+/** Elements that accept text, whose own editing keys menu commands must not take over. */
+export const TEXT_INPUT_SELECTOR =
+  'input' +
+  NON_TEXT_INPUT_TYPES.map((type) => `:not([type=${type}])`).join('') +
+  ', textarea, select, [contenteditable="true"], .cm-content';
 
 export function isTextInputTarget(el: { closest(selector: string): unknown } | null): boolean {
   if (!el) return false;
