@@ -3,7 +3,13 @@ import type { CommandContext } from './context';
 export type CommandHandler = () => void | Promise<void>;
 
 export interface CommandScope {
+  /** Makes the scope active and the topmost one. */
   claim(): void;
+  /**
+   * Inactive scopes lose to active ones in command lookup and contribute no context.
+   * Scopes start active.
+   */
+  setActive(active: boolean): void;
   setContext(patch: Partial<CommandContext>): void;
   dispose(): void;
 }
@@ -12,6 +18,7 @@ interface ScopeEntry {
   owner: string;
   handlers: Record<string, CommandHandler>;
   patch: Partial<CommandContext>;
+  active: boolean;
 }
 
 // Ordered bottom to top; the last entry is the most recently registered or claimed.
@@ -32,7 +39,7 @@ export function registerScope(
   owner: string,
   handlers: Record<string, CommandHandler>,
 ): CommandScope {
-  const entry: ScopeEntry = { owner, handlers, patch: {} };
+  const entry: ScopeEntry = { owner, handlers, patch: {}, active: true };
   stack.push(entry);
   notify();
 
@@ -40,10 +47,16 @@ export function registerScope(
     claim() {
       const index = stack.indexOf(entry);
       if (index === -1) return;
+      entry.active = true;
       if (index !== stack.length - 1) {
         stack.splice(index, 1);
         stack.push(entry);
       }
+      notify();
+    },
+    setActive(active) {
+      if (!stack.includes(entry) || entry.active === active) return;
+      entry.active = active;
       notify();
     },
     setContext(patch) {
@@ -61,18 +74,18 @@ export function registerScope(
 
 export function getLocalContext(): Partial<CommandContext> {
   const merged: Partial<CommandContext> = {};
-  for (const entry of stack) Object.assign(merged, entry.patch);
+  for (const entry of stack) if (entry.active) Object.assign(merged, entry.patch);
   return merged;
 }
 
 export function runCommand(id: string, onError?: (error: unknown) => void): boolean {
+  // Active scopes win regardless of mount order; inactive ones are only a fallback.
   let handler: CommandHandler | undefined;
-  for (let i = stack.length - 1; i >= 0; i--) {
-    const candidate = stack[i].handlers[id];
-    if (candidate) {
-      handler = candidate;
-      break;
+  for (const wantActive of [true, false]) {
+    for (let i = stack.length - 1; i >= 0 && !handler; i--) {
+      if (stack[i].active === wantActive) handler = stack[i].handlers[id];
     }
+    if (handler) break;
   }
   if (!handler) return false;
 

@@ -173,3 +173,97 @@ describe('subscribeBus', () => {
     }
   });
 });
+
+describe('active scopes', () => {
+  test('an inactive scope registered after an active one does not take over, nor leak its context', () => {
+    const calls: string[] = [];
+    register('a', { 'query.run': () => void calls.push('a') });
+    const b = register('b', { 'query.run': () => void calls.push('b') });
+    b.setActive(false);
+    b.setContext({ sqlSelectionPresent: true });
+
+    expect(runCommand('query.run')).toBe(true);
+    expect(calls).toEqual(['a']);
+    expect(getLocalContext()).toEqual({});
+  });
+
+  test('setActive(true) makes the scope win and its patch appear', () => {
+    const calls: string[] = [];
+    register('a', { 'query.run': () => void calls.push('a') });
+    const b = register('b', { 'query.run': () => void calls.push('b') });
+    b.setActive(false);
+    b.setContext({ sqlSelectionPresent: true });
+
+    b.setActive(true);
+    expect(runCommand('query.run')).toBe(true);
+    expect(calls).toEqual(['b']);
+    expect(getLocalContext()).toEqual({ sqlSelectionPresent: true });
+  });
+
+  test('claim() activates an inactive scope and moves it to the top', () => {
+    const calls: string[] = [];
+    const a = register('a', { 'query.run': () => void calls.push('a') });
+    register('b', { 'query.run': () => void calls.push('b') });
+    a.setActive(false);
+
+    a.claim();
+    expect(runCommand('query.run')).toBe(true);
+    expect(calls).toEqual(['a']);
+  });
+
+  test('with only inactive scopes owning the id, the topmost one runs', () => {
+    const calls: string[] = [];
+    const a = register('a', { 'query.run': () => void calls.push('a') });
+    const b = register('b', { 'query.run': () => void calls.push('b') });
+    register('c', { 'other.cmd': () => {} });
+    a.setActive(false);
+    b.setActive(false);
+
+    expect(runCommand('query.run')).toBe(true);
+    expect(calls).toEqual(['b']);
+  });
+
+  test('an active scope that owns the id beats an inactive one above it', () => {
+    const calls: string[] = [];
+    register('a', { 'query.run': () => void calls.push('a') });
+    const b = register('b', { 'query.run': () => void calls.push('b') });
+    const c = register('c', { 'query.run': () => void calls.push('c') });
+    c.setActive(false);
+    b.setActive(false);
+
+    expect(runCommand('query.run')).toBe(true);
+    expect(calls).toEqual(['a']);
+  });
+
+  test('setActive with an unchanged value does not notify, a change does', () => {
+    const a = register('a', {});
+    let count = 0;
+    const unsubscribe = subscribeBus(() => count++);
+    try {
+      a.setActive(true);
+      expect(count).toBe(0);
+      a.setActive(false);
+      expect(count).toBe(1);
+      a.setActive(false);
+      expect(count).toBe(1);
+      a.setActive(true);
+      expect(count).toBe(2);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  test('setActive after dispose is a no-op', () => {
+    const a = register('a', { 'query.run': () => {} });
+    a.dispose();
+    let count = 0;
+    const unsubscribe = subscribeBus(() => count++);
+    try {
+      a.setActive(false);
+      expect(count).toBe(0);
+      expect(runCommand('query.run')).toBe(false);
+    } finally {
+      unsubscribe();
+    }
+  });
+});

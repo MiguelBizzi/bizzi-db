@@ -275,6 +275,8 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
   // The menu bar's Run commands go to the focused editor (see the command bus).
   const handleRunRequestRef = useRef(handleRunRequest);
   handleRunRequestRef.current = handleRunRequest;
+  const isFocusedPaneRef = useRef(isFocusedPane);
+  isFocusedPaneRef.current = isFocusedPane;
   useEffect(() => {
     const runFromMenu = (mode: RunMode) => {
       const request = editorRef.current?.runRequest(mode);
@@ -284,8 +286,10 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
       'query.run': () => runFromMenu('auto'),
       'query.runAll': () => runFromMenu('all'),
     });
-    // Without an initial value an unfocused pane's stale flag could leak into the merged context.
+    // Only the focused pane's editor is active, whatever order the panes mount in.
+    scope.setActive(isFocusedPaneRef.current);
     scope.setContext({ sqlSelectionPresent: false });
+    if (isFocusedPaneRef.current) scope.claim();
     scopeRef.current = scope;
     return () => {
       scopeRef.current = null;
@@ -293,10 +297,13 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
     };
   }, [scopeId]);
 
-  // The focused pane is the source of truth for which editor the menu runs in. Declared after
-  // the registration effect so a pane focused at mount (restored workspace) claims once registered.
+  // The focused pane is the source of truth for which editor the menu runs in; the bus prefers
+  // active scopes, so mount order cannot steal the menu from the highlighted pane.
   useEffect(() => {
-    if (isFocusedPane) scopeRef.current?.claim();
+    const scope = scopeRef.current;
+    if (!scope) return;
+    scope.setActive(isFocusedPane);
+    if (isFocusedPane) scope.claim();
   }, [isFocusedPane]);
 
   useEffect(() => {
