@@ -35,6 +35,8 @@ export const COMMANDS: readonly Command[] = [
   { id: 'app.settings', label: 'Settings…', accelerator: 'CmdOrCtrl+,', enabled: () => true, allowInModal: true },
   { id: 'app.checkUpdates', label: 'Check for Updates…', enabled: () => true },
   { id: 'file.newQuery', label: 'New Query Tab', accelerator: 'CmdOrCtrl+T', enabled: connectionOpen },
+  { id: 'file.newConnection', label: 'New Connection…', accelerator: 'CmdOrCtrl+N', enabled: () => true },
+  { id: 'file.newTable', label: 'New Table…', accelerator: 'CmdOrCtrl+Shift+N', enabled: connectionOpen },
   { id: 'file.saveQuery', label: 'Save Query…', accelerator: 'CmdOrCtrl+S', enabled: sqlEditorActive },
   {
     id: 'file.export',
@@ -86,6 +88,13 @@ export const COMMANDS: readonly Command[] = [
   },
   { id: 'query.discard', label: 'Discard Pending Changes', enabled: hasPendingChanges },
   { id: 'query.review', label: 'Review Pending Changes', accelerator: 'CmdOrCtrl+Shift+P', enabled: connectionOpen },
+  // Switch and Back stay enabled without a connection; their handlers are no-ops there.
+  { id: 'conn.switch', label: 'Switch Connection…', enabled: () => true },
+  { id: 'conn.back', label: 'Back to Connections', enabled: () => true },
+  { id: 'conn.edit', label: 'Edit Connection…', enabled: connectionOpen },
+  { id: 'conn.reconnect', label: 'Reconnect', enabled: connectionOpen },
+  { id: 'conn.disconnect', label: 'Disconnect', enabled: connectionOpen },
+  { id: 'conn.refreshSchema', label: 'Refresh Schema', accelerator: 'CmdOrCtrl+Shift+R', enabled: connectionOpen },
   {
     id: 'conn.refreshTable',
     label: 'Refresh Table',

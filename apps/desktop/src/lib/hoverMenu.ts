@@ -33,6 +33,10 @@ export function createHoverMenuController(
         setOpen(false);
       }, delayMs);
     },
+    close() {
+      clearTimer();
+      setOpen(false);
+    },
     dispose() {
       clearTimer();
     },
@@ -60,6 +64,9 @@ export function useHoverMenu(delayMs = HOVER_MENU_CLOSE_MS) {
   const controller = controllerRef.current;
   return {
     open,
+    /** Opens the menu without the pointer; it stays open until `close` or a pointer enter/leave. */
+    show: () => controller.enter(),
+    close: () => controller.close(),
     onMouseEnter: () => controller.enter(),
     onMouseLeave: () => controller.leave(),
   };

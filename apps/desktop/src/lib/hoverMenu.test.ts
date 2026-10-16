@@ -66,4 +66,23 @@ describe('createHoverMenuController', () => {
     clock.flush();
     expect(open).toBe(false);
   });
+
+  test('close hides the menu immediately and cancels a pending close', () => {
+    let open = false;
+    const clock = fakeScheduler();
+    const menu = createHoverMenuController(
+      (value) => {
+        open = value;
+      },
+      clock
+    );
+
+    menu.enter();
+    menu.leave();
+    expect(clock.timers.size).toBe(1);
+
+    menu.close();
+    expect(open).toBe(false);
+    expect(clock.timers.size).toBe(0);
+  });
 });

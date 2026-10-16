@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { AnimatePresence } from "motion/react";
 import { Popover } from "./ui/Popover";
 import {
@@ -42,6 +43,8 @@ interface NavbarProps {
   onOpenMetrics: () => void;
   onOpenSettings: () => void;
   onBackToConnections?: () => void;
+  /** Increment to open the connection switcher (menu bar "Switch Connection…"). */
+  switcherRequest?: number;
 }
 
 function SwitcherFolderRow({
@@ -133,9 +136,35 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenMetrics,
   onOpenSettings,
   onBackToConnections,
+  switcherRequest = 0,
 }) => {
   const isPicker = variant === "picker";
   const switcher = useHoverMenu();
+  const switcherRef = useRef<HTMLDivElement>(null);
+  const { show: showSwitcher, close: closeSwitcher } = switcher;
+
+  useEffect(() => {
+    if (switcherRequest > 0 && !isPicker) showSwitcher();
+    // Only a new request opens it; a variant change alone must not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [switcherRequest]);
+
+  // A switcher opened from the menu has no pointer to leave, so dismiss it on an outside click or Escape.
+  useEffect(() => {
+    if (!switcher.open) return;
+    const onMouseDown = (event: MouseEvent) => {
+      if (!switcherRef.current?.contains(event.target as Node)) closeSwitcher();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeSwitcher();
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [switcher.open, closeSwitcher]);
   const connectingProfile = connectingId
     ? profiles.find((p) => p.id === connectingId)
     : undefined;
@@ -181,6 +210,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {!isPicker && (
           <>
             <div
+              ref={switcherRef}
               className="relative"
               data-no-drag
               onMouseEnter={switcher.onMouseEnter}

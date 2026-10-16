@@ -33,7 +33,7 @@ describe('COMMANDS registry invariants', () => {
     }
   });
 
-  test('registers the Phase 1, Phase 2, editor and Phase 3 command ids', () => {
+  test('registers the Phase 1 to Phase 4 command ids', () => {
     expect(COMMANDS.map((c) => c.id).sort()).toEqual(
       [
         'app.settings',
@@ -57,6 +57,14 @@ describe('COMMANDS registry invariants', () => {
         'query.commit',
         'query.discard',
         'conn.refreshTable',
+        'file.newConnection',
+        'file.newTable',
+        'conn.switch',
+        'conn.back',
+        'conn.edit',
+        'conn.reconnect',
+        'conn.disconnect',
+        'conn.refreshSchema',
         'view.palette',
         'view.erd',
         'view.metrics',
@@ -114,6 +122,26 @@ describe('COMMANDS registry invariants', () => {
       expect(cmd.accelerator).toBe(accelerator);
       expect(cmd.typingConflict ?? false).toBe(typingConflict);
       expect(cmd.allowInModal ?? false).toBe(false);
+    }
+  });
+
+  test('connection and schema commands have the expected labels, accelerators and rules', () => {
+    const spec: Array<[string, string, string | undefined]> = [
+      ['file.newConnection', 'New Connection…', 'CmdOrCtrl+N'],
+      ['file.newTable', 'New Table…', 'CmdOrCtrl+Shift+N'],
+      ['conn.switch', 'Switch Connection…', undefined],
+      ['conn.back', 'Back to Connections', undefined],
+      ['conn.edit', 'Edit Connection…', undefined],
+      ['conn.reconnect', 'Reconnect', undefined],
+      ['conn.disconnect', 'Disconnect', undefined],
+      ['conn.refreshSchema', 'Refresh Schema', 'CmdOrCtrl+Shift+R'],
+    ];
+    for (const [id, label, accelerator] of spec) {
+      const cmd = commandById(id);
+      expect(cmd.label).toBe(label);
+      expect(cmd.accelerator).toBe(accelerator);
+      expect(cmd.allowInModal ?? false).toBe(false);
+      expect(cmd.typingConflict ?? false).toBe(false);
     }
   });
 
@@ -235,6 +263,31 @@ describe('isCommandEnabled', () => {
     ['file.export', { activeTabType: 'table_data', modalOpen: true }, false],
     ['query.commit', { pendingCount: 1, modalOpen: true }, false],
     ['query.discard', { pendingCount: 1, modalOpen: true }, false],
+    // connection and schema commands (Phase 4)
+    ['file.newConnection', {}, true],
+    ['file.newConnection', { connectionOpen: true }, true],
+    ['file.newConnection', { modalOpen: true }, false],
+    ['file.newTable', { connectionOpen: true }, true],
+    ['file.newTable', {}, false],
+    ['file.newTable', { connectionOpen: true, modalOpen: true }, false],
+    ['conn.switch', {}, true],
+    ['conn.switch', { connectionOpen: true }, true],
+    ['conn.switch', { connectionOpen: true, modalOpen: true }, false],
+    ['conn.back', {}, true],
+    ['conn.back', { connectionOpen: true }, true],
+    ['conn.back', { connectionOpen: true, modalOpen: true }, false],
+    ['conn.edit', { connectionOpen: true }, true],
+    ['conn.edit', {}, false],
+    ['conn.edit', { connectionOpen: true, modalOpen: true }, false],
+    ['conn.reconnect', { connectionOpen: true }, true],
+    ['conn.reconnect', {}, false],
+    ['conn.reconnect', { connectionOpen: true, modalOpen: true }, false],
+    ['conn.disconnect', { connectionOpen: true }, true],
+    ['conn.disconnect', {}, false],
+    ['conn.disconnect', { connectionOpen: true, modalOpen: true }, false],
+    ['conn.refreshSchema', { connectionOpen: true }, true],
+    ['conn.refreshSchema', {}, false],
+    ['conn.refreshSchema', { connectionOpen: true, modalOpen: true }, false],
   ];
   for (const [id, over, expected] of rows) {
     test(`${id} with ${JSON.stringify(over)} -> ${expected}`, () => {
@@ -352,10 +405,18 @@ describe('menuState for realistic app contexts', () => {
         'app.settings',
         'app.checkUpdates',
         'file.newQuery',
+        'file.newConnection',
+        'file.newTable',
         'file.saveQuery',
         'edit.formatSql',
         'edit.toggleComment',
         'file.closeWindow',
+        'conn.switch',
+        'conn.back',
+        'conn.edit',
+        'conn.reconnect',
+        'conn.disconnect',
+        'conn.refreshSchema',
         'query.run',
         'query.runAll',
         'query.review',
@@ -399,7 +460,15 @@ describe('menuState for realistic app contexts', () => {
 
   test('no connection leaves only the connection-independent commands enabled', () => {
     expect(enabledIds(ctx())).toEqual(
-      ['app.settings', 'app.checkUpdates', 'file.closeWindow', 'view.palette'].sort(),
+      [
+        'app.settings',
+        'app.checkUpdates',
+        'file.closeWindow',
+        'view.palette',
+        'file.newConnection',
+        'conn.switch',
+        'conn.back',
+      ].sort(),
     );
   });
 
@@ -461,6 +530,17 @@ describe('shortcutLabel', () => {
     expect(shortcutLabel('query.commit', 'macos')).toBe('⇧⌘S');
     expect(shortcutLabel('query.discard', 'macos')).toBe('');
     expect(shortcutLabel('edit.deleteRows', 'windows')).toBe('Ctrl+Backspace');
+  });
+
+  test('formats the connection and schema accelerators', () => {
+    expect(shortcutLabel('file.newConnection', 'macos')).toBe('⌘N');
+    expect(shortcutLabel('file.newTable', 'macos')).toBe('⇧⌘N');
+    expect(shortcutLabel('conn.refreshSchema', 'macos')).toBe('⇧⌘R');
+    expect(shortcutLabel('file.newConnection', 'windows')).toBe('Ctrl+N');
+    expect(shortcutLabel('conn.refreshSchema', 'linux')).toBe('Ctrl+Shift+R');
+    for (const id of ['conn.switch', 'conn.back', 'conn.edit', 'conn.reconnect', 'conn.disconnect']) {
+      expect(shortcutLabel(id, 'macos')).toBe('');
+    }
   });
 
   test('is empty when the command has no accelerator', () => {

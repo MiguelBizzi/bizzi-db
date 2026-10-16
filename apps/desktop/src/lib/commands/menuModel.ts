@@ -54,6 +54,8 @@ export function buildMenuModel(): MenuNode[] {
       label: 'File',
       items: [
         item('file.newQuery'),
+        item('file.newConnection'),
+        item('file.newTable'),
         separator(),
         item('file.saveQuery'),
         item('file.export'),
@@ -105,7 +107,17 @@ export function buildMenuModel(): MenuNode[] {
       kind: 'submenu',
       id: 'connection',
       label: 'Connection',
-      items: [item('conn.refreshTable')],
+      items: [
+        item('conn.switch'),
+        item('conn.back'),
+        item('conn.edit'),
+        separator(),
+        item('conn.reconnect'),
+        item('conn.disconnect'),
+        separator(),
+        item('conn.refreshSchema'),
+        item('conn.refreshTable'),
+      ],
     },
     {
       kind: 'submenu',

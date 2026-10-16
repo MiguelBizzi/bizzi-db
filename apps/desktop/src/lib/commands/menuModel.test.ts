@@ -89,9 +89,11 @@ describe('buildMenuModel', () => {
     ]);
   });
 
-  test('file submenu holds new query, save and export, the close/reopen tab group, then close window', () => {
+  test('file submenu holds the new items, save and export, the close/reopen tab group, then close window', () => {
     expect(submenu(buildMenuModel(), 'file').items).toEqual([
       { kind: 'item', commandId: 'file.newQuery' },
+      { kind: 'item', commandId: 'file.newConnection' },
+      { kind: 'item', commandId: 'file.newTable' },
       { kind: 'separator' },
       { kind: 'item', commandId: 'file.saveQuery' },
       { kind: 'item', commandId: 'file.export' },
@@ -102,6 +104,20 @@ describe('buildMenuModel', () => {
       { kind: 'item', commandId: 'file.reopenTab' },
       { kind: 'separator' },
       { kind: 'item', commandId: 'file.closeWindow' },
+    ]);
+  });
+
+  test('connection submenu holds switch, back, edit, reconnect, disconnect, then the refresh commands', () => {
+    expect(submenu(buildMenuModel(), 'connection').items).toEqual([
+      { kind: 'item', commandId: 'conn.switch' },
+      { kind: 'item', commandId: 'conn.back' },
+      { kind: 'item', commandId: 'conn.edit' },
+      { kind: 'separator' },
+      { kind: 'item', commandId: 'conn.reconnect' },
+      { kind: 'item', commandId: 'conn.disconnect' },
+      { kind: 'separator' },
+      { kind: 'item', commandId: 'conn.refreshSchema' },
+      { kind: 'item', commandId: 'conn.refreshTable' },
     ]);
   });
 

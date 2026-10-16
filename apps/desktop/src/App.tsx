@@ -185,6 +185,7 @@ export default function App() {
   const [isPendingChangesOpen, setIsPendingChangesOpen] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
+  const [switcherRequest, setSwitcherRequest] = useState(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const {
     preference: motionPreference,
@@ -1075,8 +1076,8 @@ export default function App() {
   };
 
   const handleOpenConnection = useCallback(
-    async (id: string) => {
-      if (currentDbId === id) {
+    async (id: string, options?: { reconnect?: boolean }) => {
+      if (currentDbId === id && !options?.reconnect) {
         return;
       }
       setConnectingId(id);
@@ -1167,6 +1168,16 @@ export default function App() {
     setEditingProfile(profile);
     setDefaultFolderId(null);
     setIsConnectionModalOpen(true);
+  };
+
+  const reconnectCurrentConnection = () => {
+    // Reconnecting the open connection parks and restores its own tabs, so the workspace is kept.
+    if (currentDbId) void handleOpenConnection(currentDbId, { reconnect: true });
+  };
+
+  const editCurrentConnection = () => {
+    const profile = profiles.find((p) => p.id === currentDbId);
+    if (profile) openEditConnection(profile);
   };
 
   const closeConnectionModal = () => {
@@ -1453,12 +1464,30 @@ export default function App() {
     ]
   );
 
+  const openNewTableDesigner = () => {
+    if (!currentDatabase) return;
+    openTabInPane(activePaneId, {
+      id: 'tab_schema_new_' + Date.now(),
+      type: 'schema_designer',
+      title: 'New Table Schema',
+      databaseId: currentDatabase.id,
+    });
+  };
+
+  const refreshSchemas = async () => {
+    if (!currentDatabase) return;
+    const error = await refreshConnectionSchemas(loadSchema, currentDatabase.id);
+    if (error) toast.error(error);
+  };
+
   useAppMenu({
     context: commandContext,
     handlers: {
       'app.settings': () => setIsSettingsOpen(true),
       'app.checkUpdates': checkForAppUpdateManually,
       'file.newQuery': () => handleOpenNewQueryTab(),
+      'file.newConnection': () => openNewConnection(),
+      'file.newTable': openNewTableDesigner,
       'file.closeWindow': () => getCurrentWindow().close(),
       'file.closeTab': () => handleCloseTab(activePaneId, activeTabId),
       'file.closeOthers': () => handleCloseTabs(activePaneId, activeTabId, 'others'),
@@ -1468,6 +1497,14 @@ export default function App() {
       // Destructive: they keep the drawer's two-step confirmation, opening it already armed.
       'query.commit': () => openPendingChangesToConfirm('query.commit'),
       'query.discard': () => openPendingChangesToConfirm('query.discard'),
+      'conn.switch': () => {
+        if (currentDbId) setSwitcherRequest((n) => n + 1);
+      },
+      'conn.back': () => void handleBackToConnections(),
+      'conn.edit': editCurrentConnection,
+      'conn.reconnect': reconnectCurrentConnection,
+      'conn.disconnect': () => void handleBackToConnections(),
+      'conn.refreshSchema': () => void refreshSchemas(),
       'conn.refreshTable': refreshActiveTable,
       'view.palette': () => setIsCommandPaletteOpen((open) => !open),
       'view.erd': openErd,
@@ -1510,6 +1547,7 @@ export default function App() {
         onBackToConnections={() => {
           void handleBackToConnections();
         }}
+        switcherRequest={switcherRequest}
       />
 
       {showPicker ? (
@@ -1552,21 +1590,8 @@ export default function App() {
               onCopyTableSchema={handleCopyTableSchema}
               onEmptyTable={(table) => setTableActionConfirm({ table, action: 'truncate' })}
               onDeleteTable={(table) => setTableActionConfirm({ table, action: 'drop' })}
-              onOpenNewTableModal={() => {
-                openTabInPane(activePaneId, {
-                  id: 'tab_schema_new_' + Date.now(),
-                  type: 'schema_designer',
-                  title: 'New Table Schema',
-                  databaseId: currentDatabase.id,
-                });
-              }}
-              onRefreshSchemas={async () => {
-                const error = await refreshConnectionSchemas(
-                  loadSchema,
-                  currentDatabase.id
-                );
-                if (error) toast.error(error);
-              }}
+              onOpenNewTableModal={openNewTableDesigner}
+              onRefreshSchemas={refreshSchemas}
               onAddTagToTable={(tableName, tag) => {
                 setDatabases((prev) =>
                   prev.map((db) =>
