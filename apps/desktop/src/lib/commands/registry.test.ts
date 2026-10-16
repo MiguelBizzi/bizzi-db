@@ -33,12 +33,15 @@ describe('COMMANDS registry invariants', () => {
     }
   });
 
-  test('registers the Phase 1 and Phase 2 command ids', () => {
+  test('registers the Phase 1, Phase 2 and editor command ids', () => {
     expect(COMMANDS.map((c) => c.id).sort()).toEqual(
       [
         'app.settings',
         'app.checkUpdates',
         'file.newQuery',
+        'file.saveQuery',
+        'edit.formatSql',
+        'edit.toggleComment',
         'file.closeTab',
         'file.closeOthers',
         'file.closeRight',
@@ -130,6 +133,19 @@ describe('isCommandEnabled', () => {
     ['view.palette', { connectionOpen: true, modalOpen: true }, true],
     ['view.palette', { modalOpen: true }, true],
     ['app.checkUpdates', { modalOpen: true }, false],
+    // editor commands
+    ['file.saveQuery', { activeTabType: 'sql_editor' }, true],
+    ['file.saveQuery', { activeTabType: 'table_data' }, false],
+    ['file.saveQuery', {}, false],
+    ['file.saveQuery', { activeTabType: 'sql_editor', modalOpen: true }, false],
+    ['edit.formatSql', { activeTabType: 'sql_editor' }, true],
+    ['edit.formatSql', { activeTabType: 'table_data' }, false],
+    ['edit.formatSql', {}, false],
+    ['edit.formatSql', { activeTabType: 'sql_editor', modalOpen: true }, false],
+    ['edit.toggleComment', { activeTabType: 'sql_editor' }, true],
+    ['edit.toggleComment', { activeTabType: 'table_data' }, false],
+    ['edit.toggleComment', {}, false],
+    ['edit.toggleComment', { activeTabType: 'sql_editor', modalOpen: true }, false],
     // tab and pane commands (Phase 2)
     ['file.closeTab', { paneTabCount: 1 }, true],
     ['file.closeTab', { paneTabCount: 0 }, false],
@@ -239,6 +255,13 @@ describe('menuState', () => {
     expect(state.enabled['query.runAll']).toBe(true);
   });
 
+  test('save, format and comment act inside the editor, so typing does not disable them', () => {
+    const state = menuState(ctx({ activeTabType: 'sql_editor', textInputFocused: true }));
+    expect(state.enabled['file.saveQuery']).toBe(true);
+    expect(state.enabled['edit.formatSql']).toBe(true);
+    expect(state.enabled['edit.toggleComment']).toBe(true);
+  });
+
   test('typingConflict commands are disabled in menuState while typing', () => {
     const cmds: Command[] = [
       { id: 'test.typing', label: 'T', enabled: () => true, typingConflict: true },
@@ -269,6 +292,9 @@ describe('menuState for realistic app contexts', () => {
         'app.settings',
         'app.checkUpdates',
         'file.newQuery',
+        'file.saveQuery',
+        'edit.formatSql',
+        'edit.toggleComment',
         'file.closeWindow',
         'query.run',
         'query.runAll',
@@ -343,6 +369,14 @@ describe('shortcutLabel', () => {
     expect(shortcutLabel('view.nextTab', 'linux')).toBe('Ctrl+Shift+]');
     expect(shortcutLabel('file.closeRight', 'macos')).toBe('');
     expect(shortcutLabel('view.splitDown', 'macos')).toBe('');
+  });
+
+  test('formats the editor accelerators', () => {
+    expect(shortcutLabel('file.saveQuery', 'macos')).toBe('⌘S');
+    expect(shortcutLabel('edit.formatSql', 'macos')).toBe('⇧⌘F');
+    expect(shortcutLabel('edit.toggleComment', 'macos')).toBe('⌘/');
+    expect(shortcutLabel('file.saveQuery', 'windows')).toBe('Ctrl+S');
+    expect(shortcutLabel('edit.toggleComment', 'linux')).toBe('Ctrl+/');
   });
 
   test('is empty when the command has no accelerator', () => {

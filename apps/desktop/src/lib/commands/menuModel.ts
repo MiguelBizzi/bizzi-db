@@ -55,6 +55,8 @@ export function buildMenuModel(): MenuNode[] {
       items: [
         item('file.newQuery'),
         separator(),
+        item('file.saveQuery'),
+        separator(),
         item('file.closeTab'),
         item('file.closeOthers'),
         item('file.closeRight'),
@@ -76,6 +78,9 @@ export function buildMenuModel(): MenuNode[] {
         predefined('paste'),
         separator(),
         predefined('selectAll'),
+        separator(),
+        item('edit.toggleComment'),
+        item('edit.formatSql'),
       ],
     },
     {

@@ -4,6 +4,8 @@ import type { SqlRange } from '@db/shared';
 import { Modal, ModalPanel } from '../ui/Modal';
 import { Popover } from '../ui/Popover';
 import { format } from 'sql-formatter';
+import { toggleComment } from '@codemirror/commands';
+import type { EditorView } from '@codemirror/view';
 import {
   Play,
   ChevronDown,
@@ -100,6 +102,7 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
   const [hasSelection, setHasSelection] = useState(false);
   const [runMenuOpen, setRunMenuOpen] = useState(false);
   const editorRef = useRef<SqlCodeEditorHandle>(null);
+  const viewRef = useRef<EditorView | null>(null);
   const scopeRef = useRef<CommandScope | null>(null);
   const scopeId = useId();
   const runMenuRef = useRef<HTMLDivElement>(null);
@@ -277,6 +280,12 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
   handleRunRequestRef.current = handleRunRequest;
   const isFocusedPaneRef = useRef(isFocusedPane);
   isFocusedPaneRef.current = isFocusedPane;
+  // Save and Format read state (`sql`, the save modal) that changes every render, so they are
+  // reached through refs too: the scope below registers once per scope id and would otherwise
+  // keep calling the closures of the first render (formatting stale text).
+  const handleFormatQueryRef = useRef<() => void>(() => {});
+  const handleOpenSaveModalRef = useRef<() => void>(() => {});
+  const isSaveModalOpenRef = useRef(false);
   useEffect(() => {
     const runFromMenu = (mode: RunMode) => {
       const request = editorRef.current?.runRequest(mode);
@@ -285,6 +294,15 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
     const scope = registerScope('sql:' + scopeId, {
       'query.run': () => runFromMenu('auto'),
       'query.runAll': () => runFromMenu('all'),
+      // Reopening the form while it is open would reset what the user has typed into it.
+      'file.saveQuery': () => {
+        if (!isSaveModalOpenRef.current) handleOpenSaveModalRef.current();
+      },
+      'edit.formatSql': () => handleFormatQueryRef.current(),
+      'edit.toggleComment': () => {
+        const view = viewRef.current;
+        if (view) toggleComment(view);
+      },
     });
     // Only the focused pane's editor is active, whatever order the panes mount in.
     scope.setActive(isFocusedPaneRef.current);
@@ -340,6 +358,10 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
     setSaveTags(['Analytics']);
     setIsSaveModalOpen(true);
   };
+
+  handleFormatQueryRef.current = handleFormatQuery;
+  handleOpenSaveModalRef.current = handleOpenSaveModal;
+  isSaveModalOpenRef.current = isSaveModalOpen;
 
   const handleConfirmSaveQuery = (e: React.FormEvent) => {
     e.preventDefault();
@@ -675,6 +697,9 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
               value={sql}
               tables={currentDatabase.tables}
               onChange={setSql}
+              onViewReady={(view) => {
+                viewRef.current = view;
+              }}
               onSelectionChange={(has) => {
                 setHasSelection(has);
                 scopeRef.current?.setContext({ sqlSelectionPresent: has });

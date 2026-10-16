@@ -33,6 +33,7 @@ export const COMMANDS: readonly Command[] = [
   { id: 'app.settings', label: 'Settings…', accelerator: 'CmdOrCtrl+,', enabled: () => true, allowInModal: true },
   { id: 'app.checkUpdates', label: 'Check for Updates…', enabled: () => true },
   { id: 'file.newQuery', label: 'New Query Tab', accelerator: 'CmdOrCtrl+T', enabled: connectionOpen },
+  { id: 'file.saveQuery', label: 'Save Query…', accelerator: 'CmdOrCtrl+S', enabled: sqlEditorActive },
   { id: 'file.closeTab', label: 'Close Tab', accelerator: 'CmdOrCtrl+W', enabled: paneHasTabs(1) },
   { id: 'file.closeOthers', label: 'Close Other Tabs', accelerator: 'CmdOrCtrl+Alt+W', enabled: paneHasTabs(2) },
   { id: 'file.closeRight', label: 'Close Tabs to the Right', enabled: paneHasTabs(2) },
@@ -49,6 +50,8 @@ export const COMMANDS: readonly Command[] = [
     enabled: () => true,
     allowInModal: true,
   },
+  { id: 'edit.formatSql', label: 'Format SQL', accelerator: 'CmdOrCtrl+Shift+F', enabled: sqlEditorActive },
+  { id: 'edit.toggleComment', label: 'Toggle Comment', accelerator: 'CmdOrCtrl+/', enabled: sqlEditorActive },
   {
     id: 'query.run',
     label: 'Run Statement',
