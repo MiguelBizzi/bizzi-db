@@ -17,6 +17,8 @@ const paneHasTabs =
   (ctx: CommandContext): boolean =>
     ctx.paneTabCount >= min;
 const tabActive = (ctx: CommandContext): boolean => ctx.activeTabType !== null;
+const tableDataActive = (ctx: CommandContext): boolean => ctx.activeTabType === 'table_data';
+const hasPendingChanges = (ctx: CommandContext): boolean => ctx.pendingCount > 0;
 
 /** `view.tab.1`…`view.tab.8` select that tab; `view.tab.9` selects the last (browser convention). */
 const goToTabCommands: Command[] = Array.from({ length: 9 }, (_, i) => {
@@ -34,6 +36,12 @@ export const COMMANDS: readonly Command[] = [
   { id: 'app.checkUpdates', label: 'Check for Updates…', enabled: () => true },
   { id: 'file.newQuery', label: 'New Query Tab', accelerator: 'CmdOrCtrl+T', enabled: connectionOpen },
   { id: 'file.saveQuery', label: 'Save Query…', accelerator: 'CmdOrCtrl+S', enabled: sqlEditorActive },
+  {
+    id: 'file.export',
+    label: 'Export Results…',
+    accelerator: 'CmdOrCtrl+E',
+    enabled: (ctx) => tableDataActive(ctx) || (sqlEditorActive(ctx) && ctx.sqlResultPresent),
+  },
   { id: 'file.closeTab', label: 'Close Tab', accelerator: 'CmdOrCtrl+W', enabled: paneHasTabs(1) },
   { id: 'file.closeOthers', label: 'Close Other Tabs', accelerator: 'CmdOrCtrl+Alt+W', enabled: paneHasTabs(2) },
   { id: 'file.closeRight', label: 'Close Tabs to the Right', enabled: paneHasTabs(2) },
@@ -50,6 +58,16 @@ export const COMMANDS: readonly Command[] = [
     enabled: () => true,
     allowInModal: true,
   },
+  // Grid commands share their keys with text editing (⌘F, ⌘I, ⌘⌫), so they yield to a focused input.
+  { id: 'edit.find', label: 'Find in Table…', accelerator: 'CmdOrCtrl+F', enabled: tableDataActive, typingConflict: true },
+  { id: 'edit.insertRow', label: 'Insert Row', accelerator: 'CmdOrCtrl+I', enabled: tableDataActive, typingConflict: true },
+  {
+    id: 'edit.deleteRows',
+    label: 'Delete Selected Rows',
+    accelerator: 'CmdOrCtrl+Backspace',
+    enabled: (ctx) => tableDataActive(ctx) && ctx.selectedRowCount > 0,
+    typingConflict: true,
+  },
   { id: 'edit.formatSql', label: 'Format SQL', accelerator: 'CmdOrCtrl+Shift+F', enabled: sqlEditorActive },
   { id: 'edit.toggleComment', label: 'Toggle Comment', accelerator: 'CmdOrCtrl+/', enabled: sqlEditorActive },
   {
@@ -60,12 +78,19 @@ export const COMMANDS: readonly Command[] = [
     enabled: sqlEditorActive,
   },
   { id: 'query.runAll', label: 'Run All', accelerator: 'CmdOrCtrl+Shift+Enter', enabled: sqlEditorActive },
+  {
+    id: 'query.commit',
+    label: 'Commit Pending Changes',
+    accelerator: 'CmdOrCtrl+Shift+S',
+    enabled: hasPendingChanges,
+  },
+  { id: 'query.discard', label: 'Discard Pending Changes', enabled: hasPendingChanges },
   { id: 'query.review', label: 'Review Pending Changes', accelerator: 'CmdOrCtrl+Shift+P', enabled: connectionOpen },
   {
     id: 'conn.refreshTable',
     label: 'Refresh Table',
     accelerator: 'CmdOrCtrl+R',
-    enabled: (ctx) => ctx.activeTabType === 'table_data',
+    enabled: tableDataActive,
   },
   {
     id: 'view.palette',

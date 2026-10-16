@@ -33,15 +33,19 @@ describe('COMMANDS registry invariants', () => {
     }
   });
 
-  test('registers the Phase 1, Phase 2 and editor command ids', () => {
+  test('registers the Phase 1, Phase 2, editor and Phase 3 command ids', () => {
     expect(COMMANDS.map((c) => c.id).sort()).toEqual(
       [
         'app.settings',
         'app.checkUpdates',
         'file.newQuery',
         'file.saveQuery',
+        'file.export',
         'edit.formatSql',
         'edit.toggleComment',
+        'edit.find',
+        'edit.insertRow',
+        'edit.deleteRows',
         'file.closeTab',
         'file.closeOthers',
         'file.closeRight',
@@ -50,6 +54,8 @@ describe('COMMANDS registry invariants', () => {
         'query.run',
         'query.runAll',
         'query.review',
+        'query.commit',
+        'query.discard',
         'conn.refreshTable',
         'view.palette',
         'view.erd',
@@ -91,6 +97,30 @@ describe('COMMANDS registry invariants', () => {
       expect(cmd.accelerator).toBe(accelerator);
       expect(cmd.allowInModal ?? false).toBe(false);
     }
+  });
+
+  test('grid and pending-change commands have the expected labels, accelerators and typing rules', () => {
+    const spec: Array<[string, string, string | undefined, boolean]> = [
+      ['edit.find', 'Find in Table…', 'CmdOrCtrl+F', true],
+      ['edit.insertRow', 'Insert Row', 'CmdOrCtrl+I', true],
+      ['edit.deleteRows', 'Delete Selected Rows', 'CmdOrCtrl+Backspace', true],
+      ['file.export', 'Export Results…', 'CmdOrCtrl+E', false],
+      ['query.commit', 'Commit Pending Changes', 'CmdOrCtrl+Shift+S', false],
+      ['query.discard', 'Discard Pending Changes', undefined, false],
+    ];
+    for (const [id, label, accelerator, typingConflict] of spec) {
+      const cmd = commandById(id);
+      expect(cmd.label).toBe(label);
+      expect(cmd.accelerator).toBe(accelerator);
+      expect(cmd.typingConflict ?? false).toBe(typingConflict);
+      expect(cmd.allowInModal ?? false).toBe(false);
+    }
+  });
+
+  test('CmdOrCtrl+Backspace parses as Cmd/Ctrl + Backspace', () => {
+    const parsed = parseAccelerator('CmdOrCtrl+Backspace');
+    expect(parsed.cmd).toBe(true);
+    expect(parsed.key).toBe('BACKSPACE');
   });
 });
 
@@ -175,6 +205,36 @@ describe('isCommandEnabled', () => {
     ['view.splitRight', { activeTabType: 'table_data', modalOpen: true }, false],
     ['view.splitDown', { activeTabType: 'table_data' }, true],
     ['view.splitDown', {}, false],
+    // grid commands (Phase 3): typingConflict keeps them out of the way of text editing
+    ['edit.find', { activeTabType: 'table_data' }, true],
+    ['edit.find', { activeTabType: 'table_data', textInputFocused: true }, false],
+    ['edit.find', { activeTabType: 'sql_editor' }, false],
+    ['edit.find', {}, false],
+    ['edit.insertRow', { activeTabType: 'table_data' }, true],
+    ['edit.insertRow', { activeTabType: 'table_data', textInputFocused: true }, false],
+    ['edit.insertRow', { activeTabType: 'sql_editor' }, false],
+    ['edit.deleteRows', { activeTabType: 'table_data', selectedRowCount: 2 }, true],
+    ['edit.deleteRows', { activeTabType: 'table_data', selectedRowCount: 0 }, false],
+    ['edit.deleteRows', { activeTabType: 'table_data', selectedRowCount: 1, textInputFocused: true }, false],
+    ['edit.deleteRows', { activeTabType: 'sql_editor', selectedRowCount: 1 }, false],
+    ['file.export', { activeTabType: 'table_data' }, true],
+    ['file.export', { activeTabType: 'table_data', textInputFocused: true }, true],
+    ['file.export', { activeTabType: 'sql_editor', sqlResultPresent: true }, true],
+    ['file.export', { activeTabType: 'sql_editor', sqlResultPresent: false }, false],
+    ['file.export', { activeTabType: 'erd_schema', sqlResultPresent: true }, false],
+    ['file.export', {}, false],
+    // pending changes
+    ['query.commit', { pendingCount: 3 }, true],
+    ['query.commit', { pendingCount: 0 }, false],
+    ['query.discard', { pendingCount: 1 }, true],
+    ['query.discard', { pendingCount: 0 }, false],
+    // an open modal disables every Phase 3 command
+    ['edit.find', { activeTabType: 'table_data', modalOpen: true }, false],
+    ['edit.insertRow', { activeTabType: 'table_data', modalOpen: true }, false],
+    ['edit.deleteRows', { activeTabType: 'table_data', selectedRowCount: 1, modalOpen: true }, false],
+    ['file.export', { activeTabType: 'table_data', modalOpen: true }, false],
+    ['query.commit', { pendingCount: 1, modalOpen: true }, false],
+    ['query.discard', { pendingCount: 1, modalOpen: true }, false],
   ];
   for (const [id, over, expected] of rows) {
     test(`${id} with ${JSON.stringify(over)} -> ${expected}`, () => {
@@ -317,6 +377,20 @@ describe('menuState for realistic app contexts', () => {
     expect(menuState({ ...sqlTabOpen, activeTabType: 'table_data' }).enabled['conn.refreshTable']).toBe(true);
   });
 
+  test('a table_data tab with a row selection and staged changes enables the grid and pending commands', () => {
+    const tableTab = { ...sqlTabOpen, activeTabType: 'table_data' as const, selectedRowCount: 1, pendingCount: 2 };
+    const state = menuState(tableTab);
+    for (const id of ['edit.find', 'edit.insertRow', 'edit.deleteRows', 'file.export', 'query.commit', 'query.discard']) {
+      expect(state.enabled[id]).toBe(true);
+    }
+    const typing = menuState({ ...tableTab, textInputFocused: true });
+    expect(typing.enabled['edit.find']).toBe(false);
+    expect(typing.enabled['edit.insertRow']).toBe(false);
+    expect(typing.enabled['edit.deleteRows']).toBe(false);
+    expect(typing.enabled['file.export']).toBe(true);
+    expect(typing.enabled['query.commit']).toBe(true);
+  });
+
   test('an open modal leaves only the allowInModal commands enabled', () => {
     expect(enabledIds({ ...sqlTabOpen, activeTabType: 'table_data', modalOpen: true })).toEqual(
       ['app.settings', 'file.closeWindow', 'view.palette'].sort(),
@@ -377,6 +451,16 @@ describe('shortcutLabel', () => {
     expect(shortcutLabel('edit.toggleComment', 'macos')).toBe('⌘/');
     expect(shortcutLabel('file.saveQuery', 'windows')).toBe('Ctrl+S');
     expect(shortcutLabel('edit.toggleComment', 'linux')).toBe('Ctrl+/');
+  });
+
+  test('formats the grid and pending-change accelerators', () => {
+    expect(shortcutLabel('edit.find', 'macos')).toBe('⌘F');
+    expect(shortcutLabel('edit.insertRow', 'macos')).toBe('⌘I');
+    expect(shortcutLabel('edit.deleteRows', 'macos')).toBe('⌘⌫');
+    expect(shortcutLabel('file.export', 'macos')).toBe('⌘E');
+    expect(shortcutLabel('query.commit', 'macos')).toBe('⇧⌘S');
+    expect(shortcutLabel('query.discard', 'macos')).toBe('');
+    expect(shortcutLabel('edit.deleteRows', 'windows')).toBe('Ctrl+Backspace');
   });
 
   test('is empty when the command has no accelerator', () => {

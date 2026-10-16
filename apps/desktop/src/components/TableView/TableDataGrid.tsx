@@ -1,9 +1,11 @@
 import React, {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
+  type RefObject,
 } from "react";
 import { AnimatePresence } from 'motion/react';
 import {
@@ -25,6 +27,8 @@ import {
   ColumnDefinition,
 } from "../../types";
 import { TableToolbar } from "./TableToolbar";
+import type { FilterExpressionInputHandle } from "./FilterExpressionInput";
+import { registerScope, type CommandScope } from "../../lib/commands/commandBus";
 import { Checkbox } from "../ui/Checkbox";
 import { JsonModal } from "./JsonModal";
 import { InsertRowDrawer } from "./InsertRowDrawer";
@@ -156,6 +160,15 @@ interface TableDataGridProps {
   insertTable?: TableSchema;
   toolbarLeading?: React.ReactNode;
   toolbarTrailing?: React.ReactNode;
+  /**
+   * Registers this grid as a menu bar command scope (Find, Insert Row, Delete Selected Rows,
+   * Export). Only a table tab's grid does; a SQL result grid leaves the menu to its editor.
+   */
+  registerMenuScope?: boolean;
+  /** True when this grid's tab is the active tab of the focused pane; menu commands then go here. */
+  isFocusedPane?: boolean;
+  /** Receives the toolbar Export menu's default CSV export; the grid keeps its own when unset. */
+  exportTriggerRef?: RefObject<(() => void) | null>;
 }
 
 interface GridContextMenu {
@@ -203,6 +216,9 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   insertTable,
   toolbarLeading,
   toolbarTrailing,
+  registerMenuScope = false,
+  isFocusedPane = false,
+  exportTriggerRef,
 }) => {
   const isQuery = variant === "query";
   const paged = !isQuery || pagination !== undefined;
@@ -262,6 +278,12 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   const leadingWidth = readOnly ? 0 : GRID_SELECT_COLUMN_WIDTH;
   const portRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
+  const filterInputRef = useRef<FilterExpressionInputHandle>(null);
+  const ownExportTriggerRef = useRef<(() => void) | null>(null);
+  const exportRef = exportTriggerRef ?? ownExportTriggerRef;
+  const focusFilterOnShow = useRef(false);
+  const scopeRef = useRef<CommandScope | null>(null);
+  const scopeId = useId();
 
   const onLoadRowsRef = useRef(onLoadRows);
   onLoadRowsRef.current = onLoadRows;
@@ -450,6 +472,79 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     }
   };
 
+  // Stages the deletes; nothing is applied until the pending changes are committed.
+  const handleDeleteSelected = () => {
+    if (selectedRowPks.length === 0) return;
+    onDeleteSelectedRows(selectedRowPks);
+    setSelectedRowPks([]);
+  };
+
+  // Menu bar commands, read through a ref: the scope below registers once per scope id.
+  const insertBlocked = Boolean(table.isView) || readOnly;
+  const menuActions = useRef({
+    find: () => {},
+    insertRow: () => {},
+    deleteRows: () => {},
+    exportCsv: () => {},
+  });
+  menuActions.current = {
+    find: () => {
+      if (isQuery) return;
+      if (showFilters) {
+        filterInputRef.current?.focus();
+        return;
+      }
+      // The input mounts with the filter panel; the effect below focuses it then.
+      focusFilterOnShow.current = true;
+      setShowFilters(true);
+    },
+    insertRow: () => {
+      if (!insertBlocked) setInsertOpen(true);
+    },
+    deleteRows: handleDeleteSelected,
+    exportCsv: () => exportRef.current?.(),
+  };
+
+  useEffect(() => {
+    if (!showFilters || !focusFilterOnShow.current) return;
+    focusFilterOnShow.current = false;
+    filterInputRef.current?.focus();
+  }, [showFilters]);
+
+  const isFocusedPaneRef = useRef(isFocusedPane);
+  isFocusedPaneRef.current = isFocusedPane;
+  const selectedCountRef = useRef(selectedRowPks.length);
+  selectedCountRef.current = selectedRowPks.length;
+  useEffect(() => {
+    if (!registerMenuScope) return;
+    const scope = registerScope("grid:" + scopeId, {
+      "edit.find": () => menuActions.current.find(),
+      "edit.insertRow": () => menuActions.current.insertRow(),
+      "edit.deleteRows": () => menuActions.current.deleteRows(),
+      "file.export": () => menuActions.current.exportCsv(),
+    });
+    // Only the focused pane's grid is active, whatever order the panes mount in.
+    scope.setActive(isFocusedPaneRef.current);
+    scope.setContext({ selectedRowCount: selectedCountRef.current });
+    if (isFocusedPaneRef.current) scope.claim();
+    scopeRef.current = scope;
+    return () => {
+      scopeRef.current = null;
+      scope.dispose();
+    };
+  }, [scopeId, registerMenuScope]);
+
+  useEffect(() => {
+    const scope = scopeRef.current;
+    if (!scope) return;
+    scope.setActive(isFocusedPane);
+    if (isFocusedPane) scope.claim();
+  }, [isFocusedPane]);
+
+  useEffect(() => {
+    scopeRef.current?.setContext({ selectedRowCount: selectedRowPks.length });
+  }, [selectedRowPks.length]);
+
   // Inline edit submit
   const handleCellEditSubmit = (
     rowPk: any,
@@ -634,7 +729,11 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   );
 
   return (
-    <div className="flex flex-col h-full min-h-0 min-w-0 bg-background overflow-hidden font-sans select-none text-foreground">
+    <div
+      className="flex flex-col h-full min-h-0 min-w-0 bg-background overflow-hidden font-sans select-none text-foreground"
+      onFocus={() => scopeRef.current?.claim()}
+      onMouseDownCapture={() => scopeRef.current?.claim()}
+    >
       {/* Toolbar */}
       <TableToolbar
         table={table}
@@ -665,16 +764,15 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
         leading={toolbarLeading}
         trailing={toolbarTrailing}
         onInsertRow={() => setInsertOpen(true)}
-        onDeleteSelectedRows={() => {
-          onDeleteSelectedRows(selectedRowPks);
-          setSelectedRowPks([]);
-        }}
+        onDeleteSelectedRows={handleDeleteSelected}
         exportRows={exportRows}
         fetchAllRows={onFetchAllRows}
         onRefresh={() => {
           void handleRefresh();
         }}
         isLoading={loading}
+        filterInputRef={filterInputRef}
+        exportTriggerRef={exportRef}
       />
 
       {/* Spreadsheet Grid Canvas */}

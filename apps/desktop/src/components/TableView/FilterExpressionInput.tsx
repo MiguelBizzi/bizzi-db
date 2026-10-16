@@ -1,4 +1,13 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type Ref,
+} from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Popover } from '../ui/Popover';
 import { createPortal } from 'react-dom';
@@ -9,7 +18,12 @@ import {
   type FilterCompletion,
 } from '../../lib/filterExpression';
 
+export interface FilterExpressionInputHandle {
+  focus(): void;
+}
+
 interface FilterExpressionInputProps {
+  ref?: Ref<FilterExpressionInputHandle>;
   value: string;
   onChange: (value: string) => void;
   onSubmit: (value: string) => boolean;
@@ -19,6 +33,7 @@ interface FilterExpressionInputProps {
 }
 
 export function FilterExpressionInput({
+  ref,
   value,
   onChange,
   onSubmit,
@@ -27,6 +42,7 @@ export function FilterExpressionInput({
   error,
 }: FilterExpressionInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  useImperativeHandle(ref, () => ({ focus: () => inputRef.current?.focus() }), []);
   const menuRef = useRef<HTMLDivElement>(null);
   const listId = useId();
   const [cursor, setCursor] = useState(0);

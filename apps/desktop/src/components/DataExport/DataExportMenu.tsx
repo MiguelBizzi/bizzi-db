@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Popover } from '../ui/Popover';
 import {
@@ -44,6 +44,11 @@ interface DataExportMenuProps {
    * `rows` as given (a row selection, or data that is already complete).
    */
   loadAllRows?: () => Promise<Record<string, unknown>[]>;
+  /**
+   * Receives the Export menu's default action (download as CSV) while this menu is mounted, so
+   * the menu bar's Export command runs the same export. It does nothing while the menu is idle.
+   */
+  exportTriggerRef?: RefObject<(() => void) | null>;
 }
 
 type OpenMenu = 'copy' | 'export' | null;
@@ -63,6 +68,7 @@ export function DataExportMenu({
   disabled = false,
   disabledReason,
   loadAllRows,
+  exportTriggerRef,
 }: DataExportMenuProps) {
   const [open, setOpen] = useState<OpenMenu>(null);
   const [copied, setCopied] = useState(false);
@@ -136,6 +142,17 @@ export function DataExportMenu({
   };
 
   const handleExport = (format: DataExportFormat) => runExport('export', format);
+
+  useEffect(() => {
+    if (!exportTriggerRef) return;
+    const trigger = () => {
+      if (!idle) void handleExport('csv');
+    };
+    exportTriggerRef.current = trigger;
+    return () => {
+      if (exportTriggerRef.current === trigger) exportTriggerRef.current = null;
+    };
+  });
 
   useEffect(() => {
     if (!open) return;

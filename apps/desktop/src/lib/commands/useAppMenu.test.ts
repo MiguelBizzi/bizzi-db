@@ -109,6 +109,36 @@ describe('createMenuSync', () => {
     expect(calls).toBe(1);
   });
 
+  test('run re-reads the context, so a stale typing flag is corrected before the gate', async () => {
+    let calls = 0;
+    scopes.push(registerScope('test', { 'edit.insertRow': () => void calls++ }));
+    const applied: State[] = [];
+    const host: MenuHost = {
+      async applyState(state) {
+        applied.push(state);
+      },
+    };
+    // `typing` stands in for document.activeElement: it changes without any sync() call,
+    // as when a focused input is removed from the DOM and no focusout fires.
+    let typing = true;
+    const sync = createMenuSync({
+      getContext: () => ({ ...EMPTY_CONTEXT, activeTabType: 'table_data', textInputFocused: typing }),
+      onError: () => undefined,
+    });
+    sync.setHost(host);
+    sync.sync();
+    typing = false;
+    sync.run('edit.insertRow');
+    expect(calls).toBe(1);
+    await sync.idle();
+    expect(applied.at(-1)?.enabled['edit.insertRow']).toBe(true);
+    typing = true;
+    sync.run('edit.insertRow');
+    expect(calls).toBe(1);
+    await sync.idle();
+    expect(applied.at(-1)?.enabled['edit.insertRow']).toBe(false);
+  });
+
   test('run reports sync and async handler errors through onError', async () => {
     const errors: unknown[] = [];
     scopes.push(

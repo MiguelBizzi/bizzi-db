@@ -286,6 +286,14 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
   const handleFormatQueryRef = useRef<() => void>(() => {});
   const handleOpenSaveModalRef = useRef<() => void>(() => {});
   const isSaveModalOpenRef = useRef(false);
+  // The results toolbar's Export menu hands its default CSV export to the menu bar's Export.
+  const exportTriggerRef = useRef<(() => void) | null>(null);
+  // Mirrors when that Export control has rows to export: the shown result has rows, not running.
+  const activeResult = queryResults[clampResultIndex(tabState.activeResultIndex, queryResults.length)];
+  const sqlResultPresent =
+    !isRunning && Boolean(activeResult && !activeResult.error && (activeResult.rows?.length ?? 0) > 0);
+  const sqlResultPresentRef = useRef(sqlResultPresent);
+  sqlResultPresentRef.current = sqlResultPresent;
   useEffect(() => {
     const runFromMenu = (mode: RunMode) => {
       const request = editorRef.current?.runRequest(mode);
@@ -303,10 +311,11 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
         const view = viewRef.current;
         if (view) toggleComment(view);
       },
+      'file.export': () => exportTriggerRef.current?.(),
     });
     // Only the focused pane's editor is active, whatever order the panes mount in.
     scope.setActive(isFocusedPaneRef.current);
-    scope.setContext({ sqlSelectionPresent: false });
+    scope.setContext({ sqlSelectionPresent: false, sqlResultPresent: sqlResultPresentRef.current });
     if (isFocusedPaneRef.current) scope.claim();
     scopeRef.current = scope;
     return () => {
@@ -323,6 +332,10 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
     scope.setActive(isFocusedPane);
     if (isFocusedPane) scope.claim();
   }, [isFocusedPane]);
+
+  useEffect(() => {
+    scopeRef.current?.setContext({ sqlResultPresent });
+  }, [sqlResultPresent]);
 
   useEffect(() => {
     if (!runMenuOpen) return;
@@ -727,6 +740,7 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
                 onTabStateChange((prev) => ({ ...prev, activeResultIndex: index }))
               }
               grid={gridActions}
+              exportTriggerRef={exportTriggerRef}
             />
           </div>
         </div>

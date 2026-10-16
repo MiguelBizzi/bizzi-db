@@ -1,11 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, type Ref, type RefObject } from 'react';
 import { Filter, Plus, Trash2, Search, RefreshCw } from 'lucide-react';
 import { TableSchema, FilterClause } from '../../types';
 import { Select, SelectOption } from '../ui/Select';
 import { Checkbox } from '../ui/Checkbox';
 import { DataExportMenu } from '../DataExport/DataExportMenu';
 import { ColumnVisibilityMenu } from './ColumnVisibilityMenu';
-import { FilterExpressionInput } from './FilterExpressionInput';
+import { FilterExpressionInput, type FilterExpressionInputHandle } from './FilterExpressionInput';
 import { filterNeedsValue, filterRuleFieldsClass } from '../../lib/tableFilters';
 import { commitFilterExpression, valueHintsFromRows } from '../../lib/filterExpression';
 import { shortcutLabel } from '../../lib/commands/shortcutLabel';
@@ -39,6 +39,10 @@ interface TableToolbarProps {
   fetchAllRows?: () => Promise<Record<string, unknown>[]>;
   onRefresh: () => void;
   isLoading?: boolean;
+  /** Handle to the filter expression input, set while the filter panel is open. */
+  filterInputRef?: Ref<FilterExpressionInputHandle>;
+  /** Receives the Export menu's default CSV export (see `DataExportMenu`). */
+  exportTriggerRef?: RefObject<(() => void) | null>;
 }
 
 export const TableToolbar: React.FC<TableToolbarProps> = ({
@@ -66,6 +70,8 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
   fetchAllRows,
   onRefresh,
   isLoading = false,
+  filterInputRef,
+  exportTriggerRef,
 }) => {
   const isQuery = variant === 'query';
   const insertBlocked = table.isView || readOnly;
@@ -216,6 +222,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
             schema={table.schema}
             disabled={isLoading}
             disabledReason={loadingHint}
+            exportTriggerRef={exportTriggerRef}
           />
         </div>
       </div>
@@ -236,6 +243,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
           </div>
 
           <FilterExpressionInput
+            ref={filterInputRef}
             value={draft}
             onChange={(text) => {
               setDraft(text);

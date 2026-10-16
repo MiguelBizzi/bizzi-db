@@ -58,7 +58,7 @@ describe('buildMenuModel', () => {
     expect(submenu(buildMenuModel(), 'edit').items[0]).toEqual({ kind: 'predefined', item: 'undo' });
   });
 
-  test('edit submenu holds the standard items, then toggle comment and format SQL', () => {
+  test('edit submenu holds the standard items, the grid commands, then toggle comment and format SQL', () => {
     expect(submenu(buildMenuModel(), 'edit').items).toEqual([
       { kind: 'predefined', item: 'undo' },
       { kind: 'predefined', item: 'redo' },
@@ -69,25 +69,32 @@ describe('buildMenuModel', () => {
       { kind: 'separator' },
       { kind: 'predefined', item: 'selectAll' },
       { kind: 'separator' },
+      { kind: 'item', commandId: 'edit.find' },
+      { kind: 'item', commandId: 'edit.insertRow' },
+      { kind: 'item', commandId: 'edit.deleteRows' },
+      { kind: 'separator' },
       { kind: 'item', commandId: 'edit.toggleComment' },
       { kind: 'item', commandId: 'edit.formatSql' },
     ]);
   });
 
-  test('query submenu holds run, run all, a separator, then review pending changes', () => {
+  test('query submenu holds run, run all, a separator, then commit, discard and review pending changes', () => {
     expect(submenu(buildMenuModel(), 'query').items).toEqual([
       { kind: 'item', commandId: 'query.run' },
       { kind: 'item', commandId: 'query.runAll' },
       { kind: 'separator' },
+      { kind: 'item', commandId: 'query.commit' },
+      { kind: 'item', commandId: 'query.discard' },
       { kind: 'item', commandId: 'query.review' },
     ]);
   });
 
-  test('file submenu holds new query, save query, the close/reopen tab group, then close window', () => {
+  test('file submenu holds new query, save and export, the close/reopen tab group, then close window', () => {
     expect(submenu(buildMenuModel(), 'file').items).toEqual([
       { kind: 'item', commandId: 'file.newQuery' },
       { kind: 'separator' },
       { kind: 'item', commandId: 'file.saveQuery' },
+      { kind: 'item', commandId: 'file.export' },
       { kind: 'separator' },
       { kind: 'item', commandId: 'file.closeTab' },
       { kind: 'item', commandId: 'file.closeOthers' },

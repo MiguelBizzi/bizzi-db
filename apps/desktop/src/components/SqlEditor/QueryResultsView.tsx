@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, type RefObject } from 'react';
 import { motion } from 'motion/react';
 import { fade } from '../../lib/motion';
 import { PendingModifications, QueryExecutionResult, TableSchema } from '../../types';
@@ -49,6 +49,8 @@ interface QueryResultsViewProps {
   activeIndex: number;
   onActiveIndexChange: (index: number) => void;
   grid: QueryGridActions;
+  /** Receives the shown result's default CSV export, for the menu bar's Export command. */
+  exportTriggerRef?: RefObject<(() => void) | null>;
 }
 
 export const QueryResultsView: React.FC<QueryResultsViewProps> = ({
@@ -57,6 +59,7 @@ export const QueryResultsView: React.FC<QueryResultsViewProps> = ({
   activeIndex,
   onActiveIndexChange,
   grid,
+  exportTriggerRef,
 }) => {
   const setActiveIndex = onActiveIndexChange;
   const result = results[Math.min(activeIndex, Math.max(results.length - 1, 0))];
@@ -112,7 +115,13 @@ export const QueryResultsView: React.FC<QueryResultsViewProps> = ({
         </div>
       )}
       {result ? (
-        <SingleResultView key={result.id} result={result} isLoading={isLoading} grid={grid} />
+        <SingleResultView
+          key={result.id}
+          result={result}
+          isLoading={isLoading}
+          grid={grid}
+          exportTriggerRef={exportTriggerRef}
+        />
       ) : null}
     </div>
   );
@@ -125,6 +134,7 @@ function ResultsToolbar({
   activeSubTab,
   onSubTab,
   loadAllRows,
+  exportTriggerRef,
 }: {
   disabled: boolean;
   rows: number;
@@ -132,6 +142,7 @@ function ResultsToolbar({
   activeSubTab?: 'grid' | 'explain';
   onSubTab?: (tab: 'grid' | 'explain') => void;
   loadAllRows?: () => Promise<Record<string, unknown>[]>;
+  exportTriggerRef?: RefObject<(() => void) | null>;
 }) {
   const sqlTarget = inferQualifiedTable(result?.query);
   return (
@@ -158,6 +169,7 @@ function ResultsToolbar({
           schema={sqlTarget.schema}
           disabled={disabled}
           disabledReason="Unavailable while the query is running"
+          exportTriggerRef={exportTriggerRef}
         />
       </div>
     </div>
@@ -258,10 +270,12 @@ function SingleResultView({
   result,
   isLoading,
   grid,
+  exportTriggerRef,
 }: {
   result: QueryExecutionResult;
   isLoading: boolean;
   grid: QueryGridActions;
+  exportTriggerRef?: RefObject<(() => void) | null>;
 }) {
   const [activeSubTab, setActiveSubTab] = useState<'grid' | 'explain'>('grid');
   const analysis = useMemo(
@@ -332,6 +346,7 @@ function SingleResultView({
             onFetchAllRows={loadAllRows}
             onLookup={grid.onLookup}
             onOpenTable={grid.onOpenTable}
+            exportTriggerRef={exportTriggerRef}
             toolbarLeading={
               <ResultSubTabs
                 disabled={false}
@@ -370,6 +385,7 @@ function SingleResultView({
         activeSubTab={activeSubTab}
         onSubTab={setActiveSubTab}
         loadAllRows={loadAllRows}
+        exportTriggerRef={exportTriggerRef}
       />
 
       {isLoading ? (

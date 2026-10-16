@@ -1246,6 +1246,8 @@ export default function App() {
         return (
           <TableDataGrid
             key={tab.id}
+            registerMenuScope
+            isFocusedPane={tab.id === activeTabId}
             table={table}
             rows={rows}
             pagination={
@@ -1452,6 +1454,14 @@ export default function App() {
       'file.closeRight': () => handleCloseTabs(activePaneId, activeTabId, 'right'),
       'file.reopenTab': handleReopenClosedTab,
       'query.review': openPendingChanges,
+      // The handlers behind the Pending Changes drawer's "Approve all" / "Cancel all" buttons
+      // (the drawer's click-twice confirmation lives in the drawer, not in these handlers).
+      'query.commit': () => {
+        if (pendingCount > 0 && !applyingAllChanges) void handleApproveAllChanges();
+      },
+      'query.discard': () => {
+        if (pendingCount > 0) handleCancelAllChanges();
+      },
       'conn.refreshTable': refreshActiveTable,
       'view.palette': () => setIsCommandPaletteOpen((open) => !open),
       'view.erd': openErd,

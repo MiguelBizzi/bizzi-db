@@ -15,7 +15,11 @@ export interface MenuSync {
   setHost(host: MenuHost | null): void;
   /** Recomputes the menu state from `getContext()` and queues it on the host. */
   sync(): void;
-  /** Menu click entry point: ignored when the command is disabled in the latest state. */
+  /**
+   * Menu click entry point. Re-syncs first, so the gate sees the current context (a typing
+   * flag can go stale when a focused input leaves the DOM without a focusout), then ignores
+   * the command when it is disabled.
+   */
   run(commandId: string): void;
   /** Resolves once every queued `applyState` has settled. */
   idle(): Promise<void>;
@@ -45,8 +49,8 @@ export function createMenuSync(opts: {
     },
     sync,
     run(commandId) {
-      const state = latest ?? menuState(opts.getContext());
-      if (!state.enabled[commandId]) return;
+      sync();
+      if (!latest?.enabled[commandId]) return;
       runCommand(commandId, opts.onError);
     },
     idle: () => chain,
@@ -63,7 +67,6 @@ export function useAppMenu(args: { context: CommandContext; handlers: Record<str
   handlersRef.current = args.handlers;
   const contextRef = useRef(args.context);
   contextRef.current = args.context;
-  const textInputFocusedRef = useRef(false);
   const installRef = useRef<Promise<MenuHost | null> | null>(null);
   const menuRef = useRef<MenuSync | null>(null);
   if (!menuRef.current) {
@@ -71,7 +74,8 @@ export function useAppMenu(args: { context: CommandContext; handlers: Record<str
       getContext: () => ({
         ...contextRef.current,
         ...getLocalContext(),
-        textInputFocused: textInputFocusedRef.current,
+        // Read live rather than from focus events, which miss an input removed while focused.
+        textInputFocused: isTextInputTarget(document.activeElement),
       }),
       onError: (error) => toast.error(invokeErrorMessage(error, 'Command failed')),
     });
@@ -90,10 +94,7 @@ export function useAppMenu(args: { context: CommandContext; handlers: Record<str
   useEffect(() => subscribeBus(menu.sync), [menu]);
 
   useEffect(() => {
-    const update = () => {
-      textInputFocusedRef.current = isTextInputTarget(document.activeElement);
-      menu.sync();
-    };
+    const update = () => menu.sync();
     update();
     document.addEventListener('focusin', update);
     document.addEventListener('focusout', update);
