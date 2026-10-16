@@ -43,7 +43,7 @@ The frontend owns the menu. Tauri 2.2.0's JS menu API (`@tauri-apps/api/menu`) p
 
 Handlers are JS callbacks, so there is no Rust event bridge and no second list of ids. No Rust change is required: the host replaces the stock menu at runtime with `setAsAppMenu()`.
 
-One consequence drives the design. A native menu accelerator on macOS consumes the keystroke before the webview sees it. So every key bound in a menu must dispatch through the menu path, and the existing in-webview listeners for those keys are removed. Standard edit items stay `PredefinedMenuItem`s so the responder chain keeps handling them.
+One consequence drives the design. For the main webview the page sees Cmd+key events first; the native menu only receives keys the page leaves unhandled (wry forwards unhandled key events to the main menu's `performKeyEquivalent`). So every menu-bound key must either be left unhandled by the page, so the menu path dispatches it, or be handled by the page through the same registry path. The existing in-webview listeners for those keys are removed, and the SQL editor's CodeMirror keymaps are filtered so none of them takes a menu accelerator, except harmless overlaps: its own Run bindings (`⌘↵`, `⇧⌘↵`), which run through the same path as the Query menu; `⌘/`, the same toggle-comment action; and the grid-only `⌘F`, `⌘I`, `⌘⌫`, which are disabled while the editor is focused. Standard edit items stay `PredefinedMenuItem`s so the responder chain keeps handling them.
 
 ### Modules (`apps/desktop/src/lib/commands/`)
 
@@ -170,7 +170,7 @@ Manual verification on a running desktop build, per phase: the menu appears with
 
 ## Risks
 
-- **Accelerators swallow keys the webview used.** Mitigation: every menu-bound key routes through the registry, standard edit keys stay predefined, accelerators that overlap text editing (`⌘⌫`, `⌘F`, `⌘/`, `⌘I`) are disabled while an input or editor that needs them is focused, and the manual check covers the SQL editor and inputs.
+- **Page handlers pre-empt menu accelerators** (the page sees a key before the menu). Mitigation: every menu-bound key routes through the registry, CodeMirror keymaps that bind a menu key are filtered out of the SQL editor (a unit test checks the filtered keymaps against the registry), standard edit keys stay predefined, accelerators that overlap text editing (`⌘⌫`, `⌘F`, `⌘/`, `⌘I`) are disabled while an input or editor that needs them is focused, and the manual check covers the SQL editor and inputs.
 - **Menu appears after the webview loads.** The stock menu shows for a moment at launch. Accepted; building the menu from Rust would remove this at the cost of two sources of truth.
 - **Tauri 2.2.0 menu quirks.** The version is pinned. Phase 1 is deliberately small so an API gap surfaces before the rest is built on it.
 - **`⌘C` forwarding.** Confirmed only on a real build; if the responder-chain path does not reach the grid hook, the hook keeps its own listener and Copy stays predefined.
