@@ -167,28 +167,48 @@ export async function installMenu(opts: {
     const menu = await api.Menu.new({ items });
     if (opts.platform === 'macos') {
       await menu.setAsAppMenu();
+      // The custom menu is live now, so NSApp role registration failures are non-fatal: keep the host.
+      const roleFailures: unknown[] = [];
       for (const { role, submenu } of ctx.roles) {
-        if (role === 'window') await submenu.setAsWindowsMenuForNSApp();
-        else await submenu.setAsHelpMenuForNSApp();
+        try {
+          if (role === 'window') await submenu.setAsWindowsMenuForNSApp();
+          else await submenu.setAsHelpMenuForNSApp();
+        } catch (error) {
+          roleFailures.push(error);
+        }
+      }
+      if (roleFailures.length > 0) {
+        console.error('Failed to register menus with NSApp', roleFailures);
       }
     } else {
       await menu.setAsWindowMenu();
     }
 
     // Items start enabled with their registry label, so the first applyState applies everything.
-    let enabled: Record<string, boolean> = {};
-    let labels: Record<string, string> = {};
+    const enabled: Record<string, boolean> = {};
+    const labels: Record<string, string> = {};
     return {
       async applyState(state) {
-        const enabledChanges = diffState(enabled, state.enabled);
-        const labelChanges = diffState(labels, state.labels);
-        enabled = { ...enabled, ...state.enabled };
-        labels = { ...labels, ...state.labels };
-        for (const [id, value] of Object.entries(enabledChanges)) {
-          await ctx.items.get(id)?.setEnabled(value as boolean);
+        const failed: Array<{ id: string; error: unknown }> = [];
+        // A key is cached only after its call succeeds, so failed keys are retried next time.
+        for (const [id, value] of Object.entries(diffState(enabled, state.enabled))) {
+          try {
+            await ctx.items.get(id)?.setEnabled(value as boolean);
+            enabled[id] = value as boolean;
+          } catch (error) {
+            failed.push({ id, error });
+          }
         }
-        for (const [id, value] of Object.entries(labelChanges)) {
-          await ctx.items.get(id)?.setText(value as string);
+        for (const [id, value] of Object.entries(diffState(labels, state.labels))) {
+          try {
+            await ctx.items.get(id)?.setText(value as string);
+            labels[id] = value as string;
+          } catch (error) {
+            failed.push({ id, error });
+          }
+        }
+        if (failed.length > 0) {
+          console.error(`Failed to update native menu items: ${failed.map((f) => f.id).join(', ')}`, failed);
         }
       },
     };

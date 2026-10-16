@@ -7,7 +7,7 @@ interface FakeItem {
   calls: string[];
 }
 
-function makeFakeApi(opts: { menuThrows?: boolean } = {}) {
+function makeFakeApi(opts: { menuThrows?: boolean; helpRoleThrows?: boolean; failOnce?: Set<string> } = {}) {
   const log: string[] = [];
   const items = new Map<string, FakeItem>();
   const predefined: Array<{ item: unknown; text?: string }> = [];
@@ -26,7 +26,10 @@ function makeFakeApi(opts: { menuThrows?: boolean } = {}) {
       async new(o) {
         return {
           setAsWindowsMenuForNSApp: async () => void log.push('setAsWindowsMenuForNSApp'),
-          setAsHelpMenuForNSApp: async () => void log.push('setAsHelpMenuForNSApp'),
+          setAsHelpMenuForNSApp: async () => {
+            log.push('setAsHelpMenuForNSApp');
+            if (opts.helpRoleThrows) throw new Error('role boom');
+          },
           id: o.id,
           text: o.text,
           items: o.items,
@@ -38,8 +41,14 @@ function makeFakeApi(opts: { menuThrows?: boolean } = {}) {
         const fake: FakeItem = { opts: o, calls: [] };
         items.set(o.id, fake);
         return {
-          setEnabled: async (b: boolean) => void fake.calls.push(`enabled:${b}`),
-          setText: async (t: string) => void fake.calls.push(`text:${t}`),
+          setEnabled: async (b: boolean) => {
+            if (opts.failOnce?.delete(`enabled:${o.id}`)) throw new Error('enabled boom');
+            fake.calls.push(`enabled:${b}`);
+          },
+          setText: async (t: string) => {
+            if (opts.failOnce?.delete(`text:${o.id}`)) throw new Error('text boom');
+            fake.calls.push(`text:${t}`);
+          },
         };
       },
     },
@@ -144,6 +153,50 @@ describe('installMenu', () => {
     await host?.applyState({ enabled: {}, labels: { 'file.newQuery': 'A', 'app.checkUpdates': 'C' } });
     expect(items.get('file.newQuery')?.calls).toEqual(['text:A']);
     expect(items.get('app.checkUpdates')?.calls).toEqual(['text:B', 'text:C']);
+  });
+
+  test('a failing setEnabled does not abort the rest and is retried on the next applyState', async () => {
+    const spy = spyOn(console, 'error').mockImplementation(() => {});
+    const { api, items } = makeFakeApi({ failOnce: new Set(['enabled:file.newQuery']) });
+    const host = await installMenu({ model, platform: 'macos', onRun: () => {}, api, isTauri: alwaysTauri });
+    const state = { enabled: { 'file.newQuery': false, 'app.checkUpdates': false }, labels: {} };
+    await host?.applyState(state);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(items.get('file.newQuery')?.calls).toEqual([]);
+    expect(items.get('app.checkUpdates')?.calls).toEqual(['enabled:false']);
+    await host?.applyState(state);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(items.get('file.newQuery')?.calls).toEqual(['enabled:false']);
+    expect(items.get('app.checkUpdates')?.calls).toEqual(['enabled:false']);
+    await host?.applyState(state);
+    expect(items.get('file.newQuery')?.calls).toEqual(['enabled:false']);
+  });
+
+  test('a failing setText is not cached and is retried on the next applyState', async () => {
+    const spy = spyOn(console, 'error').mockImplementation(() => {});
+    const { api, items } = makeFakeApi({ failOnce: new Set(['text:file.newQuery']) });
+    const host = await installMenu({ model, platform: 'macos', onRun: () => {}, api, isTauri: alwaysTauri });
+    const state = { enabled: {}, labels: { 'file.newQuery': 'A', 'app.checkUpdates': 'B' } };
+    await host?.applyState(state);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(items.get('file.newQuery')?.calls).toEqual([]);
+    expect(items.get('app.checkUpdates')?.calls).toEqual(['text:B']);
+    await host?.applyState(state);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(items.get('file.newQuery')?.calls).toEqual(['text:A']);
+    expect(items.get('app.checkUpdates')?.calls).toEqual(['text:B']);
+  });
+
+  test('a failing NSApp role registration is non-fatal: the host is still returned', async () => {
+    const spy = spyOn(console, 'error').mockImplementation(() => {});
+    const { api, log, items } = makeFakeApi({ helpRoleThrows: true });
+    const host = await installMenu({ model, platform: 'macos', onRun: () => {}, api, isTauri: alwaysTauri });
+    expect(host).not.toBeNull();
+    expect(log).toContain('setAsAppMenu');
+    expect(spy).toHaveBeenCalledTimes(1);
+    await host?.applyState({ enabled: { 'file.newQuery': false }, labels: {} });
+    expect(items.get('file.newQuery')?.calls).toEqual(['enabled:false']);
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 
   test('resolves null and logs once when the api throws', async () => {
