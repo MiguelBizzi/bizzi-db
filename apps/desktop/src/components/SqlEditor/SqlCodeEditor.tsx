@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { sql, PostgreSQL } from '@codemirror/lang-sql';
 import {
@@ -36,20 +36,30 @@ interface SqlCodeEditorProps {
   value: string;
   tables: SqlSchemaTable[];
   onChange: (value: string) => void;
-  onRun: (request: SqlRunRequest) => void;
   /** Fires when the editor gains or loses a non-blank selection. */
   onSelectionChange?: (hasSelection: boolean) => void;
+  /** The editor view once it exists, and `null` when it is destroyed. */
+  onViewReady?: (view: EditorView | null) => void;
 }
 
 export const SqlCodeEditor = forwardRef<SqlCodeEditorHandle, SqlCodeEditorProps>(
-  function SqlCodeEditor({ value, tables, onChange, onRun, onSelectionChange }, ref) {
+  function SqlCodeEditor({ value, tables, onChange, onSelectionChange, onViewReady }, ref) {
     const viewRef = useRef<EditorView | null>(null);
-    const onRunRef = useRef(onRun);
     const onSelectionChangeRef = useRef(onSelectionChange);
+    const onViewReadyRef = useRef(onViewReady);
+    const hasSelectionRef = useRef(false);
     const tablesRef = useRef(tables);
-    onRunRef.current = onRun;
     onSelectionChangeRef.current = onSelectionChange;
+    onViewReadyRef.current = onViewReady;
     tablesRef.current = tables;
+
+    useEffect(
+      () => () => {
+        viewRef.current = null;
+        onViewReadyRef.current?.(null);
+      },
+      []
+    );
 
     useImperativeHandle(ref, () => ({
       runRequest: (mode: RunMode) =>
@@ -108,20 +118,6 @@ export const SqlCodeEditor = forwardRef<SqlCodeEditorHandle, SqlCodeEditorProps>
         }),
         Prec.highest(
           keymap.of([
-            {
-              key: 'Mod-Enter',
-              run: (view) => {
-                onRunRef.current(runRequest(view, 'auto'));
-                return true;
-              },
-            },
-            {
-              key: 'Mod-Shift-Enter',
-              run: (view) => {
-                onRunRef.current(runRequest(view, 'all'));
-                return true;
-              },
-            },
             {
               key: 'Ctrl-Space',
               run: startCompletion,
@@ -195,11 +191,15 @@ export const SqlCodeEditor = forwardRef<SqlCodeEditorHandle, SqlCodeEditorProps>
         onChange={onChange}
         onCreateEditor={(view) => {
           viewRef.current = view;
+          onViewReadyRef.current?.(view);
         }}
         onUpdate={(update) => {
           if (!update.selectionSet && !update.docChanged) return;
           const { from, to } = update.state.selection.main;
-          onSelectionChangeRef.current?.(update.state.sliceDoc(from, to).trim() !== '');
+          const has = update.state.sliceDoc(from, to).trim() !== '';
+          if (has === hasSelectionRef.current) return;
+          hasSelectionRef.current = has;
+          onSelectionChangeRef.current?.(has);
         }}
         className="h-full w-full text-xs bg-background"
       />

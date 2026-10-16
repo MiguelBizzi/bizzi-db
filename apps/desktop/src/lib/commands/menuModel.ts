@@ -73,7 +73,7 @@ export function buildMenuModel(): MenuNode[] {
       kind: 'submenu',
       id: 'query',
       label: 'Query',
-      items: [item('query.review')],
+      items: [item('query.run'), item('query.runAll'), separator(), item('query.review')],
     },
     {
       kind: 'submenu',

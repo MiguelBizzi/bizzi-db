@@ -11,6 +11,7 @@ export interface Command {
 }
 
 const connectionOpen = (ctx: CommandContext): boolean => ctx.connectionOpen;
+const sqlEditorActive = (ctx: CommandContext): boolean => ctx.activeTabType === 'sql_editor';
 
 export const COMMANDS: readonly Command[] = [
   { id: 'app.settings', label: 'Settings…', accelerator: 'CmdOrCtrl+,', enabled: () => true, allowInModal: true },
@@ -23,6 +24,14 @@ export const COMMANDS: readonly Command[] = [
     enabled: () => true,
     allowInModal: true,
   },
+  {
+    id: 'query.run',
+    label: 'Run Statement',
+    dynamicLabel: (ctx) => (ctx.sqlSelectionPresent ? 'Run Selection' : 'Run Statement'),
+    accelerator: 'CmdOrCtrl+Enter',
+    enabled: sqlEditorActive,
+  },
+  { id: 'query.runAll', label: 'Run All', accelerator: 'CmdOrCtrl+Shift+Enter', enabled: sqlEditorActive },
   { id: 'query.review', label: 'Review Pending Changes', accelerator: 'CmdOrCtrl+Shift+P', enabled: connectionOpen },
   {
     id: 'conn.refreshTable',

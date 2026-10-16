@@ -58,8 +58,13 @@ describe('buildMenuModel', () => {
     expect(submenu(buildMenuModel(), 'edit').items[0]).toEqual({ kind: 'predefined', item: 'undo' });
   });
 
-  test('query submenu holds only review pending changes in phase 1', () => {
-    expect(submenu(buildMenuModel(), 'query').items).toEqual([{ kind: 'item', commandId: 'query.review' }]);
+  test('query submenu holds run, run all, a separator, then review pending changes', () => {
+    expect(submenu(buildMenuModel(), 'query').items).toEqual([
+      { kind: 'item', commandId: 'query.run' },
+      { kind: 'item', commandId: 'query.runAll' },
+      { kind: 'separator' },
+      { kind: 'item', commandId: 'query.review' },
+    ]);
   });
 
   test('app submenu shape', () => {

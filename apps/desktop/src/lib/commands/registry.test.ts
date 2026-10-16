@@ -40,6 +40,8 @@ describe('COMMANDS registry invariants', () => {
         'app.checkUpdates',
         'file.newQuery',
         'file.closeWindow',
+        'query.run',
+        'query.runAll',
         'query.review',
         'conn.refreshTable',
         'view.palette',
@@ -75,6 +77,14 @@ describe('isCommandEnabled', () => {
     ['app.settings', {}, true],
     ['app.checkUpdates', {}, true],
     ['file.closeWindow', {}, true],
+    ['query.run', { activeTabType: 'sql_editor' }, true],
+    ['query.run', { activeTabType: 'table_data' }, false],
+    ['query.run', {}, false],
+    ['query.run', { activeTabType: 'sql_editor', modalOpen: true }, false],
+    ['query.runAll', { activeTabType: 'sql_editor' }, true],
+    ['query.runAll', { activeTabType: 'table_data' }, false],
+    ['query.runAll', {}, false],
+    ['query.runAll', { activeTabType: 'sql_editor', modalOpen: true }, false],
     // modal gating
     ['view.erd', { connectionOpen: true, modalOpen: true }, false],
     ['app.settings', { modalOpen: true }, true],
@@ -122,7 +132,7 @@ describe('menuState', () => {
     const state = menuState(ctx());
     for (const c of COMMANDS) {
       expect(typeof state.enabled[c.id]).toBe('boolean');
-      expect(state.labels[c.id]).toBe(c.label);
+      expect(state.labels[c.id]).toBe(c.dynamicLabel ? c.dynamicLabel(EMPTY_CONTEXT) : c.label);
     }
   });
 
@@ -148,6 +158,18 @@ describe('menuState', () => {
       'test.static': 'Static',
     });
     expect(menuState(ctx(), cmds).labels['test.run']).toBe('Run Statement');
+  });
+
+  test('query.run is labelled Run Selection only while the editor has a selection', () => {
+    expect(menuState(ctx({ sqlSelectionPresent: true })).labels['query.run']).toBe('Run Selection');
+    expect(menuState(ctx({ sqlSelectionPresent: false })).labels['query.run']).toBe('Run Statement');
+    expect(menuState(ctx()).labels['query.runAll']).toBe('Run All');
+  });
+
+  test('run commands act inside the editor, so typing does not disable them', () => {
+    const state = menuState(ctx({ activeTabType: 'sql_editor', textInputFocused: true }));
+    expect(state.enabled['query.run']).toBe(true);
+    expect(state.enabled['query.runAll']).toBe(true);
   });
 
   test('typingConflict commands are disabled in menuState while typing', () => {
@@ -180,6 +202,8 @@ describe('menuState for realistic app contexts', () => {
         'app.checkUpdates',
         'file.newQuery',
         'file.closeWindow',
+        'query.run',
+        'query.runAll',
         'query.review',
         'view.palette',
         'view.erd',
@@ -219,6 +243,13 @@ describe('shortcutLabel', () => {
   test('formats the accelerator for macOS', () => {
     expect(shortcutLabel('file.newQuery', 'macos')).toBe('⌘T');
     expect(shortcutLabel('view.erd', 'macos')).toBe('⇧⌘E');
+  });
+
+  test('formats the run accelerators', () => {
+    expect(shortcutLabel('query.run', 'macos')).toBe('⌘↵');
+    expect(shortcutLabel('query.runAll', 'macos')).toBe('⇧⌘↵');
+    expect(shortcutLabel('query.run', 'windows')).toBe('Ctrl+Enter');
+    expect(shortcutLabel('query.runAll', 'linux')).toBe('Ctrl+Shift+Enter');
   });
 
   test('formats the accelerator for other platforms', () => {

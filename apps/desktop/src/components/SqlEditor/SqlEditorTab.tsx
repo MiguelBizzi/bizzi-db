@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import type { SqlRange } from '@db/shared';
 import { Modal, ModalPanel } from '../ui/Modal';
@@ -21,6 +21,8 @@ import { QueryResultsView, type QueryGridActions } from './QueryResultsView';
 import { SqlCodeEditor, type SqlCodeEditorHandle, type SqlRunRequest } from './SqlCodeEditor';
 import { hasRunnableSelection, resolveRunTarget, type RunMode } from '../../lib/runTarget';
 import { SplitHandle } from '../ui/SplitHandle';
+import { registerScope, type CommandScope } from '../../lib/commands/commandBus';
+import { shortcutLabel } from '../../lib/commands/shortcutLabel';
 import { invokeErrorMessage } from '../../lib/invokeError';
 import { toast } from '../../lib/toast';
 import { queryErrorText } from '../../lib/sqlQuery';
@@ -95,6 +97,8 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
   const [hasSelection, setHasSelection] = useState(false);
   const [runMenuOpen, setRunMenuOpen] = useState(false);
   const editorRef = useRef<SqlCodeEditorHandle>(null);
+  const scopeRef = useRef<CommandScope | null>(null);
+  const scopeId = useId();
   const runMenuRef = useRef<HTMLDivElement>(null);
   const queryResults = tabState.results;
   const onSqlChangeRef = useRef(onSqlChange);
@@ -265,6 +269,27 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
     else void handleRunQuery();
   };
 
+  // The menu bar's Run commands go to the focused editor (see the command bus).
+  const handleRunRequestRef = useRef(handleRunRequest);
+  handleRunRequestRef.current = handleRunRequest;
+  useEffect(() => {
+    const runFromMenu = (mode: RunMode) => {
+      const request = editorRef.current?.runRequest(mode);
+      if (request) void handleRunRequestRef.current(request);
+    };
+    const scope = registerScope('sql:' + scopeId, {
+      'query.run': () => runFromMenu('auto'),
+      'query.runAll': () => runFromMenu('all'),
+    });
+    // Without an initial value an unfocused pane's stale flag could leak into the merged context.
+    scope.setContext({ sqlSelectionPresent: false });
+    scopeRef.current = scope;
+    return () => {
+      scopeRef.current = null;
+      scope.dispose();
+    };
+  }, [scopeId]);
+
   useEffect(() => {
     if (!runMenuOpen) return;
     const onPointer = (event: MouseEvent) => {
@@ -360,7 +385,10 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
   });
 
   return (
-    <div className="flex-1 flex h-full bg-background overflow-hidden font-sans text-foreground relative">
+    <div
+      className="flex-1 flex h-full bg-background overflow-hidden font-sans text-foreground relative"
+      onFocus={() => scopeRef.current?.claim()}
+    >
       {/* Main Editor & Results Pane Column */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Editor Action Header Bar */}
@@ -383,8 +411,8 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
                   {isRunning
                     ? 'Running...'
                     : hasSelection
-                      ? 'Run Selection (⌘↵)'
-                      : 'Run Statement (⌘↵)'}
+                      ? `Run Selection (${shortcutLabel('query.run')})`
+                      : `Run Statement (${shortcutLabel('query.run')})`}
                 </span>
               </button>
               <button
@@ -407,7 +435,7 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
                       className="w-full flex items-center justify-between gap-4 px-2.5 py-1.5 rounded-lg hover:bg-accent text-foreground font-sans text-left"
                     >
                       <span>Run All</span>
-                      <span className="text-muted-foreground font-mono">⌘⇧↵</span>
+                      <span className="text-muted-foreground font-mono">{shortcutLabel('query.runAll')}</span>
                     </button>
                   </Popover>
                 )}
@@ -630,10 +658,13 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
               value={sql}
               tables={currentDatabase.tables}
               onChange={setSql}
-              onRun={(request) => {
-                void handleRunRequest(request);
+              onSelectionChange={(has) => {
+                setHasSelection(has);
+                scopeRef.current?.setContext({ sqlSelectionPresent: has });
               }}
-              onSelectionChange={setHasSelection}
+              onViewReady={(view) => {
+                if (view) scopeRef.current?.claim();
+              }}
             />
           </div>
 
