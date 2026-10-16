@@ -61,6 +61,23 @@ export function changeKey(ref: PendingChangeRef): string {
   return `${ref.kind}:${ref.tableId}:${ref.rowId}`;
 }
 
+/** A Pending Changes drawer confirmation that a menu command opens the drawer with, already armed. */
+export type PendingConfirm = 'commit' | 'discard';
+
+/** The confirmation the Commit / Discard Pending Changes menu commands arm; null for anything else. */
+export function pendingConfirmForCommand(commandId: string): PendingConfirm | null {
+  if (commandId === 'query.commit') return 'commit';
+  if (commandId === 'query.discard') return 'discard';
+  return null;
+}
+
+/** The drawer's armed key for a confirmation: its "Approve all" or "Cancel all" footer button. */
+export function armedKeyForConfirm(confirm: PendingConfirm | null | undefined): string | null {
+  if (confirm === 'commit') return 'approve-all';
+  if (confirm === 'discard') return 'cancel-all';
+  return null;
+}
+
 export function primaryKeyColumn(table?: TableSchema): string {
   return table?.columns.find((column) => column.isPrimary)?.name || 'id';
 }

@@ -20,6 +20,7 @@ import type { PendingModifications, TableSchema } from '../../types';
 import {
   PendingChangeRef,
   TablePendingBundle,
+  armedKeyForConfirm,
   changeKey,
   countPendingChanges,
   flattenPending,
@@ -27,6 +28,7 @@ import {
   primaryKeyColumn,
   sqlForAll,
   sqlForChange,
+  type PendingConfirm,
 } from '../../lib/pendingChanges';
 
 type ReviewMode = 'visual' | 'query';
@@ -44,6 +46,11 @@ interface PendingChangesDrawerProps {
   onCancel: (ref: PendingChangeRef) => void;
   onApproveAll: () => void;
   onCancelAll: () => void;
+  /**
+   * Opens the drawer with this footer confirmation already armed (the menu bar's Commit /
+   * Discard Pending Changes), so one more click or Enter confirms it.
+   */
+  initialConfirm?: PendingConfirm | null;
 }
 
 const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
@@ -59,10 +66,13 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
   onCancel,
   onApproveAll,
   onCancelAll,
+  initialConfirm,
 }) => {
   const [mode, setMode] = useState<ReviewMode>('visual');
   const [copied, setCopied] = useState(false);
-  const [armed, setArmed] = useState<string | null>(null);
+  // The body mounts afresh on every opening (OverlayPresence), so this reads the request once.
+  const [initialArmed] = useState(() => armedKeyForConfirm(initialConfirm));
+  const [armed, setArmed] = useState<string | null>(initialArmed);
 
   const bundles = useMemo(
     () => flattenPending(pendingByTable, tables),
@@ -350,6 +360,7 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
               <button
                 type="button"
                 disabled={busy}
+                autoFocus={initialArmed === 'cancel-all'}
                 onClick={() => armOrRun('cancel-all', onCancelAll)}
                 className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors disabled:opacity-50 ${
                   armed === 'cancel-all'
@@ -363,6 +374,7 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
               <button
                 type="button"
                 disabled={busy}
+                autoFocus={initialArmed === 'approve-all'}
                 onClick={() => armOrRun('approve-all', onApproveAll)}
                 className={`pressable flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shadow-md transition-colors disabled:opacity-50 ${
                   armed === 'approve-all'

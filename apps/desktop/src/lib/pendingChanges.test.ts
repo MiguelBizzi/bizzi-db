@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import type { TableSchema } from '../types';
 import {
+  armedKeyForConfirm,
   changeKey,
+  pendingConfirmForCommand,
   countPendingChanges,
   emptyPending,
   flattenPending,
@@ -322,5 +324,21 @@ describe('tableAction pending', () => {
         { kind: 'truncate', tableId: 't' }
       ).tableAction
     ).toBeNull();
+  });
+});
+
+describe('menu confirmations', () => {
+  test('commit and discard menu commands map to the drawer confirmation they arm', () => {
+    expect(pendingConfirmForCommand('query.commit')).toBe('commit');
+    expect(pendingConfirmForCommand('query.discard')).toBe('discard');
+    expect(pendingConfirmForCommand('query.review')).toBeNull();
+    expect(pendingConfirmForCommand('file.export')).toBeNull();
+  });
+
+  test('a confirmation arms the matching drawer footer button', () => {
+    expect(armedKeyForConfirm('commit')).toBe('approve-all');
+    expect(armedKeyForConfirm('discard')).toBe('cancel-all');
+    expect(armedKeyForConfirm(null)).toBeNull();
+    expect(armedKeyForConfirm(undefined)).toBeNull();
   });
 });

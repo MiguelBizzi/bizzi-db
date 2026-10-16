@@ -68,12 +68,14 @@ import {
   emptyPending,
   flattenPending,
   hasPending,
+  pendingConfirmForCommand,
   primaryKeyColumn,
   removeChange,
   sqlForAll,
   sqlForChange,
   stageTableAction,
   type PendingChangeRef,
+  type PendingConfirm,
 } from './lib/pendingChanges';
 import {
   addTabToPane,
@@ -181,6 +183,7 @@ export default function App() {
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
   const [isPendingChangesOpen, setIsPendingChangesOpen] = useState(false);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const {
@@ -900,7 +903,15 @@ export default function App() {
   const openPendingChanges = () => {
     setIsActivityLogOpen(false);
     setPendingError(null);
+    setPendingConfirm(null);
     setIsPendingChangesOpen(true);
+  };
+
+  /** Commit / Discard from the menu: the drawer opens with that confirmation armed. */
+  const openPendingChangesToConfirm = (commandId: string) => {
+    if (pendingCount === 0) return;
+    openPendingChanges();
+    setPendingConfirm(pendingConfirmForCommand(commandId));
   };
 
   const handleUpdateCell = (
@@ -1454,14 +1465,9 @@ export default function App() {
       'file.closeRight': () => handleCloseTabs(activePaneId, activeTabId, 'right'),
       'file.reopenTab': handleReopenClosedTab,
       'query.review': openPendingChanges,
-      // The handlers behind the Pending Changes drawer's "Approve all" / "Cancel all" buttons
-      // (the drawer's click-twice confirmation lives in the drawer, not in these handlers).
-      'query.commit': () => {
-        if (pendingCount > 0 && !applyingAllChanges) void handleApproveAllChanges();
-      },
-      'query.discard': () => {
-        if (pendingCount > 0) handleCancelAllChanges();
-      },
+      // Destructive: they keep the drawer's two-step confirmation, opening it already armed.
+      'query.commit': () => openPendingChangesToConfirm('query.commit'),
+      'query.discard': () => openPendingChangesToConfirm('query.discard'),
       'conn.refreshTable': refreshActiveTable,
       'view.palette': () => setIsCommandPaletteOpen((open) => !open),
       'view.erd': openErd,
@@ -1667,6 +1673,7 @@ export default function App() {
           void handleApproveAllChanges();
         }}
         onCancelAll={handleCancelAllChanges}
+        initialConfirm={pendingConfirm}
       />
 
       <ConnectionModal
