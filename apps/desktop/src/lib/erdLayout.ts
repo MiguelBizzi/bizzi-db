@@ -228,21 +228,39 @@ function average(values: number[]): number {
   return values.reduce((sum, v) => sum + v, 0) / values.length;
 }
 
+const ERD_MIN_COLUMN_HEIGHT = 3000;
+
+function columnHeightLimit(nodes: Iterable<ErdNode>, spacing: ErdSpacing): number {
+  let area = 0;
+  for (const node of nodes) {
+    area += (node.width + spacing.rankGap) * (node.height + spacing.nodeGap);
+  }
+  return Math.max(ERD_MIN_COLUMN_HEIGHT, Math.sqrt(area) * 1.5);
+}
+
+// Stacks one rank top-to-bottom, wrapping into extra columns once it gets taller than
+// `limit`. Returns the x where the next rank may start.
 function stackRank(
   ids: string[],
   nodesById: Map<string, ErdNode>,
   x: number,
   startY: number,
-  nodeGap: number
+  spacing: ErdSpacing,
+  limit: number
 ): number {
   let y = startY;
+  let columnX = x;
   for (const id of ids) {
     const node = nodesById.get(id)!;
-    node.x = x;
+    if (y > startY && y + node.height > limit) {
+      columnX += ERD_NODE_WIDTH + spacing.nodeGap;
+      y = startY;
+    }
+    node.x = columnX;
     node.y = y;
-    y += node.height + nodeGap;
+    y += node.height + spacing.nodeGap;
   }
-  return y;
+  return columnX + ERD_NODE_WIDTH + spacing.rankGap;
 }
 
 export function layoutErd(
@@ -275,17 +293,20 @@ export function layoutErd(
   }
 
   const rankKeys = [...byRank.keys()].sort((a, b) => a - b);
+  const limit = columnHeightLimit(nodesById.values(), spacing);
+  let nextX = ERD_PADDING;
   for (const rank of rankKeys) {
-    const x = ERD_PADDING + rank * (ERD_NODE_WIDTH + spacing.rankGap);
-    stackRank(byRank.get(rank)!, nodesById, x, ERD_PADDING, spacing.nodeGap);
+    nextX = stackRank(byRank.get(rank)!, nodesById, nextX, ERD_PADDING, spacing, limit);
   }
 
   if (isolated.length > 0) {
-    const maxRank = rankKeys.length > 0 ? Math.max(...rankKeys) : -1;
-    const gridX = ERD_PADDING + (maxRank + 1) * (ERD_NODE_WIDTH + spacing.rankGap);
+    const gridX = nextX;
     const sorted = [...isolated].sort((a, b) => a.name.localeCompare(b.name));
     let y = ERD_PADDING;
-    const colHeightLimit = 720;
+    const colHeightLimit = Math.max(
+      720,
+      columnHeightLimit(sorted.map((table) => nodesById.get(table.id)!), spacing) / 1.25
+    );
     let x = gridX;
     for (const table of sorted) {
       const node = nodesById.get(table.id)!;

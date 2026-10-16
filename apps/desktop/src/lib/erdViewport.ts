@@ -1,8 +1,11 @@
 import type { ErdBounds } from './erdLayout';
 
-export const ERD_MIN_ZOOM = 0.2;
+export const ERD_MIN_ZOOM = 0.02;
 export const ERD_MAX_ZOOM = 2;
 export const ERD_DEFAULT_ZOOM = 1;
+export const ERD_DETAIL_ZOOM = 0.4;
+export const ERD_SKELETON_ZOOM = 0.12;
+export const ERD_CULL_MARGIN = 240;
 export const ERD_FIT_PADDING = 48;
 export const ERD_WHEEL_ZOOM_SENSITIVITY = 220;
 
@@ -75,4 +78,38 @@ export function centerOnWorld(
     x: container.width / 2 - (world.x - bounds.minX) * z,
     y: container.height / 2 - (world.y - bounds.minY) * z,
   };
+}
+
+export type ErdRect = { left: number; top: number; right: number; bottom: number };
+
+export function visibleWorldRect(
+  viewport: ErdViewport,
+  container: { width: number; height: number },
+  bounds: Pick<ErdBounds, 'minX' | 'minY'>,
+  margin = ERD_CULL_MARGIN
+): ErdRect {
+  const z = clampZoom(viewport.zoom);
+  const pad = margin / z;
+  return {
+    left: -viewport.x / z + bounds.minX - pad,
+    top: -viewport.y / z + bounds.minY - pad,
+    right: (container.width - viewport.x) / z + bounds.minX + pad,
+    bottom: (container.height - viewport.y) / z + bounds.minY + pad,
+  };
+}
+
+export function rectsIntersect(a: ErdRect, b: ErdRect): boolean {
+  return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top;
+}
+
+// Overview cards get a label sized in world units so it stays legible on screen where
+// the card is wide enough, and shrinks to fit the card where it is not.
+export function overviewLabelFontSize(
+  label: string,
+  zoom: number,
+  card: { width: number; height: number }
+): number {
+  const z = clampZoom(zoom);
+  const fitsWidth = (card.width * 0.9) / (Math.max(label.length, 1) * 0.6);
+  return Math.min(fitsWidth, 13 / z, card.height * 0.5);
 }

@@ -206,6 +206,56 @@ describe('layoutErd', () => {
   });
 });
 
+describe('layoutErd on large schemas', () => {
+  function starSchema(n: number): TableSchema[] {
+    const hub = table('hub');
+    const spokes = Array.from({ length: n }, (_, i) =>
+      table(`spoke_${i}`, {
+        columns: [
+          column('id', { isPrimary: true }),
+          column('hub_id', {
+            foreignKey: { targetTable: 'hub', targetSchema: 'public', targetColumn: 'id' },
+          }),
+        ],
+      })
+    );
+    return [hub, ...spokes];
+  }
+
+  test('wraps a very tall rank into side-by-side columns', () => {
+    const nodes = layoutErd(starSchema(600));
+    const bounds = layoutBounds(nodes);
+    expect(bounds.height).toBeLessThan(bounds.width * 6);
+    const xs = new Set(nodes.filter((n) => n.table.name.startsWith('spoke_')).map((n) => n.x));
+    expect(xs.size).toBeGreaterThan(1);
+  });
+
+  test('never overlaps nodes after wrapping', () => {
+    const nodes = layoutErd(starSchema(600));
+    const seen = new Set<string>();
+    for (const n of nodes) {
+      const key = `${n.x}:${n.y}`;
+      expect(seen.has(key)).toBe(false);
+      seen.add(key);
+    }
+  });
+
+  test('packs many isolated tables into a roughly square grid', () => {
+    const tables = Array.from({ length: 1000 }, (_, i) => table(`solo_${i}`));
+    const bounds = layoutBounds(layoutErd(tables));
+    expect(bounds.width / bounds.height).toBeLessThan(4);
+    expect(bounds.height / bounds.width).toBeLessThan(4);
+  });
+
+  test('keeps parents left of dependents', () => {
+    const nodes = layoutErd(starSchema(600));
+    const hub = nodes.find((n) => n.table.name === 'hub')!;
+    for (const n of nodes) {
+      if (n.id !== hub.id) expect(n.x).toBeGreaterThan(hub.x);
+    }
+  });
+});
+
 describe('layoutBounds', () => {
   test('covers every node with padding so SVG can size to the graph', () => {
     const nodes = layoutErd([

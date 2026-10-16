@@ -17,7 +17,13 @@ import { shortColumnType } from '../../lib/columnTypeDisplay';
 import { knownRowCount } from '../../lib/format';
 import { buildErdEdges, type ErdEdge } from '../../lib/erdEdges';
 import { downloadDataUrl, erdExportFileName, snapshotErdPng } from '../../lib/erdExport';
-import { layoutBounds, layoutErd, type ErdPoint } from '../../lib/erdLayout';
+import {
+  ERD_HEADER_HEIGHT,
+  ERD_ROW_HEIGHT,
+  layoutBounds,
+  layoutErd,
+  type ErdPoint,
+} from '../../lib/erdLayout';
 import {
   clearErdPositions,
   readErdPositions,
@@ -26,10 +32,15 @@ import {
 import { columnKey, searchErd } from '../../lib/erdSearch';
 import {
   ERD_DEFAULT_ZOOM,
+  ERD_DETAIL_ZOOM,
+  ERD_SKELETON_ZOOM,
   centerOnWorld,
   clampZoom,
   fitBounds,
+  overviewLabelFontSize,
   panViewport,
+  rectsIntersect,
+  visibleWorldRect,
   wheelZoomFactor,
   zoomAtPoint,
   type ErdViewport,
@@ -91,6 +102,8 @@ export const InteractiveErd: React.FC<InteractiveErdProps> = ({
     originY: number;
   } | null>(null);
   const [exporting, setExporting] = useState(false);
+  const empty = database.tables.length === 0;
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const viewportRef = useRef(viewport);
   viewportRef.current = viewport;
 
@@ -113,6 +126,41 @@ export const InteractiveErd: React.FC<InteractiveErdProps> = ({
   const searchTableSet = useMemo(() => new Set(hits.tableIds), [hits.tableIds]);
   const searchColumnSet = useMemo(() => new Set(hits.columnKeys), [hits.columnKeys]);
 
+  // Large schemas produce hundreds of thousands of DOM nodes; only mount what is on screen.
+  const detailed = viewport.zoom >= ERD_DETAIL_ZOOM;
+  const visibleRect = useMemo(
+    () => visibleWorldRect(viewport, canvasSize, bounds),
+    [viewport, canvasSize, bounds]
+  );
+  const visibleNodes = useMemo(
+    () =>
+      canvasSize.width === 0
+        ? []
+        : nodes.filter((node) =>
+            rectsIntersect(visibleRect, {
+              left: node.x,
+              top: node.y,
+              right: node.x + node.width,
+              bottom: node.y + node.height,
+            })
+          ),
+    [nodes, visibleRect, canvasSize.width]
+  );
+  const visibleEdges = useMemo(
+    () =>
+      canvasSize.width === 0
+        ? []
+        : edges.filter((edge) =>
+            rectsIntersect(visibleRect, {
+              left: Math.min(edge.source.x, edge.target.x),
+              top: Math.min(edge.source.y, edge.target.y),
+              right: Math.max(edge.source.x, edge.target.x),
+              bottom: Math.max(edge.source.y, edge.target.y),
+            })
+          ),
+    [edges, visibleRect, canvasSize.width]
+  );
+
   const selectedEdge = edges.find((edge) => edge.id === selectedEdgeId) ?? null;
 
   const persistPositions = useCallback(
@@ -134,12 +182,30 @@ export const InteractiveErd: React.FC<InteractiveErdProps> = ({
   }, []);
 
   useLayoutEffect(() => {
+    const el = canvasRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const sync = () => {
+      const rect = el.getBoundingClientRect();
+      setCanvasSize((prev) =>
+        prev.width === rect.width && prev.height === rect.height
+          ? prev
+          : { width: rect.width, height: rect.height }
+      );
+    };
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [empty]);
+
+  useLayoutEffect(() => {
     if (didFit.current || nodes.length === 0) return;
-    const size = measureCanvas();
-    if (!size) return;
-    setViewport(fitBounds(bounds, size));
+    if (canvasSize.width < 8 || canvasSize.height < 8) return;
+    const next = fitBounds(bounds, canvasSize);
+    viewportRef.current = next;
+    setViewport(next);
     didFit.current = true;
-  }, [bounds, measureCanvas, nodes.length]);
+  }, [bounds, canvasSize, nodes.length]);
 
   useEffect(() => {
     const el = canvasRef.current;
@@ -306,8 +372,6 @@ export const InteractiveErd: React.FC<InteractiveErdProps> = ({
     return false;
   };
 
-  const empty = database.tables.length === 0;
-
   return (
     <div className="flex-1 flex flex-col h-full bg-background overflow-hidden font-sans select-none text-foreground">
       <div className="p-3 bg-card border-b border-border flex flex-wrap items-center justify-between gap-2 shrink-0 font-mono text-xs">
@@ -394,13 +458,23 @@ export const InteractiveErd: React.FC<InteractiveErdProps> = ({
         <div
           ref={canvasRef}
           data-erd-canvas
+          style={
+            viewport.zoom >= 0.3
+              ? {
+                  backgroundImage:
+                    'radial-gradient(circle, color-mix(in oklch, var(--muted-foreground) 22%, transparent) 1px, transparent 1px)',
+                  backgroundSize: `${24 * viewport.zoom}px ${24 * viewport.zoom}px`,
+                  backgroundPosition: `${viewport.x}px ${viewport.y}px`,
+                }
+              : undefined
+          }
           className={`flex-1 relative overflow-hidden bg-background ${
             panning ? 'cursor-grabbing' : 'cursor-grab'
           }`}
           onPointerDown={handleCanvasPointerDown}
         >
           <div
-            className="absolute origin-top-left will-change-transform"
+            className="absolute origin-top-left"
             style={{
               transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
             }}
@@ -441,41 +515,158 @@ export const InteractiveErd: React.FC<InteractiveErdProps> = ({
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--primary)" />
                   </marker>
                 </defs>
-                {edges.map((edge) => {
+                {visibleEdges.map((edge) => {
                   const hot = isEdgeHot(edge);
                   return (
                     <g key={edge.id} data-erd-edge>
-                      <path
-                        d={edge.path}
-                        fill="none"
-                        stroke="transparent"
-                        strokeWidth={14}
-                        className="cursor-pointer"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setSelectedEdgeId(edge.id);
-                        }}
-                      />
-                      <path
-                        d={edge.path}
-                        fill="none"
-                        stroke={hot ? 'var(--primary)' : 'var(--border)'}
-                        strokeWidth={hot ? 2.5 : 1.6}
-                        markerEnd={hot ? 'url(#erd-arrow-hot)' : 'url(#erd-arrow)'}
-                        className="pointer-events-none transition-[stroke,stroke-width]"
-                      />
+                      {detailed && (
+                        <path
+                          d={edge.path}
+                          fill="none"
+                          stroke="transparent"
+                          strokeWidth={14}
+                          className="cursor-pointer"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedEdgeId(edge.id);
+                          }}
+                        />
+                      )}
+                      {detailed ? (
+                        <path
+                          d={edge.path}
+                          fill="none"
+                          stroke={hot ? 'var(--primary)' : 'var(--border)'}
+                          strokeWidth={hot ? 2.5 : 1.6}
+                          markerEnd={hot ? 'url(#erd-arrow-hot)' : 'url(#erd-arrow)'}
+                          className="pointer-events-none transition-[stroke,stroke-width]"
+                        />
+                      ) : (
+                        <path
+                          d={edge.path}
+                          fill="none"
+                          stroke={hot ? 'var(--primary)' : 'var(--muted-foreground)'}
+                          strokeOpacity={hot ? 1 : 0.3}
+                          strokeWidth={hot ? 2 : 1}
+                          vectorEffect="non-scaling-stroke"
+                          className="pointer-events-none"
+                        />
+                      )}
                     </g>
                   );
                 })}
               </svg>
 
-              {nodes.map((node) => {
+              {visibleNodes.map((node) => {
                 const isHovered = hoveredTableId === node.id;
                 const isDraggingThis = draggingTable?.id === node.id;
                 const searchHit = searchTableSet.has(node.id);
                 const edgeHit =
                   selectedEdge?.sourceTableId === node.id ||
                   selectedEdge?.targetTableId === node.id;
+
+                if (!detailed) {
+                  const label =
+                    node.table.schema !== 'public'
+                      ? `${node.table.schema}.${node.table.name}`
+                      : node.table.name;
+                  const emphasized = isHovered || searchHit || edgeHit;
+                  const z = clampZoom(viewport.zoom);
+                  const skeleton = z >= ERD_SKELETON_ZOOM;
+                  const headerHeight = skeleton
+                    ? Math.min(node.height * 0.4, Math.max(ERD_HEADER_HEIGHT, 22 / z))
+                    : node.height;
+                  // Skeleton headers mirror the detailed one (icon + left-aligned name) at one
+                  // font size per zoom level, so cards line up instead of varying by name length.
+                  const fontSize = skeleton
+                    ? Math.min(8.5 / z, headerHeight * 0.38)
+                    : overviewLabelFontSize(label, z, {
+                        width: node.width,
+                        height: headerHeight,
+                      });
+                  const hairline = Math.min(8, 1.25 / z);
+                  return (
+                    <div
+                      key={node.id}
+                      data-erd-overview
+                      onMouseEnter={() => setHoveredTableId(node.id)}
+                      onMouseLeave={() => setHoveredTableId(null)}
+                      onDoubleClick={() => {
+                        const size = measureCanvas();
+                        if (!size) return;
+                        const next = centerOnWorld(
+                          1,
+                          { x: node.x + node.width / 2, y: node.y + node.height / 2 },
+                          bounds,
+                          size
+                        );
+                        viewportRef.current = next;
+                        setViewport(next);
+                      }}
+                      title={label}
+                      style={{
+                        left: node.x - bounds.minX,
+                        top: node.y - bounds.minY,
+                        width: node.width,
+                        height: node.height,
+                        borderWidth: hairline,
+                        borderColor: emphasized
+                          ? undefined
+                          : 'color-mix(in oklch, var(--muted-foreground) 40%, var(--border))',
+                        boxShadow: emphasized
+                          ? `0 0 0 ${3 / z}px color-mix(in oklch, var(--primary) 35%, transparent)`
+                          : undefined,
+                      }}
+                      className={`absolute z-10 flex flex-col overflow-hidden rounded-xl border ${
+                        skeleton ? 'bg-card' : 'bg-muted'
+                      } ${
+                        emphasized ? 'border-primary z-20' : ''
+                      }`}
+                    >
+                      <div
+                        style={{ height: headerHeight, fontSize }}
+                        className={`flex shrink-0 items-center whitespace-nowrap font-mono leading-none ${
+                          skeleton
+                            ? 'gap-[0.5em] border-b border-border bg-background px-[0.7em] font-semibold'
+                            : 'justify-center px-2 font-bold'
+                        } ${emphasized ? 'text-primary' : 'text-foreground'}`}
+                      >
+                        {skeleton && (
+                          <TableIcon
+                            style={{ width: '1.15em', height: '1.15em' }}
+                            className="shrink-0 text-primary"
+                          />
+                        )}
+                        <span className="min-w-0 truncate">{label}</span>
+                      </div>
+                      {skeleton && (
+                        <div className="flex-1 overflow-hidden px-3 pt-1">
+                          {node.visibleColumns.map((col, index) => (
+                            <div
+                              key={col.name}
+                              style={{ height: ERD_ROW_HEIGHT }}
+                              className="flex items-center gap-2"
+                            >
+                              <div
+                                className={`h-2 w-2 shrink-0 rounded-sm ${
+                                  col.isPrimary || col.foreignKey
+                                    ? 'bg-primary/70'
+                                    : 'bg-transparent'
+                                }`}
+                              />
+                              <div
+                                style={{
+                                  width: `${34 + ((index * 37 + col.name.length * 13) % 40)}%`,
+                                }}
+                                className="h-2 rounded-full bg-accent"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
 
                 return (
                   <div
@@ -523,6 +714,7 @@ export const InteractiveErd: React.FC<InteractiveErdProps> = ({
                       )}
                     </div>
 
+                    <>
                     <div className="px-2 font-mono text-[11px] shrink-0">
                       {node.visibleColumns.map((col) => {
                         const nullable = col.isNullable !== false;
@@ -583,6 +775,7 @@ export const InteractiveErd: React.FC<InteractiveErdProps> = ({
                         Edit Schema
                       </button>
                     </div>
+                    </>
                   </div>
                 );
               })}

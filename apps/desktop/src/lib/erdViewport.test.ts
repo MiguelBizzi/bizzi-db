@@ -6,15 +6,18 @@ import {
   ERD_MIN_ZOOM,
   centerOnWorld,
   fitBounds,
+  overviewLabelFontSize,
   panViewport,
+  rectsIntersect,
+  visibleWorldRect,
   wheelZoomFactor,
   zoomAtPoint,
 } from './erdViewport';
 
 describe('clampZoom', () => {
-  test('clamps to 0.2–2', () => {
+  test('clamps to the min/max zoom', () => {
     expect(clampZoom(1)).toBe(1);
-    expect(clampZoom(0.05)).toBe(ERD_MIN_ZOOM);
+    expect(clampZoom(0.001)).toBe(ERD_MIN_ZOOM);
     expect(clampZoom(8)).toBe(ERD_MAX_ZOOM);
   });
 
@@ -92,5 +95,60 @@ describe('centerOnWorld', () => {
     });
     expect(viewport.x + (110 - bounds.minX) * viewport.zoom).toBe(400);
     expect(viewport.y + (80 - bounds.minY) * viewport.zoom).toBe(200);
+  });
+});
+
+describe('visibleWorldRect', () => {
+  const bounds = { minX: 10, minY: 20, width: 5000, height: 5000 };
+
+  test('maps the container back to world coordinates', () => {
+    const rect = visibleWorldRect({ x: 0, y: 0, zoom: 1 }, { width: 800, height: 400 }, bounds, 0);
+    expect(rect).toEqual({ left: 10, top: 20, right: 810, bottom: 420 });
+  });
+
+  test('follows pan and zoom', () => {
+    // world-div point (500, 300) sits at the screen origin at zoom 0.5
+    const rect = visibleWorldRect(
+      { x: -250, y: -150, zoom: 0.5 },
+      { width: 800, height: 400 },
+      bounds,
+      0
+    );
+    expect(rect.left).toBeCloseTo(510);
+    expect(rect.top).toBeCloseTo(320);
+    expect(rect.right).toBeCloseTo(510 + 1600);
+    expect(rect.bottom).toBeCloseTo(320 + 800);
+  });
+
+  test('margin is in screen pixels', () => {
+    const rect = visibleWorldRect({ x: 0, y: 0, zoom: 0.5 }, { width: 800, height: 400 }, bounds, 100);
+    expect(rect.left).toBeCloseTo(10 - 200);
+    expect(rect.right).toBeCloseTo(10 + 1600 + 200);
+  });
+});
+
+describe('rectsIntersect', () => {
+  const a = { left: 0, top: 0, right: 100, bottom: 100 };
+  test('detects overlap and separation', () => {
+    expect(rectsIntersect(a, { left: 50, top: 50, right: 150, bottom: 150 })).toBe(true);
+    expect(rectsIntersect(a, { left: 101, top: 0, right: 200, bottom: 100 })).toBe(false);
+    expect(rectsIntersect(a, { left: 0, top: -50, right: 100, bottom: -1 })).toBe(false);
+  });
+});
+
+describe('overviewLabelFontSize', () => {
+  const card = { width: 260, height: 300 };
+
+  test('targets a readable on-screen size when the card has room', () => {
+    expect(overviewLabelFontSize('a', 0.5, card)).toBeCloseTo(26);
+  });
+
+  test('shrinks to fit long names inside the card', () => {
+    const size = overviewLabelFontSize('x'.repeat(40), 0.1, card);
+    expect(size * 0.6 * 40).toBeLessThanOrEqual(card.width);
+  });
+
+  test('never exceeds half the card height', () => {
+    expect(overviewLabelFontSize('a', 0.05, { width: 260, height: 60 })).toBeLessThanOrEqual(30);
   });
 });
