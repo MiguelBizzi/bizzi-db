@@ -33,12 +33,16 @@ describe('COMMANDS registry invariants', () => {
     }
   });
 
-  test('registers the Phase 1 command ids', () => {
+  test('registers the Phase 1 and Phase 2 command ids', () => {
     expect(COMMANDS.map((c) => c.id).sort()).toEqual(
       [
         'app.settings',
         'app.checkUpdates',
         'file.newQuery',
+        'file.closeTab',
+        'file.closeOthers',
+        'file.closeRight',
+        'file.reopenTab',
         'file.closeWindow',
         'query.run',
         'query.runAll',
@@ -48,8 +52,42 @@ describe('COMMANDS registry invariants', () => {
         'view.erd',
         'view.metrics',
         'view.activity',
+        'view.nextTab',
+        'view.prevTab',
+        'view.tab.1',
+        'view.tab.2',
+        'view.tab.3',
+        'view.tab.4',
+        'view.tab.5',
+        'view.tab.6',
+        'view.tab.7',
+        'view.tab.8',
+        'view.tab.9',
+        'view.splitRight',
+        'view.splitDown',
       ].sort(),
     );
+  });
+
+  test('tab and pane commands have the expected labels and accelerators', () => {
+    const spec: Array<[string, string, string | undefined]> = [
+      ['file.closeTab', 'Close Tab', 'CmdOrCtrl+W'],
+      ['file.closeOthers', 'Close Other Tabs', 'CmdOrCtrl+Alt+W'],
+      ['file.closeRight', 'Close Tabs to the Right', undefined],
+      ['file.reopenTab', 'Reopen Closed Tab', 'CmdOrCtrl+Shift+T'],
+      ['view.nextTab', 'Next Tab', 'CmdOrCtrl+Shift+]'],
+      ['view.prevTab', 'Previous Tab', 'CmdOrCtrl+Shift+['],
+      ['view.splitRight', 'Split Pane Right', 'CmdOrCtrl+Alt+\\'],
+      ['view.splitDown', 'Split Pane Down', undefined],
+    ];
+    for (let n = 1; n <= 8; n++) spec.push([`view.tab.${n}`, `Tab ${n}`, `CmdOrCtrl+${n}`]);
+    spec.push(['view.tab.9', 'Last Tab', 'CmdOrCtrl+9']);
+    for (const [id, label, accelerator] of spec) {
+      const cmd = commandById(id);
+      expect(cmd.label).toBe(label);
+      expect(cmd.accelerator).toBe(accelerator);
+      expect(cmd.allowInModal ?? false).toBe(false);
+    }
   });
 });
 
@@ -92,6 +130,35 @@ describe('isCommandEnabled', () => {
     ['view.palette', { connectionOpen: true, modalOpen: true }, true],
     ['view.palette', { modalOpen: true }, true],
     ['app.checkUpdates', { modalOpen: true }, false],
+    // tab and pane commands (Phase 2)
+    ['file.closeTab', { paneTabCount: 1 }, true],
+    ['file.closeTab', { paneTabCount: 0 }, false],
+    ['file.closeTab', { paneTabCount: 1, modalOpen: true }, false],
+    ['file.closeOthers', { paneTabCount: 2 }, true],
+    ['file.closeOthers', { paneTabCount: 1 }, false],
+    ['file.closeRight', { paneTabCount: 2 }, true],
+    ['file.closeRight', { paneTabCount: 1 }, false],
+    ['file.reopenTab', { closedTabCount: 1 }, true],
+    ['file.reopenTab', { closedTabCount: 0 }, false],
+    ['file.reopenTab', { closedTabCount: 1, modalOpen: true }, false],
+    ['view.nextTab', { paneTabCount: 2 }, true],
+    ['view.nextTab', { paneTabCount: 1 }, false],
+    ['view.prevTab', { paneTabCount: 2 }, true],
+    ['view.prevTab', { paneTabCount: 1 }, false],
+    ['view.tab.1', { paneTabCount: 1 }, true],
+    ['view.tab.1', { paneTabCount: 0 }, false],
+    ['view.tab.3', { paneTabCount: 3 }, true],
+    ['view.tab.3', { paneTabCount: 2 }, false],
+    ['view.tab.8', { paneTabCount: 8 }, true],
+    ['view.tab.8', { paneTabCount: 7 }, false],
+    ['view.tab.9', { paneTabCount: 1 }, true],
+    ['view.tab.9', { paneTabCount: 0 }, false],
+    ['view.tab.9', { paneTabCount: 1, modalOpen: true }, false],
+    ['view.splitRight', { activeTabType: 'sql_editor' }, true],
+    ['view.splitRight', {}, false],
+    ['view.splitRight', { activeTabType: 'table_data', modalOpen: true }, false],
+    ['view.splitDown', { activeTabType: 'table_data' }, true],
+    ['view.splitDown', {}, false],
   ];
   for (const [id, over, expected] of rows) {
     test(`${id} with ${JSON.stringify(over)} -> ${expected}`, () => {
@@ -186,6 +253,7 @@ describe('menuState for realistic app contexts', () => {
     activeTabType: 'sql_editor',
     connectionOpen: true,
     tabCount: 1,
+    paneTabCount: 1,
     pendingCount: 0,
     modalOpen: false,
   });
@@ -209,6 +277,11 @@ describe('menuState for realistic app contexts', () => {
         'view.erd',
         'view.metrics',
         'view.activity',
+        'file.closeTab',
+        'view.tab.1',
+        'view.tab.9',
+        'view.splitRight',
+        'view.splitDown',
       ].sort(),
     );
     expect(menuState(sqlTabOpen).enabled['conn.refreshTable']).toBe(false);
@@ -255,6 +328,21 @@ describe('shortcutLabel', () => {
   test('formats the accelerator for other platforms', () => {
     expect(shortcutLabel('file.newQuery', 'windows')).toBe('Ctrl+T');
     expect(shortcutLabel('view.erd', 'linux')).toBe('Ctrl+Shift+E');
+  });
+
+  test('formats the tab and pane accelerators', () => {
+    expect(shortcutLabel('file.closeTab', 'macos')).toBe('⌘W');
+    expect(shortcutLabel('file.closeOthers', 'macos')).toBe('⌥⌘W');
+    expect(shortcutLabel('file.reopenTab', 'macos')).toBe('⇧⌘T');
+    expect(shortcutLabel('view.nextTab', 'macos')).toBe('⇧⌘]');
+    expect(shortcutLabel('view.prevTab', 'macos')).toBe('⇧⌘[');
+    expect(shortcutLabel('view.tab.1', 'macos')).toBe('⌘1');
+    expect(shortcutLabel('view.tab.9', 'macos')).toBe('⌘9');
+    expect(shortcutLabel('view.splitRight', 'macos')).toBe('⌥⌘\\');
+    expect(shortcutLabel('view.splitRight', 'windows')).toBe('Ctrl+Alt+\\');
+    expect(shortcutLabel('view.nextTab', 'linux')).toBe('Ctrl+Shift+]');
+    expect(shortcutLabel('file.closeRight', 'macos')).toBe('');
+    expect(shortcutLabel('view.splitDown', 'macos')).toBe('');
   });
 
   test('is empty when the command has no accelerator', () => {

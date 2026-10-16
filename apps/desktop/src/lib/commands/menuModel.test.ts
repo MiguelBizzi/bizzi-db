@@ -67,6 +67,52 @@ describe('buildMenuModel', () => {
     ]);
   });
 
+  test('file submenu holds new query, the close/reopen tab group, then close window', () => {
+    expect(submenu(buildMenuModel(), 'file').items).toEqual([
+      { kind: 'item', commandId: 'file.newQuery' },
+      { kind: 'separator' },
+      { kind: 'item', commandId: 'file.closeTab' },
+      { kind: 'item', commandId: 'file.closeOthers' },
+      { kind: 'item', commandId: 'file.closeRight' },
+      { kind: 'item', commandId: 'file.reopenTab' },
+      { kind: 'separator' },
+      { kind: 'item', commandId: 'file.closeWindow' },
+    ]);
+  });
+
+  test('view submenu holds panels, tab navigation, the Go to Tab submenu, splits and fullscreen', () => {
+    const goToTab: MenuNode = {
+      kind: 'submenu',
+      id: 'view.goToTab',
+      label: 'Go to Tab',
+      items: [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({ kind: 'item', commandId: `view.tab.${n}` })),
+    };
+    expect(submenu(buildMenuModel(), 'view').items).toEqual([
+      { kind: 'item', commandId: 'view.palette' },
+      { kind: 'separator' },
+      { kind: 'item', commandId: 'view.erd' },
+      { kind: 'item', commandId: 'view.metrics' },
+      { kind: 'item', commandId: 'view.activity' },
+      { kind: 'separator' },
+      { kind: 'item', commandId: 'view.nextTab' },
+      { kind: 'item', commandId: 'view.prevTab' },
+      goToTab,
+      { kind: 'separator' },
+      { kind: 'item', commandId: 'view.splitRight' },
+      { kind: 'item', commandId: 'view.splitDown' },
+      { kind: 'separator' },
+      { kind: 'predefined', item: 'fullscreen' },
+    ]);
+  });
+
+  test('the Go to Tab submenu has nine items, reached by the recursive walker', () => {
+    const view = submenu(buildMenuModel(), 'view');
+    const goToTab = view.items.find((n) => n.kind === 'submenu' && n.id === 'view.goToTab');
+    if (!goToTab || goToTab.kind !== 'submenu') throw new Error('no Go to Tab submenu');
+    expect(goToTab.items).toHaveLength(9);
+    expect(itemIds([view]).filter((id) => id.startsWith('view.tab.'))).toHaveLength(9);
+  });
+
   test('app submenu shape', () => {
     expect(submenu(buildMenuModel(), 'app').items).toEqual([
       { kind: 'predefined', item: 'about' },
@@ -143,6 +189,11 @@ describe('adaptMenuModel', () => {
       test('keeps every command exactly once', () => {
         const ids = itemIds(adaptMenuModel(buildMenuModel(), platform));
         for (const cmd of COMMANDS) expect(ids.filter((id) => id === cmd.id).length).toBe(1);
+      });
+
+      test('keeps the nested Go to Tab submenu inside View', () => {
+        const view = submenu(adaptMenuModel(buildMenuModel(), platform), 'view');
+        expect(view).toEqual(submenu(buildMenuModel(), 'view'));
       });
 
       test('does not mutate its input', () => {

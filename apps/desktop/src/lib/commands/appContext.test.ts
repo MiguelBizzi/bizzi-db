@@ -10,15 +10,19 @@ const base = {
   activeTabId: 'b',
   currentDbId: 'db1',
   pendingCount: 0,
+  paneTabCount: 2,
+  closedTabCount: 0,
   modals: {},
 };
 
 describe('deriveCommandContext', () => {
   test('maps app state onto the command context', () => {
-    expect(deriveCommandContext({ ...base, pendingCount: 3 })).toEqual({
+    expect(deriveCommandContext({ ...base, pendingCount: 3, paneTabCount: 1, closedTabCount: 4 })).toEqual({
       ...EMPTY_CONTEXT,
       activeTabType: 'table_data',
       tabCount: 2,
+      paneTabCount: 1,
+      closedTabCount: 4,
       pendingCount: 3,
       connectionOpen: true,
       modalOpen: false,
@@ -29,6 +33,13 @@ describe('deriveCommandContext', () => {
     expect(deriveCommandContext({ ...base, activeTabId: '' }).activeTabType).toBeNull();
     expect(deriveCommandContext({ ...base, activeTabId: 'missing' }).activeTabType).toBeNull();
     expect(deriveCommandContext({ ...base, tabs: [], activeTabId: '' }).tabCount).toBe(0);
+  });
+
+  test('passes paneTabCount and closedTabCount through unchanged', () => {
+    expect(deriveCommandContext({ ...base, paneTabCount: 0 }).paneTabCount).toBe(0);
+    expect(deriveCommandContext({ ...base, paneTabCount: 5 }).paneTabCount).toBe(5);
+    expect(deriveCommandContext({ ...base, closedTabCount: 0 }).closedTabCount).toBe(0);
+    expect(deriveCommandContext({ ...base, closedTabCount: 7 }).closedTabCount).toBe(7);
   });
 
   test('connectionOpen follows currentDbId', () => {

@@ -215,6 +215,59 @@ describe('installMenu', () => {
     expect(ran).toEqual(['file.newQuery']);
   });
 
+  test('builds nested submenus: inner items are created, tracked by applyState and runnable', async () => {
+    const nestedModel: MenuNode[] = [
+      {
+        kind: 'submenu',
+        id: 'view',
+        label: 'View',
+        items: [
+          { kind: 'item', commandId: 'view.nextTab' },
+          {
+            kind: 'submenu',
+            id: 'view.goToTab',
+            label: 'Go to Tab',
+            items: [
+              { kind: 'item', commandId: 'view.tab.1' },
+              { kind: 'item', commandId: 'view.tab.9' },
+            ],
+          },
+        ],
+      },
+    ];
+    const { api, items } = makeFakeApi();
+    const ran: string[] = [];
+    let menuItems: unknown[] = [];
+    const recordingApi: MenuApi = {
+      ...api,
+      Menu: {
+        new: async (o) => {
+          menuItems = o.items;
+          return api.Menu.new(o);
+        },
+      },
+    };
+    const host = await installMenu({
+      model: nestedModel,
+      platform: 'macos',
+      onRun: (id) => ran.push(id),
+      api: recordingApi,
+      isTauri: alwaysTauri,
+    });
+    const view = menuItems[0] as { id: string; items: unknown[] };
+    const goToTab = view.items[1] as { id: string; text: string; items: unknown[] };
+    expect(view.id).toBe('view');
+    expect(goToTab.id).toBe('view.goToTab');
+    expect(goToTab.text).toBe('Go to Tab');
+    expect(goToTab.items).toHaveLength(2);
+    expect(items.get('view.tab.9')?.opts.text).toBe('Last Tab');
+    expect(items.get('view.tab.9')?.opts.accelerator).toBe('CmdOrCtrl+9');
+    await host?.applyState({ enabled: { 'view.tab.1': false }, labels: {} });
+    expect(items.get('view.tab.1')?.calls).toEqual(['enabled:false']);
+    items.get('view.tab.9')?.opts.action();
+    expect(ran).toEqual(['view.tab.9']);
+  });
+
   test('resolves null without touching the api when not under Tauri', async () => {
     const { api, log, items, predefined } = makeFakeApi();
     const host = await installMenu({ model, platform: 'macos', onRun: () => {}, api, isTauri: () => false });

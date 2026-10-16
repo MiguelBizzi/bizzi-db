@@ -101,6 +101,8 @@ import {
   renameTab,
   type CloseTabKind,
 } from './lib/tabPaneActions';
+import { popReopenable, pushClosed, type ClosedTab } from './lib/closedTabs';
+import { adjacentTabId, nthTabId } from './lib/tabNavigation';
 import { defaultQuerySql, nextUntitledQueryTitle } from './lib/sqlQuery';
 import { QUERY_PAGE_SIZE } from './lib/queryPaging';
 import { emptySqlTabState, pruneSqlTabState, type SqlTabState } from './lib/sqlTabState';
@@ -160,6 +162,8 @@ export default function App() {
   const [tabs, setTabs] = useState<WorkspaceTab[]>([]);
   const [layout, setLayout] = useState<LayoutNode>(() => singlePane([], '', ROOT_PANE_ID));
   const [focusedPaneId, setFocusedPaneId] = useState(ROOT_PANE_ID);
+  /** Recently closed tabs (newest last) for Reopen Closed Tab. */
+  const [closedTabs, setClosedTabs] = useState<ClosedTab[]>([]);
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>([]);
   const [tableRows, setTableRows] = useState<Record<string, Record<string, unknown>[]>>({});
@@ -661,8 +665,23 @@ export default function App() {
     setFocusedPaneId(resolveFocusedPaneId(nextLayout, preferredPaneId));
   };
 
+  /** Pushes tabs about to be closed onto the closed-tab stack, with their pane and position. */
+  const rememberClosedTabs = (paneId: string, tabIds: string[]) => {
+    const pane = paneById(layout, paneId);
+    if (!pane) return;
+    // Reverse pane order, so repeated reopens restore a batch left to right at its old positions.
+    const entries = tabIds
+      .map((id) => ({ tab: tabs.find((t) => t.id === id), index: pane.tabIds.indexOf(id) }))
+      .filter((e): e is { tab: WorkspaceTab; index: number } => Boolean(e.tab) && e.index >= 0)
+      .sort((a, b) => b.index - a.index)
+      .map(({ tab, index }) => ({ tab, paneId, index }));
+    if (entries.length > 0) setClosedTabs((prev) => pushClosed(prev, entries));
+  };
+
   const handleCloseTab = (paneId: string, tabId: string) => {
-    if (paneTab(paneId, tabId)?.isPinned) return;
+    const closing = paneTab(paneId, tabId);
+    if (closing?.isPinned) return;
+    if (closing) rememberClosedTabs(paneId, [tabId]);
     setTabs((prev) => prev.filter((tab) => tab.id !== tabId));
     syncFocus(removeTabFromPane(layout, paneId, tabId), paneId);
   };
@@ -694,6 +713,7 @@ export default function App() {
     if (!pane) return;
     const result = closePaneTabs(tabs, pane.tabIds, tabId, kind);
     if (result.removedTabIds.length === 0) return;
+    rememberClosedTabs(paneId, result.removedTabIds);
     const nextActive = result.tabIds.includes(pane.activeTabId)
       ? pane.activeTabId
       : result.tabIds[result.tabIds.length - 1] ?? '';
@@ -740,6 +760,41 @@ export default function App() {
   const handleSelectPaneTab = (paneId: string, tabId: string) => {
     setLayout((prev) => setPaneActiveTab(prev, paneId, tabId));
     setFocusedPaneId(paneId);
+  };
+
+  const handleReopenClosedTab = () => {
+    const tableIds = new Set(currentDatabase?.tables.map((t) => t.id) ?? []);
+    const openIds = new Set(tabs.map((t) => t.id));
+    const popped = popReopenable(closedTabs, (tab) => {
+      if (!currentDatabase || openIds.has(tab.id)) return false;
+      if (tab.databaseId && tab.databaseId !== currentDatabase.id) return false;
+      if (tab.type === 'table_data' || tab.type === 'schema_designer') {
+        return Boolean(tab.tableId && tableIds.has(tab.tableId));
+      }
+      return true;
+    });
+    if (!popped) {
+      toast.error('No closed tab to reopen');
+      return;
+    }
+    const { entry, rest } = popped;
+    const inOriginalPane = Boolean(paneById(layout, entry.paneId));
+    const targetId = inOriginalPane ? entry.paneId : activePaneId;
+    setClosedTabs(rest);
+    setTabs((prev) => [...prev, entry.tab]);
+    setLayout((prev) => {
+      const next = addTabToPane(prev, targetId, entry.tab.id);
+      const last = (paneById(next, targetId)?.tabIds.length ?? 0) - 1;
+      // Back at its old position in its own pane; appended when it lands in another pane.
+      return inOriginalPane ? reorderPaneTabs(next, targetId, last, Math.min(entry.index, last)) : next;
+    });
+    setFocusedPaneId(targetId);
+  };
+
+  const selectFocusedPaneTab = (pick: (tabIds: string[], activeId: string) => string | null) => {
+    const pane = paneById(layout, activePaneId);
+    const id = pane ? pick(pane.tabIds, pane.activeTabId) : null;
+    if (id) handleSelectPaneTab(activePaneId, id);
   };
 
   const handleResizeSplit = (splitId: string, sizes: [number, number]) => {
@@ -1350,6 +1405,7 @@ export default function App() {
     }
   };
 
+  const paneTabCount = paneById(layout, activePaneId)?.tabIds.length ?? 0;
   const commandContext = useMemo(
     () =>
       deriveCommandContext({
@@ -1357,6 +1413,8 @@ export default function App() {
         activeTabId,
         currentDbId,
         pendingCount,
+        paneTabCount,
+        closedTabCount: closedTabs.length,
         modals: {
           isCommandPaletteOpen,
           isSettingsOpen,
@@ -1371,6 +1429,8 @@ export default function App() {
       activeTabId,
       currentDbId,
       pendingCount,
+      paneTabCount,
+      closedTabs.length,
       isCommandPaletteOpen,
       isSettingsOpen,
       isConnectionModalOpen,
@@ -1387,12 +1447,23 @@ export default function App() {
       'app.checkUpdates': checkForAppUpdateManually,
       'file.newQuery': () => handleOpenNewQueryTab(),
       'file.closeWindow': () => getCurrentWindow().close(),
+      'file.closeTab': () => handleCloseTab(activePaneId, activeTabId),
+      'file.closeOthers': () => handleCloseTabs(activePaneId, activeTabId, 'others'),
+      'file.closeRight': () => handleCloseTabs(activePaneId, activeTabId, 'right'),
+      'file.reopenTab': handleReopenClosedTab,
       'query.review': openPendingChanges,
       'conn.refreshTable': refreshActiveTable,
       'view.palette': () => setIsCommandPaletteOpen((open) => !open),
       'view.erd': openErd,
       'view.metrics': openMetrics,
       'view.activity': () => setIsActivityLogOpen(true),
+      'view.nextTab': () => selectFocusedPaneTab((ids, active) => adjacentTabId(ids, active, 1)),
+      'view.prevTab': () => selectFocusedPaneTab((ids, active) => adjacentTabId(ids, active, -1)),
+      ...Object.fromEntries(
+        [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`view.tab.${n}`, () => selectFocusedPaneTab((ids) => nthTabId(ids, n))])
+      ),
+      'view.splitRight': () => handleSplitPane(activePaneId, activeTabId, 'row', 'after'),
+      'view.splitDown': () => handleSplitPane(activePaneId, activeTabId, 'column', 'after'),
     },
   });
 
