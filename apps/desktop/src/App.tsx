@@ -1672,6 +1672,9 @@ export default function App() {
         </div>
       )}
 
+      {/* Rendered before the palette and settings so they paint on top (equal z-50, no portal). */}
+      <ShortcutsModal isOpen={isShortcutsOpen} groups={shortcutGroups} onClose={closeShortcuts} />
+
       <CommandPalette
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
@@ -1748,7 +1751,6 @@ export default function App() {
         onCheckForUpdates={checkForAppUpdateManually}
         onRestartToUpdate={restartToUpdate}
       />
-      <ShortcutsModal isOpen={isShortcutsOpen} groups={shortcutGroups} onClose={closeShortcuts} />
       <AnimatePresence>
       {shouldShowUpdateBanner(updateStatus, dismissedUpdateVersion) ? (
         <UpdateBanner
