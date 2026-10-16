@@ -23,12 +23,9 @@ import {
 } from "../lib/connectionFolders";
 import { useHoverMenu } from "../lib/hoverMenu";
 import { WindowControls } from "./WindowControls";
+import { shortcutLabel } from "../lib/commands/shortcutLabel";
 
-const PALETTE_SHORTCUT = /Mac|iPhone|iPad|iPod/i.test(
-  typeof navigator === "undefined" ? "" : navigator.userAgent,
-)
-  ? "⌘K"
-  : "Ctrl+K";
+const PALETTE_SHORTCUT = shortcutLabel("view.palette");
 
 interface NavbarProps {
   profiles: ConnectionProfile[];

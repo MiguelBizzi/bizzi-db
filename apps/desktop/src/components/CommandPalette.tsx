@@ -16,11 +16,9 @@ import {
 } from 'lucide-react';
 import { DatabaseSchema, TableSchema, SavedQuery } from '../types';
 import { knownRowCount } from '../lib/format';
+import { shortcutLabel } from '../lib/commands/shortcutLabel';
 
-const isApplePlatform =
-  typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-const MOD_K = isApplePlatform ? '⌘K' : 'Ctrl+K';
+const MOD_K = shortcutLabel('view.palette');
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -75,7 +73,7 @@ const CommandPaletteBody: React.FC<CommandPaletteProps> = ({
           label: 'Open New SQL Query Tab',
           icon: Code,
           iconClass: 'text-primary',
-          shortcut: isApplePlatform ? '⌘T' : 'Ctrl+T',
+          shortcut: shortcutLabel('file.newQuery'),
           run: () => {
             onOpenNewQuery();
             onClose();

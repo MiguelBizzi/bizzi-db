@@ -8,12 +8,9 @@ import { ColumnVisibilityMenu } from './ColumnVisibilityMenu';
 import { FilterExpressionInput } from './FilterExpressionInput';
 import { filterNeedsValue, filterRuleFieldsClass } from '../../lib/tableFilters';
 import { commitFilterExpression, valueHintsFromRows } from '../../lib/filterExpression';
+import { shortcutLabel } from '../../lib/commands/shortcutLabel';
 
-const REFRESH_SHORTCUT = /Mac|iPhone|iPad|iPod/i.test(
-  typeof navigator === 'undefined' ? '' : navigator.userAgent,
-)
-  ? '⌘R'
-  : 'Ctrl+R';
+const REFRESH_SHORTCUT = shortcutLabel('conn.refreshTable');
 
 interface TableToolbarProps {
   table: TableSchema;

@@ -119,7 +119,10 @@ import { shouldConnectAfterSave } from './lib/connectionForm';
 import { toast } from './lib/toast';
 import { activeFilters } from './lib/tableFilters';
 import { buildTableDdlPreview } from './lib/schemaChange';
+import { deriveCommandContext } from './lib/commands/appContext';
+import { useAppMenu } from './lib/commands/useAppMenu';
 import { getVersion } from '@tauri-apps/api/app';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import {
@@ -501,33 +504,16 @@ export default function App() {
     };
   }, [currentDbId, enqueueSchemaCheck]);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.isComposing || event.repeat) return;
-      const isMod = event.metaKey || event.ctrlKey;
-      if (!isMod || event.altKey || event.shiftKey) return;
-      const key = event.key.toLowerCase();
-      if (key === 'k') {
-        event.preventDefault();
-        event.stopPropagation();
-        setIsCommandPaletteOpen((open) => !open);
-        return;
-      }
-      if (key !== 'r') return;
-      event.preventDefault();
-      event.stopPropagation();
-      const tab = tabs.find((t) => t.id === activeTabId);
-      if (!tab || tab.type !== 'table_data' || !currentDatabase) return;
-      const table = currentDatabase.tables.find(
-        (t) => t.id === tab.tableId || t.name === tab.tableName || t.name === tab.title
-      );
-      if (!table) return;
-      if ((tableLoadInflight.current[table.id] ?? 0) > 0) return;
-      void refreshTableRows(table);
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [activeTabId, currentDatabase, tabs, refreshTableRows, layout, focusedPaneId]);
+  const refreshActiveTable = () => {
+    const tab = tabs.find((t) => t.id === activeTabId);
+    if (!tab || tab.type !== 'table_data' || !currentDatabase) return;
+    const table = currentDatabase.tables.find(
+      (t) => t.id === tab.tableId || t.name === tab.tableName || t.name === tab.title
+    );
+    if (!table) return;
+    if ((tableLoadInflight.current[table.id] ?? 0) > 0) return;
+    void refreshTableRows(table);
+  };
 
   const pendingCount = useMemo(
     () => countPendingChanges(pendingByTable),
@@ -1362,6 +1348,52 @@ export default function App() {
         return null;
     }
   };
+
+  const commandContext = useMemo(
+    () =>
+      deriveCommandContext({
+        tabs,
+        activeTabId,
+        currentDbId,
+        pendingCount,
+        modals: {
+          isCommandPaletteOpen,
+          isSettingsOpen,
+          isConnectionModalOpen,
+          isPendingChangesOpen,
+          isActivityLogOpen,
+          tableActionConfirm: Boolean(tableActionConfirm),
+        },
+      }),
+    [
+      tabs,
+      activeTabId,
+      currentDbId,
+      pendingCount,
+      isCommandPaletteOpen,
+      isSettingsOpen,
+      isConnectionModalOpen,
+      isPendingChangesOpen,
+      isActivityLogOpen,
+      tableActionConfirm,
+    ]
+  );
+
+  useAppMenu({
+    context: commandContext,
+    handlers: {
+      'app.settings': () => setIsSettingsOpen(true),
+      'app.checkUpdates': checkForAppUpdateManually,
+      'file.newQuery': () => handleOpenNewQueryTab(),
+      'file.closeWindow': () => getCurrentWindow().close(),
+      'query.review': openPendingChanges,
+      'conn.refreshTable': refreshActiveTable,
+      'view.palette': () => setIsCommandPaletteOpen((open) => !open),
+      'view.erd': openErd,
+      'view.metrics': openMetrics,
+      'view.activity': () => setIsActivityLogOpen(true),
+    },
+  });
 
   const showPicker = !currentDbId;
 

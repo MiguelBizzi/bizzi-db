@@ -157,6 +157,52 @@ describe('menuState', () => {
   });
 });
 
+describe('menuState for realistic app contexts', () => {
+  const sqlTabOpen = ctx({
+    activeTabType: 'sql_editor',
+    connectionOpen: true,
+    tabCount: 1,
+    pendingCount: 0,
+    modalOpen: false,
+  });
+  const enabledIds = (c: CommandContext) =>
+    Object.entries(menuState(c).enabled)
+      .filter(([, on]) => on)
+      .map(([id]) => id)
+      .sort();
+
+  test('SQL tab, connection open, nothing pending, no modal', () => {
+    expect(enabledIds(sqlTabOpen)).toEqual(
+      [
+        'app.settings',
+        'app.checkUpdates',
+        'file.newQuery',
+        'file.closeWindow',
+        'query.review',
+        'view.palette',
+        'view.erd',
+        'view.metrics',
+        'view.activity',
+      ].sort(),
+    );
+    expect(menuState(sqlTabOpen).enabled['conn.refreshTable']).toBe(false);
+  });
+
+  test('a table_data tab enables Refresh Table', () => {
+    expect(menuState({ ...sqlTabOpen, activeTabType: 'table_data' }).enabled['conn.refreshTable']).toBe(true);
+  });
+
+  test('an open modal leaves only the allowInModal commands enabled', () => {
+    expect(enabledIds({ ...sqlTabOpen, activeTabType: 'table_data', modalOpen: true })).toEqual(
+      ['app.settings', 'file.closeWindow', 'view.palette'].sort(),
+    );
+  });
+
+  test('no connection leaves only the connection-independent commands enabled', () => {
+    expect(enabledIds(ctx())).toEqual(['app.settings', 'app.checkUpdates', 'file.closeWindow'].sort());
+  });
+});
+
 describe('shortcutLabel', () => {
   test('formats the accelerator for macOS', () => {
     expect(shortcutLabel('file.newQuery', 'macos')).toBe('⌘T');
