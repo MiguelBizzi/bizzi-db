@@ -653,6 +653,12 @@ pub fn run() {
             settings_save,
             ssh_pick_private_key
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            macos::handle_run_event(app, &event);
+            #[cfg(not(target_os = "macos"))]
+            let _ = (app, event);
+        });
 }

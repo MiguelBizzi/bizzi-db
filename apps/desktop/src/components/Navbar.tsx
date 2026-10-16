@@ -22,6 +22,7 @@ import {
   groupConnections,
 } from "../lib/connectionFolders";
 import { useHoverMenu } from "../lib/hoverMenu";
+import { WindowControls } from "./WindowControls";
 
 const PALETTE_SHORTCUT = /Mac|iPhone|iPad|iPod/i.test(
   typeof navigator === "undefined" ? "" : navigator.userAgent,
@@ -164,8 +165,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             .catch(() => {});
         });
       }}
-      className="h-13 bg-card border-b border-border text-card-foreground flex items-center justify-between pl-24 pr-4 select-none z-30 shrink-0"
+      className="relative h-13 bg-card border-b border-border text-card-foreground flex items-center justify-between pl-24 pr-4 select-none z-30 shrink-0"
     >
+      <WindowControls />
       <div className="flex items-center gap-3 min-w-0">
         <button
           type="button"

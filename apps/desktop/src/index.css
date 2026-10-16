@@ -367,7 +367,7 @@
   z-index: 20;
 }
 
-/* Native traffic lights sit in this bar; keep controls clickable. */
+/* Traffic lights sit in this bar; keep controls clickable. */
 [data-tauri-drag-region] {
   -webkit-app-region: drag;
   app-region: drag;
