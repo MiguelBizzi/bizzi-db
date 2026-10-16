@@ -34,7 +34,8 @@ export const COMMANDS: readonly Command[] = [
     id: 'view.palette',
     label: 'Command Palette…',
     accelerator: 'CmdOrCtrl+K',
-    enabled: connectionOpen,
+    // Always available: the palette also works on the connection picker (no connection).
+    enabled: () => true,
     allowInModal: true,
   },
   { id: 'view.erd', label: 'Schema Diagram (ERD)', accelerator: 'CmdOrCtrl+Shift+E', enabled: connectionOpen },

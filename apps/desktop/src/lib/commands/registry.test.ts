@@ -71,6 +71,7 @@ describe('isCommandEnabled', () => {
     ['view.erd', { connectionOpen: true }, true],
     ['view.erd', {}, false],
     ['view.palette', { connectionOpen: true }, true],
+    ['view.palette', { connectionOpen: false }, true],
     ['app.settings', {}, true],
     ['app.checkUpdates', {}, true],
     ['file.closeWindow', {}, true],
@@ -79,6 +80,7 @@ describe('isCommandEnabled', () => {
     ['app.settings', { modalOpen: true }, true],
     ['file.closeWindow', { modalOpen: true }, true],
     ['view.palette', { connectionOpen: true, modalOpen: true }, true],
+    ['view.palette', { modalOpen: true }, true],
     ['app.checkUpdates', { modalOpen: true }, false],
   ];
   for (const [id, over, expected] of rows) {
@@ -199,7 +201,17 @@ describe('menuState for realistic app contexts', () => {
   });
 
   test('no connection leaves only the connection-independent commands enabled', () => {
-    expect(enabledIds(ctx())).toEqual(['app.settings', 'app.checkUpdates', 'file.closeWindow'].sort());
+    expect(enabledIds(ctx())).toEqual(
+      ['app.settings', 'app.checkUpdates', 'file.closeWindow', 'view.palette'].sort(),
+    );
+  });
+
+  test('the command palette stays available on the connection picker (no connection)', () => {
+    const state = menuState(ctx({ connectionOpen: false }));
+    expect(state.enabled['view.palette']).toBe(true);
+    for (const id of ['view.erd', 'view.metrics', 'view.activity', 'file.newQuery', 'query.review']) {
+      expect(state.enabled[id]).toBe(false);
+    }
   });
 });
 
