@@ -117,6 +117,10 @@ export const COMMANDS: readonly Command[] = [
   ...goToTabCommands,
   { id: 'view.splitRight', label: 'Split Pane Right', accelerator: 'CmdOrCtrl+Alt+\\', enabled: tabActive },
   { id: 'view.splitDown', label: 'Split Pane Down', enabled: tabActive },
+  { id: 'help.docs', label: 'Documentation', enabled: () => true },
+  { id: 'help.releaseNotes', label: 'Release Notes', enabled: () => true },
+  { id: 'help.reportIssue', label: 'Report an Issue', enabled: () => true },
+  { id: 'help.shortcuts', label: 'Keyboard Shortcuts…', enabled: () => true },
 ];
 
 export function commandById(id: string): Command {

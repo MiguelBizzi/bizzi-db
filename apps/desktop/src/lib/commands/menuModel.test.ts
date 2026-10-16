@@ -24,13 +24,21 @@ function submenu(model: MenuNode[], id: string): Extract<MenuNode, { kind: 'subm
   return found;
 }
 
+const HELP_ITEMS: MenuNode[] = [
+  { kind: 'item', commandId: 'help.docs' },
+  { kind: 'item', commandId: 'help.releaseNotes' },
+  { kind: 'item', commandId: 'help.reportIssue' },
+  { kind: 'separator' },
+  { kind: 'item', commandId: 'help.shortcuts' },
+];
+
 describe('buildMenuModel', () => {
   test('top-level submenu ids on macOS', () => {
     const ids = buildMenuModel().map((n) => (n.kind === 'submenu' ? n.id : n.kind));
-    expect(ids).toEqual(['app', 'file', 'edit', 'query', 'connection', 'view', 'window']);
+    expect(ids).toEqual(['app', 'file', 'edit', 'query', 'connection', 'view', 'window', 'help']);
   });
 
-  test('submenu labels and window role', () => {
+  test('submenu labels and window and help roles', () => {
     const model = buildMenuModel();
     expect(model.map((n) => (n.kind === 'submenu' ? n.label : ''))).toEqual([
       'Bizzi DB',
@@ -40,8 +48,10 @@ describe('buildMenuModel', () => {
       'Connection',
       'View',
       'Window',
+      'Help',
     ]);
     expect(submenu(model, 'window').role).toBe('window');
+    expect(submenu(model, 'help').role).toBe('help');
   });
 
   test('every command appears in the model exactly once and every item is registered', () => {
@@ -171,8 +181,8 @@ describe('buildMenuModel', () => {
     ]);
   });
 
-  test('there is no help submenu yet', () => {
-    expect(buildMenuModel().some((n) => n.kind === 'submenu' && n.id === 'help')).toBe(false);
+  test('help submenu holds the links, a separator, then Keyboard Shortcuts', () => {
+    expect(submenu(buildMenuModel(), 'help').items).toEqual(HELP_ITEMS);
   });
 });
 
@@ -208,11 +218,23 @@ describe('adaptMenuModel', () => {
         expect(items.slice(-2)).toEqual([{ kind: 'separator' }, { kind: 'predefined', item: 'quit' }]);
       });
 
-      test('help submenu holds about and check for updates', () => {
-        const help = submenu(adaptMenuModel(buildMenuModel(), platform), 'help');
+      test('help submenu holds about and check for updates, a separator, then the help items', () => {
+        const out = adaptMenuModel(buildMenuModel(), platform);
+        expect(out.filter((n) => n.kind === 'submenu' && n.id === 'help').length).toBe(1);
+        const help = submenu(out, 'help');
         expect(help.label).toBe('Help');
         expect(help.role).toBe('help');
         expect(help.items).toEqual([
+          { kind: 'predefined', item: 'about' },
+          { kind: 'item', commandId: 'app.checkUpdates' },
+          { kind: 'separator' },
+          ...HELP_ITEMS,
+        ]);
+      });
+
+      test('creates a help submenu with about and check for updates when the model has none', () => {
+        const model = buildMenuModel().filter((n) => !(n.kind === 'submenu' && n.id === 'help'));
+        expect(submenu(adaptMenuModel(model, platform), 'help').items).toEqual([
           { kind: 'predefined', item: 'about' },
           { kind: 'item', commandId: 'app.checkUpdates' },
         ]);
@@ -246,7 +268,7 @@ describe('adaptMenuModel', () => {
 
       test('merges into an existing help submenu instead of creating a second', () => {
         const model: MenuNode[] = [
-          ...buildMenuModel(),
+          ...buildMenuModel().filter((n) => !(n.kind === 'submenu' && n.id === 'help')),
           {
             kind: 'submenu',
             id: 'help',

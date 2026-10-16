@@ -82,6 +82,10 @@ describe('COMMANDS registry invariants', () => {
         'view.tab.9',
         'view.splitRight',
         'view.splitDown',
+        'help.docs',
+        'help.releaseNotes',
+        'help.reportIssue',
+        'help.shortcuts',
       ].sort(),
     );
   });
@@ -140,6 +144,22 @@ describe('COMMANDS registry invariants', () => {
       const cmd = commandById(id);
       expect(cmd.label).toBe(label);
       expect(cmd.accelerator).toBe(accelerator);
+      expect(cmd.allowInModal ?? false).toBe(false);
+      expect(cmd.typingConflict ?? false).toBe(false);
+    }
+  });
+
+  test('help commands have the expected labels, no accelerator and are not allowed in a modal', () => {
+    const spec: Array<[string, string]> = [
+      ['help.docs', 'Documentation'],
+      ['help.releaseNotes', 'Release Notes'],
+      ['help.reportIssue', 'Report an Issue'],
+      ['help.shortcuts', 'Keyboard Shortcuts…'],
+    ];
+    for (const [id, label] of spec) {
+      const cmd = commandById(id);
+      expect(cmd.label).toBe(label);
+      expect(cmd.accelerator).toBeUndefined();
       expect(cmd.allowInModal ?? false).toBe(false);
       expect(cmd.typingConflict ?? false).toBe(false);
     }
@@ -288,6 +308,17 @@ describe('isCommandEnabled', () => {
     ['conn.refreshSchema', { connectionOpen: true }, true],
     ['conn.refreshSchema', {}, false],
     ['conn.refreshSchema', { connectionOpen: true, modalOpen: true }, false],
+    // help commands: always available, except behind a modal
+    ['help.docs', {}, true],
+    ['help.docs', { connectionOpen: true }, true],
+    ['help.docs', { modalOpen: true }, false],
+    ['help.releaseNotes', {}, true],
+    ['help.releaseNotes', { modalOpen: true }, false],
+    ['help.reportIssue', {}, true],
+    ['help.reportIssue', { modalOpen: true }, false],
+    ['help.shortcuts', {}, true],
+    ['help.shortcuts', { connectionOpen: true }, true],
+    ['help.shortcuts', { modalOpen: true }, false],
   ];
   for (const [id, over, expected] of rows) {
     test(`${id} with ${JSON.stringify(over)} -> ${expected}`, () => {
@@ -429,6 +460,10 @@ describe('menuState for realistic app contexts', () => {
         'view.tab.9',
         'view.splitRight',
         'view.splitDown',
+        'help.docs',
+        'help.releaseNotes',
+        'help.reportIssue',
+        'help.shortcuts',
       ].sort(),
     );
     expect(menuState(sqlTabOpen).enabled['conn.refreshTable']).toBe(false);
@@ -468,6 +503,10 @@ describe('menuState for realistic app contexts', () => {
         'file.newConnection',
         'conn.switch',
         'conn.back',
+        'help.docs',
+        'help.releaseNotes',
+        'help.reportIssue',
+        'help.shortcuts',
       ].sort(),
     );
   });

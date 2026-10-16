@@ -14,6 +14,7 @@ import { ActivityLogDrawer } from './components/ActivityLog/ActivityLogDrawer';
 import { PendingChangesDrawer } from './components/PendingChanges/PendingChangesDrawer';
 import { ConnectionModal } from './components/Modals/ConnectionModal';
 import { SettingsModal } from './components/Modals/SettingsModal';
+import { ShortcutsModal } from './components/Modals/ShortcutsModal';
 import { ConnectionPicker } from './components/ConnectionPicker';
 import { Toaster } from './components/ui/Toaster';
 import {
@@ -125,10 +126,16 @@ import { activeFilters } from './lib/tableFilters';
 import { buildTableDdlPreview } from './lib/schemaChange';
 import { deriveCommandContext } from './lib/commands/appContext';
 import { useAppMenu } from './lib/commands/useAppMenu';
+import { buildMenuModel } from './lib/commands/menuModel';
+import { adaptMenuModel } from './lib/commands/platformAdapter';
+import { currentPlatform } from './lib/commands/shortcutLabel';
+import { cheatSheetRows } from './lib/commands/shortcutsCheatSheet';
+import { EXTERNAL_LINKS, type ExternalLinkId } from './lib/externalLinks';
 import { getVersion } from '@tauri-apps/api/app';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   IDLE_UPDATE_STATUS,
   UPDATE_CHECK_INTERVAL_MS,
@@ -187,6 +194,12 @@ export default function App() {
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
   const [switcherRequest, setSwitcherRequest] = useState(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const closeShortcuts = useCallback(() => setIsShortcutsOpen(false), []);
+  const shortcutGroups = useMemo(() => {
+    const platform = currentPlatform();
+    return cheatSheetRows(adaptMenuModel(buildMenuModel(), platform), platform);
+  }, []);
   const {
     preference: motionPreference,
     reduced: reducedMotion,
@@ -1442,6 +1455,7 @@ export default function App() {
         modals: {
           isCommandPaletteOpen,
           isSettingsOpen,
+          isShortcutsOpen,
           isConnectionModalOpen,
           isPendingChangesOpen,
           isActivityLogOpen,
@@ -1457,6 +1471,7 @@ export default function App() {
       closedTabs.length,
       isCommandPaletteOpen,
       isSettingsOpen,
+      isShortcutsOpen,
       isConnectionModalOpen,
       isPendingChangesOpen,
       isActivityLogOpen,
@@ -1478,6 +1493,10 @@ export default function App() {
     if (!currentDatabase) return;
     const error = await refreshConnectionSchemas(loadSchema, currentDatabase.id);
     if (error) toast.error(error);
+  };
+
+  const openExternalLink = (id: ExternalLinkId) => {
+    openUrl(EXTERNAL_LINKS[id]).catch((err: unknown) => toast.error(invokeErrorMessage(err, 'Could not open the link')));
   };
 
   useAppMenu({
@@ -1517,6 +1536,10 @@ export default function App() {
       ),
       'view.splitRight': () => handleSplitPane(activePaneId, activeTabId, 'row', 'after'),
       'view.splitDown': () => handleSplitPane(activePaneId, activeTabId, 'column', 'after'),
+      'help.docs': () => openExternalLink('docs'),
+      'help.releaseNotes': () => openExternalLink('releaseNotes'),
+      'help.reportIssue': () => openExternalLink('reportIssue'),
+      'help.shortcuts': () => setIsShortcutsOpen(true),
     },
   });
 
@@ -1725,6 +1748,7 @@ export default function App() {
         onCheckForUpdates={checkForAppUpdateManually}
         onRestartToUpdate={restartToUpdate}
       />
+      <ShortcutsModal isOpen={isShortcutsOpen} groups={shortcutGroups} onClose={closeShortcuts} />
       <AnimatePresence>
       {shouldShowUpdateBanner(updateStatus, dismissedUpdateVersion) ? (
         <UpdateBanner

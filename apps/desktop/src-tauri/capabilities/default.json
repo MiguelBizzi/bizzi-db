@@ -11,6 +11,14 @@
     "core:window:allow-set-fullscreen",
     "allow-app-commands",
     "updater:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "https://github.com/MiguelBizzi/bizzi-db#readme" },
+        { "url": "https://github.com/MiguelBizzi/bizzi-db/releases" },
+        { "url": "https://github.com/MiguelBizzi/bizzi-db/issues/new" }
+      ]
+    }
   ]
 }

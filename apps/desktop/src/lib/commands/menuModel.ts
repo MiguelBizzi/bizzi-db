@@ -152,5 +152,18 @@ export function buildMenuModel(): MenuNode[] {
       role: 'window',
       items: [predefined('minimize'), predefined('maximize'), separator(), predefined('bringAllToFront')],
     },
+    {
+      kind: 'submenu',
+      id: 'help',
+      label: 'Help',
+      role: 'help',
+      items: [
+        item('help.docs'),
+        item('help.releaseNotes'),
+        item('help.reportIssue'),
+        separator(),
+        item('help.shortcuts'),
+      ],
+    },
   ];
 }
