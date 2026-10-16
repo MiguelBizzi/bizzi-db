@@ -65,23 +65,52 @@ const MAC_KEY_GLYPHS: Record<string, string> = {
   BACKSPACE: '⌫',
 };
 
+const NAMED_KEYS = [
+  'Enter',
+  'Backspace',
+  'Delete',
+  'Escape',
+  'Space',
+  'Tab',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown',
+  'Insert',
+];
+const NAMED_KEY_BY_LOWER = new Map(NAMED_KEYS.map((k) => [k.toLowerCase(), k]));
+
+/** Display form of a key: single characters uppercased, named keys in natural case. */
+function displayKey(rawKey: string): string {
+  if (rawKey.length === 1) return rawKey.toUpperCase();
+  const named = NAMED_KEY_BY_LOWER.get(rawKey.toLowerCase());
+  if (named) return named;
+  // Function keys (F1..F24) and unknown names: uppercase a leading letter only.
+  return /^f\d+$/i.test(rawKey) ? rawKey.toUpperCase() : rawKey.charAt(0).toUpperCase() + rawKey.slice(1);
+}
+
 /** Human-readable label: `⇧⌘N` on macOS, `Ctrl+Shift+N` elsewhere. */
 export function formatAccelerator(acc: string, platform: Platform): string {
   const p = parseAccelerator(acc);
+  const key = displayKey(acc.split('+').pop() ?? '');
   if (platform === 'macos') {
     return (
       (p.ctrl ? '⌃' : '') +
       (p.alt ? '⌥' : '') +
       (p.shift ? '⇧' : '') +
       (p.cmd ? '⌘' : '') +
-      (MAC_KEY_GLYPHS[p.key] ?? p.key)
+      (MAC_KEY_GLYPHS[p.key] ?? key)
     );
   }
   const parts: string[] = [];
   if (p.ctrl || p.cmd) parts.push('Ctrl');
   if (p.alt) parts.push('Alt');
   if (p.shift) parts.push('Shift');
-  parts.push(p.key);
+  parts.push(key);
   return parts.join('+');
 }
 

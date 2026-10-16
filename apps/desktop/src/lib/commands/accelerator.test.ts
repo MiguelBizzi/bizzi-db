@@ -72,6 +72,30 @@ describe('formatAccelerator', () => {
     expect(formatAccelerator('CmdOrCtrl+Shift+N', 'windows')).toBe('Ctrl+Shift+N');
     expect(formatAccelerator('CmdOrCtrl+Alt+W', 'linux')).toBe('Ctrl+Alt+W');
   });
+
+  test('named keys display in natural case on Windows and Linux', () => {
+    expect(formatAccelerator('CmdOrCtrl+Shift+Enter', 'windows')).toBe('Ctrl+Shift+Enter');
+    expect(formatAccelerator('CmdOrCtrl+Backspace', 'windows')).toBe('Ctrl+Backspace');
+    expect(formatAccelerator('CmdOrCtrl+ArrowUp', 'linux')).toBe('Ctrl+ArrowUp');
+    expect(formatAccelerator('CmdOrCtrl+enter', 'linux')).toBe('Ctrl+Enter');
+  });
+
+  test('named keys without a glyph display in natural case on macOS', () => {
+    expect(formatAccelerator('CmdOrCtrl+Escape', 'macos')).toBe('⌘Escape');
+    expect(formatAccelerator('CmdOrCtrl+Alt+ArrowUp', 'macos')).toBe('⌥⌘ArrowUp');
+    expect(formatAccelerator('CmdOrCtrl+Space', 'macos')).toBe('⌘Space');
+    expect(formatAccelerator('CmdOrCtrl+Tab', 'macos')).toBe('⌘Tab');
+  });
+
+  test('single-character and function keys are uppercased', () => {
+    expect(formatAccelerator('CmdOrCtrl+,', 'windows')).toBe('Ctrl+,');
+    expect(formatAccelerator('CmdOrCtrl+/', 'macos')).toBe('⌘/');
+    expect(formatAccelerator('CmdOrCtrl+f5', 'windows')).toBe('Ctrl+F5');
+  });
+
+  test('normalize keeps the uppercased canonical key for named keys', () => {
+    expect(normalizeAccelerator('CmdOrCtrl+Shift+Enter')).toBe('CmdOrCtrl+Shift+ENTER');
+  });
 });
 
 describe('toTauriAccelerator', () => {
