@@ -317,7 +317,11 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
     });
     // Only the focused pane's editor is active, whatever order the panes mount in.
     scope.setActive(isFocusedPaneRef.current);
-    scope.setContext({ sqlSelectionPresent: false, sqlResultPresent: sqlResultPresentRef.current });
+    scope.setContext({
+      sqlSelectionPresent: false,
+      sqlResultPresent: sqlResultPresentRef.current,
+      modalOpen: isSaveModalOpenRef.current,
+    });
     if (isFocusedPaneRef.current) scope.claim();
     scopeRef.current = scope;
     return () => {
@@ -338,6 +342,12 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
   useEffect(() => {
     scopeRef.current?.setContext({ sqlResultPresent });
   }, [sqlResultPresent]);
+
+  // The Save Query form counts as a modal for the menu bar (e.g. Cmd+W must not close the tab
+  // while a title is being typed).
+  useEffect(() => {
+    scopeRef.current?.setContext({ modalOpen: isSaveModalOpen });
+  }, [isSaveModalOpen]);
 
   useEffect(() => {
     if (!runMenuOpen) return;

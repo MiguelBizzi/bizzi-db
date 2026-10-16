@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { registerScope, type CommandScope } from './commandBus';
+import { getLocalContext, registerScope, type CommandScope } from './commandBus';
 import { EMPTY_CONTEXT, type CommandContext } from './context';
 import type { MenuHost } from './menuHost';
-import { createMenuSync } from './useAppMenu';
+import { menuState } from './registry';
+import { createMenuSync, mergeMenuContext } from './useAppMenu';
 
 type State = Parameters<MenuHost['applyState']>[0];
 
@@ -137,6 +138,34 @@ describe('createMenuSync', () => {
     expect(calls).toBe(1);
     await sync.idle();
     expect(applied.at(-1)?.enabled['edit.insertRow']).toBe(false);
+  });
+
+  test('a local modalOpen:false does not clear an app-level modal', () => {
+    const app: CommandContext = { ...EMPTY_CONTEXT, activeTabType: 'sql_editor', modalOpen: true };
+    scopes.push(registerScope('test', {}));
+    scopes[0].setContext({ modalOpen: false, sqlSelectionPresent: true });
+    const ctx = mergeMenuContext(app, getLocalContext(), false);
+    expect(ctx.modalOpen).toBe(true);
+    expect(ctx.sqlSelectionPresent).toBe(true);
+    expect(menuState(ctx).enabled['query.run']).toBe(false);
+  });
+
+  test('a local overlay (modalOpen:true) disables commands the app context allows', () => {
+    let calls = 0;
+    const scope = registerScope('test', { 'query.run': () => void calls++, 'file.closeTab': () => void calls++ });
+    scopes.push(scope);
+    const app: CommandContext = { ...EMPTY_CONTEXT, activeTabType: 'sql_editor', paneTabCount: 1 };
+    const sync = createMenuSync({
+      getContext: () => mergeMenuContext(app, getLocalContext(), false),
+      onError: () => undefined,
+    });
+    scope.setContext({ modalOpen: true });
+    sync.run('query.run');
+    sync.run('file.closeTab');
+    expect(calls).toBe(0);
+    scope.setContext({ modalOpen: false });
+    sync.run('query.run');
+    expect(calls).toBe(1);
   });
 
   test('run reports sync and async handler errors through onError', async () => {

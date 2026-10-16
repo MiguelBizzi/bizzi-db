@@ -515,6 +515,11 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   isFocusedPaneRef.current = isFocusedPane;
   const selectedCountRef = useRef(selectedRowPks.length);
   selectedCountRef.current = selectedRowPks.length;
+  // The insert drawer and JSON editor count as modals for the menu bar, so its commands
+  // (Close Tab, Export, Delete Rows…) do not act on the grid behind them.
+  const overlayOpen = insertOpen || jsonModalState.isOpen;
+  const overlayOpenRef = useRef(overlayOpen);
+  overlayOpenRef.current = overlayOpen;
   useEffect(() => {
     if (!registerMenuScope) return;
     const scope = registerScope("grid:" + scopeId, {
@@ -525,7 +530,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     });
     // Only the focused pane's grid is active, whatever order the panes mount in.
     scope.setActive(isFocusedPaneRef.current);
-    scope.setContext({ selectedRowCount: selectedCountRef.current });
+    scope.setContext({ selectedRowCount: selectedCountRef.current, modalOpen: overlayOpenRef.current });
     if (isFocusedPaneRef.current) scope.claim();
     scopeRef.current = scope;
     return () => {
@@ -544,6 +549,10 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   useEffect(() => {
     scopeRef.current?.setContext({ selectedRowCount: selectedRowPks.length });
   }, [selectedRowPks.length]);
+
+  useEffect(() => {
+    scopeRef.current?.setContext({ modalOpen: overlayOpen });
+  }, [overlayOpen]);
 
   // Inline edit submit
   const handleCellEditSubmit = (

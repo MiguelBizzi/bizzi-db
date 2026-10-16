@@ -25,6 +25,19 @@ export interface MenuSync {
   idle(): Promise<void>;
 }
 
+/**
+ * The context the menu gates on: local scope context over the app context, plus typing focus.
+ * `modalOpen` is OR-ed: a component overlay (local) and an app-level modal each count, and a
+ * scope publishing `modalOpen: false` must not clear the app's `true`.
+ */
+export function mergeMenuContext(
+  app: CommandContext,
+  local: Partial<CommandContext>,
+  textInputFocused: boolean,
+): CommandContext {
+  return { ...app, ...local, modalOpen: app.modalOpen || Boolean(local.modalOpen), textInputFocused };
+}
+
 /** React-free core of `useAppMenu`. Only reads the bus; never writes to it. */
 export function createMenuSync(opts: {
   getContext: () => CommandContext;
@@ -71,12 +84,13 @@ export function useAppMenu(args: { context: CommandContext; handlers: Record<str
   const menuRef = useRef<MenuSync | null>(null);
   if (!menuRef.current) {
     menuRef.current = createMenuSync({
-      getContext: () => ({
-        ...contextRef.current,
-        ...getLocalContext(),
-        // Read live rather than from focus events, which miss an input removed while focused.
-        textInputFocused: isTextInputTarget(document.activeElement),
-      }),
+      getContext: () =>
+        mergeMenuContext(
+          contextRef.current,
+          getLocalContext(),
+          // Read live rather than from focus events, which miss an input removed while focused.
+          isTextInputTarget(document.activeElement),
+        ),
       onError: (error) => toast.error(invokeErrorMessage(error, 'Command failed')),
     });
   }
