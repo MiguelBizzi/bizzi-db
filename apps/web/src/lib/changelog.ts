@@ -34,6 +34,40 @@ export const UPCOMING: UpcomingEntry | null = null;
 // Write for people who use the app, not for people who read the commits.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.18',
+    date: '2026-10-18',
+    releases: 1,
+    title: 'A native menu bar, and objects managed in place',
+    summary:
+      'Actions now live in a native menu with keyboard shortcuts, and you can design views, write functions and inspect indexes without leaving the app.',
+    changes: [
+      {
+        kind: 'new',
+        text: 'A native macOS menu bar holds the main actions, with keyboard shortcuts for them. Help → Keyboard Shortcuts lists them all.',
+      },
+      {
+        kind: 'new',
+        text: 'Create views from File → New View, with a designer and the SQL it will run.',
+      },
+      {
+        kind: 'new',
+        text: 'Functions and procedures are listed in the schema view. Create, edit and drop them, with a code editor for the body.',
+      },
+      {
+        kind: 'new',
+        text: 'Indexes open in a drawer with their definition, and can be dropped after you confirm.',
+      },
+      {
+        kind: 'fixed',
+        text: 'Menu commands no longer fire while a dialog or drawer is open.',
+      },
+      {
+        kind: 'fixed',
+        text: 'A failed statement in a script no longer leaves the connection stuck in an aborted transaction.',
+      },
+    ],
+  },
+  {
     version: '0.1.17',
     date: '2026-10-15',
     releases: 1,
