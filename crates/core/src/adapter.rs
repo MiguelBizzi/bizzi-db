@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::types::{DatabaseSchema, QueryExecutionResult, SslMode, TableFilter};
+use crate::types::{DatabaseSchema, QueryExecutionResult, RoutineSource, SslMode, TableFilter};
 
 #[derive(Clone)]
 pub struct ConnectConfig {
@@ -102,6 +102,15 @@ pub trait Session: Send + Sync {
         offset: i64,
         filters: &[TableFilter],
     ) -> Result<QueryExecutionResult, AdapterError>;
+    async fn routine_source(
+        &self,
+        _schema: &str,
+        _oid: &str,
+    ) -> Result<RoutineSource, AdapterError> {
+        Err(AdapterError::msg(
+            "Viewing routine source is not supported for this database",
+        ))
+    }
 }
 
 #[async_trait]

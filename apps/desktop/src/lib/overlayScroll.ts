@@ -163,6 +163,27 @@ export function overlayThumbDragPosition(
   );
 }
 
+export type StackingLevel = { position: string; zIndex: string };
+
+export function overlayThumbZIndex(levels: StackingLevel[]): number {
+  let highest = 0;
+  for (const level of levels) {
+    if (level.position === "static") continue;
+    const z = Number.parseInt(level.zIndex, 10);
+    if (Number.isFinite(z) && z > highest) highest = z;
+  }
+  return highest + 1;
+}
+
+function stackingLevels(el: HTMLElement): StackingLevel[] {
+  const levels: StackingLevel[] = [];
+  for (let node: HTMLElement | null = el; node; node = node.parentElement) {
+    const style = getComputedStyle(node);
+    levels.push({ position: style.position, zIndex: style.zIndex });
+  }
+  return levels;
+}
+
 function applyThumbRect(el: HTMLElement, rect: OverlayThumbRect | null) {
   if (!rect) {
     el.style.opacity = "0";
@@ -217,6 +238,9 @@ export function bindOverlayScroll(root: Document | HTMLElement = document): () =
 
   const paint = (el: HTMLElement) => {
     const viewport = el.getBoundingClientRect();
+    const zIndex = String(overlayThumbZIndex(stackingLevels(el)));
+    thumbX.style.zIndex = zIndex;
+    thumbY.style.zIndex = zIndex;
     applyThumbRect(thumbY, overlayThumbMetrics(el, viewport, "y"));
     applyThumbRect(thumbX, overlayThumbMetrics(el, viewport, "x"));
   };

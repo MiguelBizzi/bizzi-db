@@ -8,8 +8,15 @@ import {
   RefreshCw,
   Network,
   FolderTree,
+  ChevronRight,
+  EllipsisVertical,
+  SquareFunction,
+  Workflow,
 } from 'lucide-react';
-import { DatabaseSchema, TableSchema } from '../types';
+import { DatabaseSchema, RoutineDefinition, TableSchema } from '../types';
+import { filterRoutines } from '../lib/routineTabs';
+import { routineMenuItems, type RoutineMenuHandlers } from './routineMenu';
+import { createMenuItems } from './createMenu';
 import { tableStatParts } from '../lib/format';
 import { explorerListMode } from '../lib/explorerList';
 import { Select } from './ui/Select';
@@ -47,6 +54,11 @@ interface SidebarProps {
   onSelectTableData: (table: TableSchema) => void;
   onOpenErd: () => void;
   onOpenSchemaDesigner?: (table: TableSchema) => void;
+  onNewIndex?: (table: TableSchema) => void;
+  onOpenRoutine?: (routine: RoutineDefinition) => void;
+  routineHandlers?: RoutineMenuHandlers;
+  onNewRoutine?: () => void;
+  onNewView?: () => void;
   onOpenNewTableModal?: () => void;
   onRefreshSchemas?: () => void | Promise<void>;
   onAddTagToTable?: (tableName: string, tag: string) => void;
@@ -62,6 +74,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectTableData,
   onOpenErd,
   onOpenSchemaDesigner,
+  onNewIndex,
+  onOpenRoutine,
+  routineHandlers,
+  onNewRoutine,
+  onNewView,
   onOpenNewTableModal,
   onRefreshSchemas,
   onAddTagToTable,
@@ -79,13 +96,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [menu, setMenu] = useState<{ x: number; y: number; table: TableSchema } | null>(
     null
   );
+  const [routineMenu, setRoutineMenu] = useState<{
+    x: number;
+    y: number;
+    routine: RoutineDefinition;
+  } | null>(null);
+  const [routinesOpen, setRoutinesOpen] = useState(true);
+  const [createMenu, setCreateMenu] = useState<{ x: number; y: number } | null>(null);
+  const routines = currentDatabase.routines ?? [];
 
-  // Collect all unique tags and schemas across tables
   const allTags = Array.from(
     new Set(currentDatabase.tables.flatMap((t) => t.tags))
   );
   const allSchemas = Array.from(
-    new Set(currentDatabase.tables.map((t) => t.schema))
+    new Set([...currentDatabase.tables.map((t) => t.schema), ...routines.map((r) => r.schema)])
   );
 
   const filteredTables = currentDatabase.tables.filter((table) => {
@@ -97,6 +121,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return matchesSearch && matchesTag && matchesSchema;
   });
   const listMode = explorerListMode(refreshingSchemas, filteredTables.length);
+  const filteredRoutines = filterRoutines(routines, { search: searchTerm, schema: selectedSchema });
 
   const handleAddTagSubmit = (e: React.FormEvent, tableName: string) => {
     e.preventDefault();
@@ -111,6 +136,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onOpen: onSelectTableData,
     onOpenSql: onOpenTableSql,
     onEdit: onOpenSchemaDesigner,
+    onNewIndex,
     onCopySchema: onCopyTableSchema,
     onEmpty: onEmptyTable,
     onDelete: onDeleteTable,
@@ -145,9 +171,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
             <button
               type="button"
-              onClick={onOpenNewTableModal}
-              title="Create New Table"
-              className="p-1 rounded-md bg-muted hover:bg-accent text-primary border border-sidebar-border transition-colors"
+              title="Create…"
+              aria-label="Create a table, view or function"
+              aria-haspopup="menu"
+              aria-expanded={createMenu != null}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                if (createMenu) {
+                  setCreateMenu(null);
+                  return;
+                }
+                const rect = event.currentTarget.getBoundingClientRect();
+                setCreateMenu({ x: rect.left, y: rect.bottom + 4 });
+              }}
+              className={`p-1 rounded-md hover:bg-accent text-primary border border-sidebar-border transition-colors ${
+                createMenu ? 'bg-accent' : 'bg-muted'
+              }`}
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
@@ -159,7 +198,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Filter tables..."
+            placeholder={routines.length > 0 ? 'Filter tables & functions...' : 'Filter tables...'}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-8 pr-3 py-1.5 bg-background border border-sidebar-border rounded-lg text-xs text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary font-mono transition-all"
@@ -237,7 +276,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             return (
               <div
                 key={table.id}
-                className={`relative rounded-lg border transition-all ${
+                className={`group relative rounded-lg border transition-all ${
                   isActive
                     ? 'bg-primary/20 border-primary/50 text-primary font-medium'
                     : 'bg-card/40 border-sidebar-border hover:bg-accent/60 text-card-foreground'
@@ -249,7 +288,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <div
                   onClick={() => onSelectTableData(table)}
-                  className="p-2 cursor-pointer flex items-center justify-between"
+                  className="p-2 pr-8 cursor-pointer flex items-center justify-between"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     {table.isView ? (
@@ -277,6 +316,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                   </div>
                 </div>
+                <RowMenuButton
+                  label={`${table.isView ? 'View' : 'Table'} actions for ${table.name}`}
+                  open={menu?.table.id === table.id}
+                  onOpen={(x, y) => setMenu({ x, y, table })}
+                  onClose={() => setMenu(null)}
+                />
               </div>
             );
           })
@@ -285,6 +330,92 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {listMode === 'empty' && (
           <div className="text-center py-8 px-4 text-xs text-muted-foreground">
             No tables matching "{searchTerm}"
+          </div>
+        )}
+
+        {listMode !== 'skeleton' && (routines.length > 0 || onNewRoutine) && (
+          <div className="pt-2">
+            <div className="px-2 py-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-muted-foreground font-mono">
+              <button
+                type="button"
+                onClick={() => setRoutinesOpen((open) => !open)}
+                aria-expanded={routinesOpen}
+                className="flex items-center gap-1 hover:text-foreground transition-colors"
+              >
+                <ChevronRight
+                  className={`w-3 h-3 transition-transform ${routinesOpen ? 'rotate-90' : ''}`}
+                />
+                Functions
+                <span>({filteredRoutines.length})</span>
+              </button>
+              {onNewRoutine && (
+                <button
+                  type="button"
+                  onClick={onNewRoutine}
+                  title="Create New Function"
+                  aria-label="Create new function"
+                  className="p-0.5 rounded hover:bg-accent text-primary transition-colors"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+            {routinesOpen && (
+              <div className="space-y-1">
+                {filteredRoutines.map((routine) => (
+                  <div
+                    key={routine.id}
+                    title={`${routine.schema}.${routine.name}(${routine.identityArguments})`}
+                    className="group relative rounded-lg border bg-card/40 border-sidebar-border hover:bg-accent/60 text-card-foreground transition-all"
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      setRoutineMenu({ x: event.clientX, y: event.clientY, routine });
+                    }}
+                  >
+                    <div
+                      onClick={() => onOpenRoutine?.(routine)}
+                      className="p-2 pr-8 cursor-pointer flex items-center gap-2.5 min-w-0"
+                    >
+                      {routine.kind === 'procedure' ? (
+                        <Workflow className="w-4 h-4 shrink-0 text-sky-400" />
+                      ) : (
+                        <SquareFunction className="w-4 h-4 shrink-0 text-sky-400" />
+                      )}
+                      <div className="min-w-0">
+                        <div className="font-mono text-xs font-medium truncate text-foreground">
+                          {routine.name}
+                          <span className="text-muted-foreground">
+                            ({routine.parameters.filter((p) => p.mode !== 'out' && p.mode !== 'table').length})
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-muted-foreground font-mono truncate">
+                          {[
+                            routine.kind === 'procedure' ? 'procedure' : routine.returnType ?? '',
+                            routine.language,
+                            selectedSchema === 'ALL' && allSchemas.length > 1 ? routine.schema : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' • ')}
+                        </div>
+                      </div>
+                    </div>
+                    {routineHandlers && (
+                      <RowMenuButton
+                        label={`${routine.kind === 'procedure' ? 'Procedure' : 'Function'} actions for ${routine.name}`}
+                        open={routineMenu?.routine.id === routine.id}
+                        onOpen={(x, y) => setRoutineMenu({ x, y, routine })}
+                        onClose={() => setRoutineMenu(null)}
+                      />
+                    )}
+                  </div>
+                ))}
+                {filteredRoutines.length === 0 && (
+                  <div className="text-center py-3 px-4 text-[11px] text-muted-foreground">
+                    {searchTerm ? `No functions matching "${searchTerm}"` : 'No functions in this schema'}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -310,9 +441,76 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
       )}
       </AnimatePresence>
+      <AnimatePresence>
+      {createMenu && (
+        <ContextMenu
+          key={`create:${createMenu.x}:${createMenu.y}`}
+          x={createMenu.x}
+          y={createMenu.y}
+          items={createMenuItems({
+            onNewTable: onOpenNewTableModal,
+            onNewView,
+            onNewFunction: onNewRoutine,
+          })}
+          onClose={() => setCreateMenu(null)}
+        />
+      )}
+      </AnimatePresence>
+      <AnimatePresence>
+      {routineMenu && routineHandlers && (
+        <ContextMenu
+          key={`${routineMenu.x}:${routineMenu.y}`}
+          x={routineMenu.x}
+          y={routineMenu.y}
+          items={routineMenuItems(routineMenu.routine, routineHandlers, {
+            disabled: currentDatabase.status !== 'connected',
+          })}
+          onClose={() => setRoutineMenu(null)}
+        />
+      )}
+      </AnimatePresence>
     </aside>
   );
 };
+
+function RowMenuButton({
+  label,
+  open,
+  onOpen,
+  onClose,
+}: {
+  label: string;
+  open: boolean;
+  onOpen: (x: number, y: number) => void;
+  onClose: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-haspopup="menu"
+      aria-expanded={open}
+      title="More actions"
+      // The menu closes on any outside mousedown; keep this one from closing
+      // it first so a second click toggles it shut instead of reopening it.
+      onMouseDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation();
+        if (open) {
+          onClose();
+          return;
+        }
+        const rect = event.currentTarget.getBoundingClientRect();
+        onOpen(rect.left, rect.bottom + 4);
+      }}
+      className={`absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 transition-opacity ${
+        open ? 'opacity-100 bg-accent text-foreground' : 'opacity-60 group-hover:opacity-100'
+      }`}
+    >
+      <EllipsisVertical className="w-3.5 h-3.5" />
+    </button>
+  );
+}
 
 function ExplorerListSkeleton() {
   return (

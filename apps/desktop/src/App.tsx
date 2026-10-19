@@ -7,6 +7,9 @@ import { SqlEditorTab } from './components/SqlEditor/SqlEditorTab';
 import { InteractiveErd } from './components/SchemaView/InteractiveErd';
 import { CreateTableDesigner } from './components/SchemaView/CreateTableDesigner';
 import { TableSchemaDesigner } from './components/SchemaView/TableSchemaDesigner';
+import { RoutineDesigner } from './components/RoutineView/RoutineDesigner';
+import { DropRoutineModal } from './components/RoutineView/DropRoutineModal';
+import { ViewDesigner } from './components/ViewDesigner/ViewDesigner';
 import { ConfirmTableActionModal } from './components/SchemaView/ConfirmTableActionModal';
 import { DatabaseMetrics } from './components/MetricsView/DatabaseMetrics';
 import { CommandPalette } from './components/CommandPalette';
@@ -19,6 +22,7 @@ import { ConnectionPicker } from './components/ConnectionPicker';
 import { Toaster } from './components/ui/Toaster';
 import {
   DatabaseSchema,
+  RoutineDefinition,
   TableSchema,
   WorkspaceTab,
   SavedQuery,
@@ -47,6 +51,7 @@ import {
   queryExecute,
   queryPage,
   sqlStatementRanges,
+  schemaRoutineSource,
   schemaSync,
   settingsGet,
   settingsSave,
@@ -63,6 +68,10 @@ import {
 } from '@db/storage';
 import { Database, Loader2 } from 'lucide-react';
 import { invokeErrorMessage } from './lib/invokeError';
+import { firstExecutionError } from './lib/executionResult';
+import { resolveRoutine, routineTabTitle, type RoutineTarget } from './lib/routineTabs';
+import { objectDdlFor } from './lib/ddl/registry';
+import { planScript } from './lib/ddl/types';
 import {
   changeKey,
   countPendingChanges,
@@ -72,12 +81,22 @@ import {
   pendingConfirmForCommand,
   primaryKeyColumn,
   removeChange,
-  sqlForAll,
+  rowStatementsForAll,
   sqlForChange,
   stageTableAction,
   type PendingChangeRef,
   type PendingConfirm,
 } from './lib/pendingChanges';
+import {
+  applyAllScripts,
+  removeSchemaChange,
+  schemaChangeScript,
+  routineChangeKey,
+  stageSchemaChange,
+  stagedFromPlan,
+  viewChangeKey,
+  type StagedSchemaChange,
+} from './lib/schemaQueue';
 import {
   addTabToPane,
   collapseEmptyPane,
@@ -109,6 +128,7 @@ import { adjacentTabId, nthTabId } from './lib/tabNavigation';
 import { defaultQuerySql, nextUntitledQueryTitle } from './lib/sqlQuery';
 import { QUERY_PAGE_SIZE } from './lib/queryPaging';
 import { emptySqlTabState, pruneSqlTabState, type SqlTabState } from './lib/sqlTabState';
+import { pruneTabFormState } from './lib/tabFormState';
 import {
   dropConnectionTabs,
   mergeConnectionTabs,
@@ -179,6 +199,8 @@ export default function App() {
   /** Rows matching each table's active filters; absent while the table is unfiltered. */
   const [tableMatches, setTableMatches] = useState<Record<string, number | undefined>>({});
   const [pendingByTable, setPendingByTable] = useState<Record<string, PendingModifications>>({});
+  /** Staged schema edits and deletes, for every connection; see currentSchemaChanges. */
+  const [schemaQueue, setSchemaQueue] = useState<StagedSchemaChange[]>([]);
   const [sqlTabStates, setSqlTabStates] = useState<Record<string, SqlTabState>>({});
   // Bumped per table when its rows change, so open query results can refresh themselves.
   const [dataRevisions, setDataRevisions] = useState<Record<string, number>>({});
@@ -225,6 +247,7 @@ export default function App() {
   const [applyingAllChanges, setApplyingAllChanges] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const [pendingError, setPendingError] = useState<string | null>(null);
+  const [routineToDrop, setRoutineToDrop] = useState<RoutineDefinition | null>(null);
   const [tableActionConfirm, setTableActionConfirm] = useState<{
     table: TableSchema;
     action: 'truncate' | 'drop';
@@ -536,9 +559,19 @@ export default function App() {
     void refreshTableRows(table);
   };
 
+  const currentSchemaChanges = useMemo(
+    () => schemaQueue.filter((change) => change.connectionId === currentDatabase?.id),
+    [schemaQueue, currentDatabase?.id]
+  );
+
+  const stagedKeys = useMemo(
+    () => new Set(currentSchemaChanges.map((change) => change.key)),
+    [currentSchemaChanges]
+  );
+
   const pendingCount = useMemo(
-    () => countPendingChanges(pendingByTable),
-    [pendingByTable]
+    () => countPendingChanges(pendingByTable) + currentSchemaChanges.length,
+    [pendingByTable, currentSchemaChanges.length]
   );
 
   useEffect(() => {
@@ -637,6 +670,102 @@ export default function App() {
     void enqueueSchemaCheck();
   };
 
+  /** The table whose schema tab should open its index editor once. */
+  const [newIndexForTableId, setNewIndexForTableId] = useState<string | null>(null);
+  const clearNewIndexRequest = useCallback(() => setNewIndexForTableId(null), []);
+  const handleNewIndex = (table: TableSchema) => {
+    handleSelectTableSchema(table);
+    setNewIndexForTableId(table.id);
+  };
+
+  /** The routine whose tab should open its editor once. */
+  const [editRoutineId, setEditRoutineId] = useState<string | null>(null);
+  const clearEditRoutineRequest = useCallback(() => setEditRoutineId(null), []);
+
+  const handleOpenRoutine = (routine: RoutineDefinition, opts?: { edit?: boolean }) => {
+    revealTabInPane(
+      activePaneId,
+      (tab) => tab.type === 'function_designer' && tab.routineId === routine.id,
+      () => ({
+        id: 'tab_routine_' + routine.oid + '_' + Date.now(),
+        type: 'function_designer',
+        title: routineTabTitle(routine),
+        routineId: routine.id,
+        databaseId: currentDatabase?.id,
+      })
+    );
+    if (opts?.edit) setEditRoutineId(routine.id);
+    void enqueueSchemaCheck();
+  };
+
+  const viewTabTitle = (view: { name: string; isMaterialized?: boolean }) =>
+    `${view.name} (${view.isMaterialized ? 'Materialized View' : 'View'})`;
+
+  const handleEditView = (view: TableSchema) => {
+    revealTabInPane(
+      activePaneId,
+      (tab) => tab.type === 'view_designer' && tab.tableId === view.id,
+      () => ({
+        id: 'tab_view_' + view.id + '_' + Date.now(),
+        type: 'view_designer',
+        title: viewTabTitle(view),
+        tableId: view.id,
+        databaseId: currentDatabase?.id,
+      })
+    );
+    void enqueueSchemaCheck();
+  };
+
+  const openNewViewDesigner = () => {
+    if (!currentDatabase) return;
+    openTabInPane(activePaneId, {
+      id: 'tab_view_new_' + Date.now(),
+      type: 'view_designer',
+      title: 'New View',
+      databaseId: currentDatabase.id,
+    });
+  };
+
+  const handleEditTableOrView = (table: TableSchema) =>
+    table.isView ? handleEditView(table) : handleSelectTableSchema(table);
+
+  const openNewRoutineDesigner = () => {
+    if (!currentDatabase) return;
+    openTabInPane(activePaneId, {
+      id: 'tab_routine_new_' + Date.now(),
+      type: 'function_designer',
+      title: 'New Function',
+      databaseId: currentDatabase.id,
+    });
+  };
+
+  const loadRoutineSource = useCallback(
+    (routine: RoutineDefinition) => {
+      if (!currentDatabase) return Promise.reject(new Error('Not connected'));
+      return schemaRoutineSource({
+        connectionId: currentDatabase.id,
+        schema: routine.schema,
+        oid: routine.oid,
+      });
+    },
+    [currentDatabase?.id]
+  );
+
+  const handleCopyRoutineSignature = (routine: RoutineDefinition) => {
+    void navigator.clipboard
+      .writeText(`${routine.schema}.${routine.name}(${routine.identityArguments})`)
+      .then(() => toast.success('Signature copied'))
+      .catch(() => toast.error('Could not copy to clipboard'));
+  };
+
+  const handleOpenRoutineSql = (routine: RoutineDefinition) => {
+    loadRoutineSource(routine)
+      .then((source) =>
+        handleOpenNewQueryTab(source.definition, activePaneId, `Query · ${routine.name}`)
+      )
+      .catch((err: unknown) => toast.error(invokeErrorMessage(err, 'Could not load the definition')));
+  };
+
   const handleOpenNewQueryTab = (
     initialSql?: string,
     paneId = activePaneId,
@@ -660,15 +789,36 @@ export default function App() {
   };
 
   const handleCopyTableSchema = (table: TableSchema) => {
+    const ddl = currentDatabase ? objectDdlFor(currentDatabase.dialect) : undefined;
+    const viewSql = table.isView && ddl ? ddl.createView(ddl.viewDraftFrom(table)) : undefined;
     void navigator.clipboard
-      .writeText(buildTableDdlPreview(table))
-      .then(() => toast.success('Table schema copied'))
+      .writeText(viewSql?.ok ? planScript(viewSql) : buildTableDdlPreview(table))
+      .then(() => toast.success(table.isView ? 'View definition copied' : 'Table schema copied'))
       .catch(() => toast.error('Could not copy to clipboard'));
   };
 
   const handleConfirmTableAction = () => {
     if (!tableActionConfirm) return;
     const { table, action } = tableActionConfirm;
+    if (table.isView) {
+      const result = currentDatabase && objectDdlFor(currentDatabase.dialect)?.dropView(table);
+      if (action === 'drop' && result?.ok) {
+        stageSchema(
+          stagedFromPlan(result, {
+            key: viewChangeKey(table),
+            objectKind: 'view',
+            action: 'drop',
+            schema: table.schema,
+            name: table.name,
+            title: `Delete ${table.isMaterialized ? 'materialized view' : 'view'} ${table.name}`,
+            effects: { closeTableId: table.id },
+          })
+        );
+      }
+      setTableActionConfirm(null);
+      openPendingChanges();
+      return;
+    }
     setPendingByTable((prev) => ({
       ...prev,
       [table.id]: stageTableAction(prev[table.id] || emptyPending(), action),
@@ -709,7 +859,9 @@ export default function App() {
       .filter(
         (tab) =>
           Boolean(tab.tableId && drop.has(tab.tableId)) &&
-          (tab.type === 'table_data' || tab.type === 'schema_designer')
+          (tab.type === 'table_data' ||
+            tab.type === 'schema_designer' ||
+            tab.type === 'view_designer')
       )
       .map((tab) => tab.id);
     if (closeIds.length === 0) return;
@@ -724,6 +876,22 @@ export default function App() {
   };
 
   const closeTabsForTable = (tableId: string) => closeTabsForTables([tableId]);
+
+  const closeTabsWhere = (predicate: (tab: WorkspaceTab) => boolean) => {
+    const closeIds = tabs.filter(predicate).map((tab) => tab.id);
+    if (closeIds.length === 0) return;
+    const closeSet = new Set(closeIds);
+    let nextLayout = layout;
+    for (const tabId of closeIds) {
+      const paneId = tabPaneId(nextLayout, tabId);
+      if (paneId) nextLayout = removeTabFromPane(nextLayout, paneId, tabId);
+    }
+    setTabs((prev) => prev.filter((tab) => !closeSet.has(tab.id)));
+    syncFocus(nextLayout, focusedPaneId);
+  };
+
+  const closeTabsForRoutine = (routineId: string) =>
+    closeTabsWhere((tab) => tab.type === 'function_designer' && tab.routineId === routineId);
 
   const handleCloseTabs = (paneId: string, tabId: string, kind: CloseTabKind) => {
     const pane = paneById(layout, paneId);
@@ -788,6 +956,12 @@ export default function App() {
       if (tab.type === 'table_data' || tab.type === 'schema_designer') {
         return Boolean(tab.tableId && tableIds.has(tab.tableId));
       }
+      if (tab.type === 'view_designer' && tab.tableId) {
+        return tableIds.has(tab.tableId);
+      }
+      if (tab.type === 'function_designer' && tab.routineId) {
+        return Boolean(currentDatabase.routines?.some((r) => r.id === tab.routineId));
+      }
       return true;
     });
     if (!popped) {
@@ -833,12 +1007,9 @@ export default function App() {
   useEffect(() => {
     // Tabs parked under other connections keep their query results for the session.
     const parked = workspaceRef.current?.tabs ?? [];
-    setSqlTabStates((prev) =>
-      pruneSqlTabState(
-        prev,
-        [...tabs, ...parked].map((tab) => tab.id)
-      )
-    );
+    const liveIds = [...tabs, ...parked].map((tab) => tab.id);
+    setSqlTabStates((prev) => pruneSqlTabState(prev, liveIds));
+    pruneTabFormState(liveIds);
   }, [tabs]);
 
   const bumpDataRevisions = (tableIds: string[]) => {
@@ -904,7 +1075,8 @@ export default function App() {
     if (!currentDatabase) return { error: 'Not connected' };
     try {
       const res = await queryExecute({ connectionId: currentDatabase.id, sql });
-      if (res.results[0]?.error) return { error: res.results[0].error };
+      const error = firstExecutionError(res.results);
+      if (error) return { error };
       await refreshTableRows(table);
       bumpDataRevisions([table.id]);
       await refreshHistory();
@@ -970,8 +1142,9 @@ export default function App() {
   };
 
   const handleCancelAllChanges = () => {
-    const total = countPendingChanges(pendingByTable);
+    const total = countPendingChanges(pendingByTable) + currentSchemaChanges.length;
     setPendingByTable({});
+    setSchemaQueue((prev) => prev.filter((change) => change.connectionId !== currentDatabase?.id));
     setPendingStatus(total === 0 ? null : `Discarded ${total} change${total === 1 ? '' : 's'}`);
     setPendingError(null);
   };
@@ -990,9 +1163,9 @@ export default function App() {
     setPendingError(null);
     try {
       const res = await queryExecute({ connectionId: currentDatabase.id, sql });
-      const result = res.results[0];
-      if (result?.error) {
-        setPendingError(result.error);
+      const error = firstExecutionError(res.results);
+      if (error) {
+        setPendingError(error);
         return;
       }
       setPendingByTable((prev) => {
@@ -1026,39 +1199,159 @@ export default function App() {
       return;
     }
     const bundles = flattenPending(pendingByTable, currentDatabase.tables);
-    const sql = sqlForAll(bundles);
-    const total = countPendingChanges(pendingByTable);
-    if (!sql || total === 0) return;
+    const rowSql = rowStatementsForAll(bundles);
+    const schemaChanges = currentSchemaChanges;
+    const scripts = applyAllScripts(rowSql, schemaChanges);
+    const total = countPendingChanges(pendingByTable) + schemaChanges.length;
+    if (scripts.length === 0 || total === 0) return;
+    const transactional = schemaChanges.filter((change) => change.transactional);
+    const separate = schemaChanges.filter((change) => !change.transactional);
+    const hasTransaction = Boolean(rowSql.trim()) || transactional.length > 0;
+    const applied: StagedSchemaChange[] = [];
+    let rowsApplied = false;
     setApplyingAllChanges(true);
     setPendingError(null);
     try {
-      const res = await queryExecute({ connectionId: currentDatabase.id, sql });
-      const result = res.results[0];
-      if (result?.error) {
-        setPendingError(result.error);
-        return;
+      let next = 0;
+      if (hasTransaction) {
+        const res = await queryExecute({ connectionId: currentDatabase.id, sql: scripts[next++] });
+        const error = firstExecutionError(res.results);
+        if (error) {
+          setPendingError(error);
+          return;
+        }
+        rowsApplied = true;
+        applied.push(...transactional);
+        setPendingByTable({});
+        setSchemaQueue((prev) => prev.filter((change) => !transactional.includes(change)));
       }
-      const droppedIds = bundles
-        .filter((bundle) => bundle.tableAction === 'drop')
-        .map((bundle) => bundle.tableId);
-      setPendingByTable({});
-      if (droppedIds.length > 0) {
-        closeTabsForTables(droppedIds);
-        await loadSchema(currentDatabase.id);
+      for (const change of separate) {
+        const res = await queryExecute({ connectionId: currentDatabase.id, sql: scripts[next++] });
+        const error = firstExecutionError(res.results);
+        if (error) {
+          setPendingError(`${change.title}: ${error}`);
+          break;
+        }
+        applied.push(change);
+        setSchemaQueue((prev) => prev.filter((entry) => entry !== change));
       }
-      await Promise.all(
-        bundles
-          .filter((bundle) => bundle.table && bundle.tableAction !== 'drop')
-          .map((bundle) => refreshTableRows(bundle.table as TableSchema))
-      );
-      bumpDataRevisions(bundles.map((bundle) => bundle.tableId));
+      const droppedIds = rowsApplied
+        ? bundles.filter((bundle) => bundle.tableAction === 'drop').map((bundle) => bundle.tableId)
+        : [];
+      if (droppedIds.length > 0 || applied.length > 0) {
+        const schema = await loadSchema(currentDatabase.id);
+        applySchemaEffects(applied, schema, droppedIds);
+      }
+      if (rowsApplied) {
+        await Promise.all(
+          bundles
+            .filter((bundle) => bundle.table && bundle.tableAction !== 'drop')
+            .map((bundle) => refreshTableRows(bundle.table as TableSchema))
+        );
+        bumpDataRevisions(bundles.map((bundle) => bundle.tableId));
+      }
       await refreshHistory();
-      setPendingStatus(`Applied ${total} change${total === 1 ? '' : 's'}`);
+      const count = (rowsApplied ? countPendingChanges(pendingByTable) : 0) + applied.length;
+      if (count > 0) setPendingStatus(`Applied ${count} change${count === 1 ? '' : 's'}`);
     } catch (e: unknown) {
       setPendingError(e instanceof Error ? e.message : 'Failed to apply changes');
     } finally {
       setApplyingAllChanges(false);
     }
+  };
+
+  const stageSchema = (change: StagedSchemaChange) => {
+    if (!currentDatabase) return;
+    const replacing = currentSchemaChanges.some((entry) => entry.key === change.key);
+    setSchemaQueue((prev) =>
+      stageSchemaChange(
+        prev.filter(
+          (entry) => !(entry.key === change.key && entry.connectionId !== currentDatabase.id)
+        ),
+        { ...change, connectionId: currentDatabase.id }
+      )
+    );
+    setPendingError(null);
+    setPendingStatus(null);
+    toast.success(
+      `${replacing ? 'Updated staged change' : 'Staged'}: ${change.title}. Review it in Pending Changes.`
+    );
+  };
+
+  const applySchemaEffects = (
+    changes: StagedSchemaChange[],
+    schema: DatabaseSchema,
+    droppedTableIds: string[] = []
+  ) => {
+    const closeTables = new Set(droppedTableIds);
+    const closeRoutines = new Set<string>();
+    const routineMoves = new Map<string, RoutineDefinition>();
+    const tableMoves = new Map<string, string>();
+    for (const change of changes) {
+      const effects = change.effects;
+      if (!effects) continue;
+      if (effects.closeTableId) closeTables.add(effects.closeTableId);
+      if (effects.closeRoutineId) closeRoutines.add(effects.closeRoutineId);
+      if (effects.retargetTable) tableMoves.set(effects.retargetTable.fromId, effects.retargetTable.toId);
+      if (effects.retargetRoutine) {
+        const routine = resolveRoutine(schema.routines ?? [], effects.retargetRoutine);
+        if (routine) routineMoves.set(effects.retargetRoutine.fromId, routine);
+      }
+    }
+    if (routineMoves.size > 0 || tableMoves.size > 0) {
+      setTabs((prev) =>
+        prev.map((tab) => {
+          const routine = tab.routineId ? routineMoves.get(tab.routineId) : undefined;
+          if (routine) return { ...tab, routineId: routine.id, title: routineTabTitle(routine) };
+          const tableId = tab.tableId ? tableMoves.get(tab.tableId) : undefined;
+          if (tableId) return { ...tab, tableId };
+          return tab;
+        })
+      );
+    }
+    closeTabsWhere(
+      (tab) =>
+        (Boolean(tab.tableId && closeTables.has(tab.tableId)) &&
+          (tab.type === 'table_data' ||
+            tab.type === 'schema_designer' ||
+            tab.type === 'view_designer')) ||
+        (tab.type === 'function_designer' && Boolean(tab.routineId && closeRoutines.has(tab.routineId)))
+    );
+  };
+
+  const handleApproveSchemaChange = async (key: string) => {
+    const change = currentSchemaChanges.find((entry) => entry.key === key);
+    if (!currentDatabase || !change) return;
+    setApplyingChangeKey(`schema:${key}`);
+    setPendingError(null);
+    try {
+      const res = await queryExecute({
+        connectionId: currentDatabase.id,
+        sql: schemaChangeScript(change),
+      });
+      const error = firstExecutionError(res.results);
+      if (error) {
+        setPendingError(error);
+        return;
+      }
+      setSchemaQueue((prev) => prev.filter((entry) => entry !== change));
+      const schema = await loadSchema(currentDatabase.id);
+      applySchemaEffects([change], schema);
+      await refreshHistory();
+      setPendingStatus('Change applied');
+    } catch (e: unknown) {
+      setPendingError(e instanceof Error ? e.message : 'Failed to apply change');
+    } finally {
+      setApplyingChangeKey(null);
+    }
+  };
+
+  const handleCancelSchemaChange = (key: string) => {
+    setSchemaQueue((prev) =>
+      prev.filter((entry) => !(entry.key === key && entry.connectionId === currentDatabase?.id))
+    );
+    setPendingStatus('Change discarded');
+    setPendingError(null);
   };
 
   const openErd = () => {
@@ -1249,6 +1542,52 @@ export default function App() {
     setProfiles(await connectionsList());
   };
 
+  const executeViewCreate = async (
+    tabId: string,
+    sql: string,
+    target: { schema: string; name: string }
+  ): Promise<{ error?: string }> => {
+    if (!currentDatabase) return { error: 'Not connected' };
+    const res = await queryExecute({ connectionId: currentDatabase.id, sql });
+    const error = firstExecutionError(res.results);
+    if (error) return { error };
+    const schema = await loadSchema(currentDatabase.id);
+    await refreshHistory();
+    const view = schema.tables.find((t) => t.schema === target.schema && t.name === target.name);
+    if (view) {
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === tabId ? { ...tab, tableId: view.id, title: viewTabTitle(view) } : tab
+        )
+      );
+    }
+    return {};
+  };
+
+  const executeRoutineDdl = async (
+    tabId: string,
+    sql: string,
+    target?: RoutineTarget
+  ): Promise<{ error?: string }> => {
+    if (!currentDatabase) return { error: 'Not connected' };
+    const res = await queryExecute({ connectionId: currentDatabase.id, sql });
+    const error = firstExecutionError(res.results);
+    if (error) return { error };
+    const schema = await loadSchema(currentDatabase.id);
+    await refreshHistory();
+    const routine = target ? resolveRoutine(schema.routines ?? [], target) : undefined;
+    if (routine) {
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === tabId
+            ? { ...tab, routineId: routine.id, title: routineTabTitle(routine) }
+            : tab
+        )
+      );
+    }
+    return {};
+  };
+
   const renderTabContent = (tab: WorkspaceTab) => {
     if (!currentDatabase) {
       return (
@@ -1397,12 +1736,14 @@ export default function App() {
           return (
             <CreateTableDesigner
               key={tab.id}
+              tabId={tab.id}
               tables={currentDatabase.tables}
               dialect={currentDatabase.dialect}
               disabled={currentDatabase.status !== 'connected'}
               onExecute={async (sql) => {
                 const res = await queryExecute({ connectionId: currentDatabase.id, sql });
-                if (res.results[0]?.error) return { error: res.results[0].error };
+                const error = firstExecutionError(res.results);
+                if (error) return { error };
                 await loadSchema(currentDatabase.id);
                 await refreshHistory();
                 return {};
@@ -1425,13 +1766,101 @@ export default function App() {
             tables={currentDatabase.tables}
             dialect={currentDatabase.dialect}
             disabled={currentDatabase.status !== 'connected'}
+            serverVersionNum={currentDatabase.serverVersionNum}
+            newIndexRequested={newIndexForTableId === table.id}
+            onNewIndexRequestHandled={clearNewIndexRequest}
+            onStage={stageSchema}
+            stagedKeys={stagedKeys}
             onExecute={async (sql) => {
               const res = await queryExecute({ connectionId: currentDatabase.id, sql });
-              if (res.results[0]?.error) return { error: res.results[0].error };
+              const error = firstExecutionError(res.results);
+              if (error) return { error };
               await loadSchema(currentDatabase.id);
               await refreshHistory();
               return {};
             }}
+          />
+        );
+      }
+      case 'function_designer': {
+        const routines = currentDatabase.routines ?? [];
+        const routine = tab.routineId
+          ? routines.find((entry) => entry.id === tab.routineId)
+          : undefined;
+        if (tab.routineId && !routine) {
+          return (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+              This routine no longer exists in the current schema.
+            </div>
+          );
+        }
+        const schemas = Array.from(
+          new Set([
+            ...currentDatabase.tables.map((t) => t.schema),
+            ...routines.map((r) => r.schema),
+          ])
+        ).sort();
+        return (
+          <RoutineDesigner
+            key={tab.id}
+            tabId={tab.id}
+            routine={routine}
+            defaultSchema={schemas.includes('public') ? 'public' : schemas[0] ?? 'public'}
+            schemas={schemas}
+            languages={currentDatabase.languages ?? []}
+            dialect={currentDatabase.dialect}
+            disabled={currentDatabase.status !== 'connected'}
+            editRequested={Boolean(routine && editRoutineId === routine.id)}
+            onEditRequestHandled={clearEditRoutineRequest}
+            loadSource={loadRoutineSource}
+            onExecute={(sql, target) => executeRoutineDdl(tab.id, sql, target)}
+            onOpenSql={(sql, title) => handleOpenNewQueryTab(sql, activePaneId, title)}
+            onStage={stageSchema}
+            stagedChange={
+              routine
+                ? currentSchemaChanges.find((change) => change.key === routineChangeKey(routine))
+                : undefined
+            }
+            onOpenPending={openPendingChanges}
+          />
+        );
+      }
+      case 'view_designer': {
+        const view = tab.tableId
+          ? currentDatabase.tables.find((t) => t.id === tab.tableId && t.isView)
+          : undefined;
+        if (tab.tableId && !view) {
+          return (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+              This view no longer exists in the current schema.
+            </div>
+          );
+        }
+        const schemas = Array.from(
+          new Set([
+            ...currentDatabase.tables.map((t) => t.schema),
+            ...(currentDatabase.routines ?? []).map((r) => r.schema),
+          ])
+        ).sort();
+        return (
+          <ViewDesigner
+            key={tab.id}
+            tabId={tab.id}
+            view={view}
+            defaultSchema={schemas.includes('public') ? 'public' : schemas[0] ?? 'public'}
+            schemas={schemas}
+            dialect={currentDatabase.dialect}
+            disabled={currentDatabase.status !== 'connected'}
+            onExecute={(sql, target) => executeViewCreate(tab.id, sql, target)}
+            onStage={stageSchema}
+            stagedChange={
+              view
+                ? currentSchemaChanges.find((change) => change.key === viewChangeKey(view))
+                : undefined
+            }
+            onOpenPending={openPendingChanges}
+            onOpenSql={(sql, title) => handleOpenNewQueryTab(sql, activePaneId, title)}
+            onDelete={(target) => setTableActionConfirm({ table: target, action: 'drop' })}
           />
         );
       }
@@ -1460,6 +1889,7 @@ export default function App() {
           isPendingChangesOpen,
           isActivityLogOpen,
           tableActionConfirm: Boolean(tableActionConfirm),
+          routineToDrop: Boolean(routineToDrop),
         },
       }),
     [
@@ -1476,6 +1906,7 @@ export default function App() {
       isPendingChangesOpen,
       isActivityLogOpen,
       tableActionConfirm,
+      routineToDrop,
     ]
   );
 
@@ -1507,6 +1938,17 @@ export default function App() {
       'file.newQuery': () => handleOpenNewQueryTab(),
       'file.newConnection': () => openNewConnection(),
       'file.newTable': openNewTableDesigner,
+      'file.newView': openNewViewDesigner,
+      'file.newFunction': openNewRoutineDesigner,
+      'file.newIndex': () => {
+        const table = activeTab?.tableId ? findTable(activeTab.tableId) : undefined;
+        if (!table) return;
+        if (table.isView) {
+          toast.error('Indexes are added to tables. Open a table to add one.');
+          return;
+        }
+        handleNewIndex(table);
+      },
       'file.closeWindow': () => getCurrentWindow().close(),
       'file.closeTab': () => handleCloseTab(activePaneId, activeTabId),
       'file.closeOthers': () => handleCloseTabs(activePaneId, activeTabId, 'others'),
@@ -1608,7 +2050,18 @@ export default function App() {
               activeTableId={activeTab?.type === 'table_data' ? activeTab.tableId : undefined}
               onSelectTableData={handleSelectTableData}
               onOpenErd={openErd}
-              onOpenSchemaDesigner={handleSelectTableSchema}
+              onOpenSchemaDesigner={handleEditTableOrView}
+              onNewIndex={handleNewIndex}
+              onOpenRoutine={handleOpenRoutine}
+              onNewRoutine={openNewRoutineDesigner}
+              onNewView={openNewViewDesigner}
+              routineHandlers={{
+                onOpen: handleOpenRoutine,
+                onEdit: (routine) => handleOpenRoutine(routine, { edit: true }),
+                onOpenSql: handleOpenRoutineSql,
+                onCopyName: handleCopyRoutineSignature,
+                onDrop: setRoutineToDrop,
+              }}
               onOpenTableSql={handleOpenTableSql}
               onCopyTableSchema={handleCopyTableSchema}
               onEmptyTable={(table) => setTableActionConfirm({ table, action: 'truncate' })}
@@ -1691,6 +2144,9 @@ export default function App() {
         }}
         onOpenPendingChanges={openPendingChanges}
         onOpenNewQuery={() => handleOpenNewQueryTab()}
+        onSelectRoutine={(routine) => handleOpenRoutine(routine)}
+        onNewRoutine={openNewRoutineDesigner}
+        onNewView={openNewViewDesigner}
         onSelectDatabase={(dbId) => setCurrentDbId(dbId)}
       />
 
@@ -1699,6 +2155,17 @@ export default function App() {
         isOpen={isActivityLogOpen}
         onClose={() => setIsActivityLogOpen(false)}
       />
+
+      {currentDatabase && (
+        <DropRoutineModal
+          isOpen={routineToDrop != null}
+          dialect={currentDatabase.dialect}
+          routine={routineToDrop}
+          disabled={currentDatabase.status !== 'connected'}
+          onClose={() => setRoutineToDrop(null)}
+          onStage={stageSchema}
+        />
+      )}
 
       <ConfirmTableActionModal
         table={tableActionConfirm?.table ?? null}
@@ -1710,6 +2177,7 @@ export default function App() {
       <PendingChangesDrawer
         isOpen={isPendingChangesOpen}
         pendingByTable={pendingByTable}
+        schemaChanges={currentSchemaChanges}
         tables={currentDatabase?.tables || []}
         applyingKey={applyingChangeKey}
         applyingAll={applyingAllChanges}
@@ -1724,6 +2192,10 @@ export default function App() {
           void handleApproveAllChanges();
         }}
         onCancelAll={handleCancelAllChanges}
+        onApproveSchema={(key) => {
+          void handleApproveSchemaChange(key);
+        }}
+        onCancelSchema={handleCancelSchemaChange}
         initialConfirm={pendingConfirm}
       />
 
@@ -1756,7 +2228,9 @@ export default function App() {
         <UpdateBanner
           key="update-banner"
           status={updateStatus}
-          hasUnsavedChanges={Object.values(pendingByTable).some(hasPending)}
+          hasUnsavedChanges={
+            Object.values(pendingByTable).some(hasPending) || schemaQueue.length > 0
+          }
           onRestart={restartToUpdate}
           onRetry={checkForAppUpdateManually}
           onLater={() => {

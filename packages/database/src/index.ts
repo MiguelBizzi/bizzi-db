@@ -1,4 +1,5 @@
 import type { DatabaseDialect } from '@db/shared';
+import { POSTGRES_OBJECTS, type ObjectCapabilities } from './objects';
 
 export {
   columnTypesFor,
@@ -6,6 +7,18 @@ export {
   type ColumnTypeFamily,
   type ColumnTypeParams,
 } from './columnTypes';
+export {
+  indexMethod,
+  methodSupportsInclude,
+  POSTGRES_OBJECTS,
+  storageParamsFor,
+  versionAtLeast,
+  type IndexCapabilities,
+  type IndexMethodSpec,
+  type ObjectCapabilities,
+  type RoutineCapabilities,
+  type StorageParamSpec,
+} from './objects';
 
 export interface DialectMeta {
   id: DatabaseDialect;
@@ -13,6 +26,12 @@ export interface DialectMeta {
   defaultPort: number;
   defaultSsl: boolean;
   quoteIdent: (name: string) => string;
+  quoteLiteral: (value: string) => string;
+  objects: ObjectCapabilities;
+}
+
+function quoteSqlLiteral(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
 }
 
 function quoteSqlIdent(name: string): string {
@@ -26,6 +45,8 @@ export const DIALECTS: Record<'PostgreSQL', DialectMeta> = {
     defaultPort: 5432,
     defaultSsl: false,
     quoteIdent: quoteSqlIdent,
+    quoteLiteral: quoteSqlLiteral,
+    objects: POSTGRES_OBJECTS,
   },
 };
 

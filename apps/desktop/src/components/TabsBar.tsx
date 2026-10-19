@@ -17,6 +17,8 @@ import {
   PanelLeft,
   PanelBottom,
   PanelTop,
+  SquareFunction,
+  Eye,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useMotionPreference } from '../lib/motionPreference';
@@ -108,6 +110,10 @@ export const TabsBar: React.FC<TabsBarProps> = ({
         return <Logs className="w-3.5 h-3.5 text-secondary" />;
       case 'schema_designer':
         return <Edit3 className="w-3.5 h-3.5 text-rose-400" />;
+      case 'function_designer':
+        return <SquareFunction className="w-3.5 h-3.5 text-sky-400" />;
+      case 'view_designer':
+        return <Eye className="w-3.5 h-3.5 text-amber-400" />;
       default:
         return <TableIcon className="w-3.5 h-3.5 text-muted-foreground" />;
     }

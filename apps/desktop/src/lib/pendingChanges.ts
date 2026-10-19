@@ -241,8 +241,12 @@ export function sqlForBundle(bundle: TablePendingBundle): string {
   return statements.join('\n');
 }
 
+export function rowStatementsForAll(bundles: TablePendingBundle[]): string {
+  return bundles.map(sqlForBundle).filter(Boolean).join('\n');
+}
+
 export function sqlForAll(bundles: TablePendingBundle[]): string {
-  const body = bundles.map(sqlForBundle).filter(Boolean).join('\n');
+  const body = rowStatementsForAll(bundles);
   if (!body) return '';
   return `BEGIN;\n${body}\nCOMMIT;`;
 }

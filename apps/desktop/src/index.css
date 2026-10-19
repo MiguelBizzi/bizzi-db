@@ -261,7 +261,7 @@
 .overlay-scroll-thumb {
   position: fixed;
   pointer-events: none;
-  z-index: 2147483000;
+  z-index: 1;
   border-radius: 999px;
   background: color-mix(in oklch, var(--foreground) 38%, transparent);
   opacity: 0;

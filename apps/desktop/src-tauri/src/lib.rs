@@ -10,9 +10,9 @@ use db_core::{
     ssh_secret_key, ssh_tunnel_from_profile, ssh_tunnel_from_save, validate_folder_name,
     validate_save_input, ActivityLogItem, Adapter, AppSettings, ConnectionFolder,
     ConnectionProfile, ConnectionStatus, DatabaseSchema, ExecuteQueryRequest, QueryExecuteResponse,
-    QueryExecutionResult, QueryPageRequest, SaveConnectionInput, SaveFolderInput, SavedQuery,
-    SchemaSyncRequest, SchemaSyncResponse, Session, SqlRange, SshAuthMethod, TablePreviewRequest,
-    TestConnectionResult, WorkspaceState,
+    QueryExecutionResult, QueryPageRequest, RoutineSource, RoutineSourceRequest,
+    SaveConnectionInput, SaveFolderInput, SavedQuery, SchemaSyncRequest, SchemaSyncResponse,
+    Session, SqlRange, SshAuthMethod, TablePreviewRequest, TestConnectionResult, WorkspaceState,
 };
 use db_postgres::PostgresAdapter;
 use db_storage::{DualSecretStore, FileSecrets, KeychainSecrets, Storage};
@@ -351,6 +351,18 @@ async fn schema_introspect(
 }
 
 #[tauri::command]
+async fn schema_routine_source(
+    state: State<'_, AppState>,
+    input: RoutineSourceRequest,
+) -> Result<RoutineSource, String> {
+    let session = session_for(&state, &input.connection_id).await?;
+    session
+        .routine_source(&input.schema, &input.oid)
+        .await
+        .map_err(map_err)
+}
+
+#[tauri::command]
 async fn schema_sync(
     state: State<'_, AppState>,
     input: SchemaSyncRequest,
@@ -638,6 +650,7 @@ pub fn run() {
             folders_save,
             folders_delete,
             schema_introspect,
+            schema_routine_source,
             schema_sync,
             table_preview,
             query_execute,

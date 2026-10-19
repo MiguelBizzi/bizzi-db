@@ -5,7 +5,7 @@ use chrono::Utc;
 use db_core::{
     clamp_pool_size, clamp_preview_page, count_select_sql, paged_select_sql, split_sql_statements,
     Adapter, AdapterError, ConnectConfig, ConnectionStatus, DatabaseDialect, DatabaseSchema,
-    QueryError, QueryErrorCategory, QueryExecutionResult, Session, TableFilter,
+    QueryError, QueryErrorCategory, QueryExecutionResult, RoutineSource, Session, TableFilter,
 };
 use deadpool_postgres::{ManagerConfig, Pool, RecyclingMethod, Runtime};
 use native_tls::TlsConnector;
@@ -16,6 +16,10 @@ use uuid::Uuid;
 use crate::error::query_error_from;
 use crate::filter::where_clause;
 use crate::ident::qualify_table;
+use crate::objects::{
+    index_from_row, index_query, routine_from_row, routine_query, LANGUAGE_QUERY,
+    ROUTINE_SOURCE_QUERY,
+};
 use crate::values::{collect_simple, first_count};
 
 pub struct PostgresAdapter;
@@ -124,6 +128,21 @@ impl Session for PostgresSession {
             }
         }
         Ok(result)
+    }
+
+    async fn routine_source(&self, schema: &str, oid: &str) -> Result<RoutineSource, AdapterError> {
+        let client = self.client().await?;
+        let rows = client
+            .query(ROUTINE_SOURCE_QUERY, &[&oid, &schema])
+            .await
+            .map_err(|e| AdapterError::msg(e.to_string()))?;
+        let row = rows.first().ok_or_else(|| {
+            AdapterError::msg("This routine no longer exists. Refresh the schema.")
+        })?;
+        Ok(RoutineSource {
+            definition: row.get(0),
+            body: row.get(1),
+        })
     }
 }
 
@@ -247,6 +266,7 @@ async fn run_script(
         let failed = result.error.is_some();
         results.push(result);
         if failed {
+            let _ = client.simple_query("ROLLBACK").await;
             break;
         }
     }
@@ -377,7 +397,8 @@ FROM (
       n.nspname,
       c.relname,
       c.relkind,
-      COALESCE(obj_description(c.oid, 'pg_class'), '')
+      COALESCE(obj_description(c.oid, 'pg_class'), ''),
+      CASE WHEN c.relkind IN ('v', 'm') THEN md5(COALESCE(pg_get_viewdef(c.oid), '')) ELSE '' END
     ) AS part
   FROM pg_class c
   JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -443,7 +464,15 @@ FROM (
       i.relname,
       ix.indisunique::text,
       COALESCE(am.amname::text, ''),
-      ix.indkey::text
+      ix.indkey::text,
+      ix.indoption::text,
+      ix.indclass::text,
+      ix.indcollation::text,
+      ix.indisvalid::text,
+      COALESCE(pg_get_expr(ix.indexprs, ix.indrelid), ''),
+      COALESCE(pg_get_expr(ix.indpred, ix.indrelid), ''),
+      COALESCE(i.reloptions::text, ''),
+      i.reltablespace::text
     )
   FROM pg_index ix
   JOIN pg_class t ON t.oid = ix.indrelid
@@ -462,6 +491,38 @@ FROM (
   JOIN pg_type t ON t.oid = e.enumtypid
   JOIN pg_namespace n ON n.oid = t.typnamespace
   WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+
+  UNION ALL
+
+  SELECT
+    6,
+    concat_ws(
+      ':',
+      n.nspname,
+      p.proname,
+      p.oid::text,
+      p.prokind::text,
+      p.prolang::text,
+      p.prorettype::text,
+      p.proretset::text,
+      COALESCE(p.proallargtypes::text, p.proargtypes::text),
+      COALESCE(p.proargmodes::text, ''),
+      COALESCE(p.proargnames::text, ''),
+      COALESCE(pg_get_expr(p.proargdefaults, 0), ''),
+      p.provolatile::text,
+      p.proisstrict::text,
+      p.prosecdef::text,
+      p.proparallel::text,
+      p.proleakproof::text,
+      p.procost::text,
+      p.prorows::text,
+      md5(COALESCE(p.prosrc, '')),
+      COALESCE(obj_description(p.oid, 'pg_proc'), '')
+    )
+  FROM pg_proc p
+  JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+    AND p.prokind IN ('f', 'p')
 ) catalog_parts
 "#;
 
@@ -474,6 +535,12 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
         .query_one_string("SELECT version()")
         .await
         .unwrap_or_else(|_| "PostgreSQL".to_string());
+    let server_version_num = session
+        .query_one_string("SHOW server_version_num")
+        .await
+        .ok()
+        .and_then(|v| v.trim().parse::<i32>().ok())
+        .unwrap_or(0);
     let db_name = session
         .query_one_string("SELECT current_database()")
         .await
@@ -496,7 +563,8 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
               c.relkind::text AS kind,
               COALESCE(c.reltuples, 0)::bigint AS est_rows,
               COALESCE(pg_total_relation_size(c.oid), 0)::bigint AS size_bytes,
-              COALESCE(obj_description(c.oid, 'pg_class'), '')::text AS comment
+              COALESCE(obj_description(c.oid, 'pg_class'), '')::text AS comment,
+              CASE WHEN c.relkind IN ('v', 'm') THEN pg_get_viewdef(c.oid, true)::text END AS view_sql
             FROM pg_class c
             JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
@@ -568,7 +636,7 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
               tn.nspname::text,
               tgt.relname::text,
               tgt_att.attname::text,
-              COALESCE(confdeltype::text, '') 
+              COALESCE(confdeltype::text, '')
             FROM pg_constraint con
             JOIN pg_class src ON src.oid = con.conrelid
             JOIN pg_namespace n ON n.oid = src.relnamespace
@@ -584,31 +652,15 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
         )
         .await?;
 
-    let index_rows = session
-        .query_rows(
-            r#"
-            SELECT
-              n.nspname::text,
-              t.relname::text,
-              i.relname::text,
-              ix.indisunique,
-              COALESCE(am.amname::text, 'BTREE'),
-              array_to_string(ARRAY(
-                SELECT a.attname
-                FROM unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord)
-                JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
-                ORDER BY k.ord
-              ), ',')
-            FROM pg_index ix
-            JOIN pg_class t ON t.oid = ix.indrelid
-            JOIN pg_class i ON i.oid = ix.indexrelid
-            JOIN pg_namespace n ON n.oid = t.relnamespace
-            LEFT JOIN pg_am am ON am.oid = i.relam
-            WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
-              AND t.relkind IN ('r', 'p', 'm')
-            "#,
-        )
+    let index_rows = session.query_rows(&index_query(server_version_num)).await?;
+    let routine_rows = session
+        .query_rows(&routine_query(server_version_num))
         .await?;
+    let languages: Vec<String> = session
+        .query_rows(LANGUAGE_QUERY)
+        .await
+        .map(|rows| rows.iter().map(|row| row.get(0)).collect())
+        .unwrap_or_default();
 
     use db_core::{ColumnDefinition, ForeignKeyRef, IndexDefinition, TableSchema};
     use std::collections::HashMap;
@@ -648,29 +700,23 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
     let mut indexes: HashMap<(String, String), Vec<IndexDefinition>> = HashMap::new();
     let mut unique_cols: HashMap<(String, String, String), ()> = HashMap::new();
     for row in &index_rows {
-        let schema: String = row.get(0);
-        let table: String = row.get(1);
-        let name: String = row.get(2);
-        let is_unique: bool = row.get(3);
-        let index_type: String = row.get(4);
-        let cols_csv: String = row.get(5);
-        let columns: Vec<String> = if cols_csv.is_empty() {
-            Vec::new()
-        } else {
-            cols_csv.split(',').map(|s| s.to_string()).collect()
+        let Some(crate::objects::IndexRow {
+            schema,
+            table,
+            index,
+        }) = index_from_row(row)
+        else {
+            continue;
         };
-        if is_unique && columns.len() == 1 {
-            unique_cols.insert((schema.clone(), table.clone(), columns[0].clone()), ());
+
+        let single_plain_key = index.keys.len() == 1 && !index.keys[0].is_expression;
+        if index.is_unique && single_plain_key && index.predicate.is_none() {
+            unique_cols.insert(
+                (schema.clone(), table.clone(), index.columns[0].clone()),
+                (),
+            );
         }
-        indexes
-            .entry((schema, table))
-            .or_default()
-            .push(IndexDefinition {
-                name,
-                columns,
-                is_unique,
-                index_type: index_type.to_uppercase(),
-            });
+        indexes.entry((schema, table)).or_default().push(index);
     }
 
     let mut columns: HashMap<(String, String), Vec<ColumnDefinition>> = HashMap::new();
@@ -721,6 +767,7 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
         let est_rows: i64 = row.get(3);
         let size_bytes: i64 = row.get(4);
         let comment: String = row.get(5);
+        let view_sql: Option<String> = row.get(6);
         let id = format!("{schema}.{name}");
         tables.push(TableSchema {
             id: id.clone(),
@@ -741,7 +788,8 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
             created_at: now.clone(),
             updated_at: now.clone(),
             is_view: Some(kind == "v" || kind == "m"),
-            view_sql: None,
+            view_sql,
+            is_materialized: if kind == "m" { Some(true) } else { None },
         });
     }
 
@@ -755,6 +803,13 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
         environment: db_core::Environment::Development,
         status: ConnectionStatus::Connected,
         tables,
+        routines: routine_rows.iter().filter_map(routine_from_row).collect(),
+        languages,
+        server_version_num: if server_version_num > 0 {
+            Some(server_version_num)
+        } else {
+            None
+        },
         total_size_mb: (total_size as f64) / (1024.0 * 1024.0),
         active_connections,
         queries_per_second: 0.0,
@@ -799,6 +854,11 @@ mod tests {
         assert!(SCHEMA_FINGERPRINT_SQL.contains("pg_constraint"));
         assert!(SCHEMA_FINGERPRINT_SQL.contains("pg_index"));
         assert!(SCHEMA_FINGERPRINT_SQL.contains("pg_enum"));
+        assert!(SCHEMA_FINGERPRINT_SQL.contains("pg_proc"));
+        assert!(SCHEMA_FINGERPRINT_SQL.contains("indpred"));
+        assert!(SCHEMA_FINGERPRINT_SQL.contains("pg_get_viewdef"));
+        assert!(!SCHEMA_FINGERPRINT_SQL.contains("idx_scan"));
+        assert!(!SCHEMA_FINGERPRINT_SQL.contains("pg_relation_size"));
         assert!(!SCHEMA_FINGERPRINT_SQL.contains("reltuples"));
         assert!(!SCHEMA_FINGERPRINT_SQL.contains("pg_total_relation_size"));
         assert!(!SCHEMA_FINGERPRINT_SQL.contains("pg_database_size"));

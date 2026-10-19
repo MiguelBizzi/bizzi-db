@@ -2,6 +2,7 @@ export type TableActionId =
   | 'open'
   | 'openSql'
   | 'edit'
+  | 'newIndex'
   | 'copySchema'
   | 'empty'
   | 'delete';
@@ -18,28 +19,32 @@ export function tableActionDescriptors(opts: {
   isView?: boolean;
   hideEdit?: boolean;
 }): TableActionDescriptor[] {
-  const destructiveDisabled = Boolean(opts.isView);
+  const isView = Boolean(opts.isView);
+  const noun = isView ? 'View' : 'Table';
   const items: TableActionDescriptor[] = [
     { id: 'open', label: 'Open' },
     { id: 'openSql', label: 'Open in SQL Editor' },
   ];
   if (!opts.hideEdit) {
-    items.push({ id: 'edit', label: 'Edit Table' });
+    items.push(
+      { id: 'edit', label: `Edit ${noun}` },
+      { id: 'newIndex', label: 'New Index…', disabled: isView }
+    );
   }
   items.push(
-    { id: 'copySchema', label: 'Copy Table Schema' },
+    { id: 'copySchema', label: isView ? 'Copy View Definition' : 'Copy Table Schema' },
     { id: 'separator', separator: true },
     {
       id: 'empty',
       label: 'Empty Table',
       danger: true,
-      disabled: destructiveDisabled,
+      disabled: isView,
     },
     {
       id: 'delete',
-      label: 'Delete Table',
+      label: `Delete ${noun}`,
       danger: true,
-      disabled: destructiveDisabled,
+      disabled: false,
     }
   );
   return items;

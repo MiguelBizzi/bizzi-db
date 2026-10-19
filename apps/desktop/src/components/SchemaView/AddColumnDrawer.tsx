@@ -19,7 +19,7 @@ interface AddColumnDrawerProps {
   types: ColumnTypeDef[];
   disabled?: boolean;
   onClose: () => void;
-  onExecute: (sql: string) => Promise<{ error?: string }>;
+  onExecute: (sql: string, columnName: string) => Promise<{ error?: string }>;
 }
 
 const AddColumnDrawerBody: React.FC<AddColumnDrawerProps> = ({
@@ -74,7 +74,7 @@ const AddColumnDrawerBody: React.FC<AddColumnDrawerProps> = ({
     if (Object.keys(nextErrors).length > 0 || !sql) return;
     setSubmitting(true);
     try {
-      const result = await onExecute(sql);
+      const result = await onExecute(sql, draft.name.trim());
       if (result.error) {
         setSubmitError(result.error);
         return;
@@ -169,7 +169,7 @@ const AddColumnDrawerBody: React.FC<AddColumnDrawerProps> = ({
                 className="pressable flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary hover:opacity-90 text-primary-foreground text-xs font-bold shadow-md transition-colors disabled:opacity-50"
               >
                 <Check className="w-3.5 h-3.5" />
-                <span>{submitting ? "Adding…" : "Add column"}</span>
+                <span>{submitting ? "Staging…" : "Stage add column"}</span>
               </button>
             </div>
           </footer>

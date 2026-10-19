@@ -15,6 +15,8 @@ import {
   ArrowRight,
   Table2,
   Eraser,
+  Layers,
+  AlertTriangle,
 } from 'lucide-react';
 import type { PendingModifications, TableSchema } from '../../types';
 import {
@@ -26,16 +28,22 @@ import {
   flattenPending,
   formatCellValue,
   primaryKeyColumn,
-  sqlForAll,
+  rowStatementsForAll,
   sqlForChange,
   type PendingConfirm,
 } from '../../lib/pendingChanges';
+import {
+  applyAllScripts,
+  schemaChangeScript,
+  type StagedSchemaChange,
+} from '../../lib/schemaQueue';
 
 type ReviewMode = 'visual' | 'query';
 
 interface PendingChangesDrawerProps {
   isOpen: boolean;
   pendingByTable: Record<string, PendingModifications>;
+  schemaChanges: StagedSchemaChange[];
   tables: TableSchema[];
   applyingKey: string | null;
   applyingAll: boolean;
@@ -46,16 +54,15 @@ interface PendingChangesDrawerProps {
   onCancel: (ref: PendingChangeRef) => void;
   onApproveAll: () => void;
   onCancelAll: () => void;
-  /**
-   * Opens the drawer with this footer confirmation already armed (the menu bar's Commit /
-   * Discard Pending Changes), so one more click or Enter confirms it.
-   */
+  onApproveSchema: (key: string) => void;
+  onCancelSchema: (key: string) => void;
   initialConfirm?: PendingConfirm | null;
 }
 
 const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
   isOpen,
   pendingByTable,
+  schemaChanges,
   tables,
   applyingKey,
   applyingAll,
@@ -66,6 +73,8 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
   onCancel,
   onApproveAll,
   onCancelAll,
+  onApproveSchema,
+  onCancelSchema,
   initialConfirm,
 }) => {
   const [mode, setMode] = useState<ReviewMode>('visual');
@@ -78,8 +87,11 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
     () => flattenPending(pendingByTable, tables),
     [pendingByTable, tables]
   );
-  const total = countPendingChanges(pendingByTable);
-  const allSql = useMemo(() => sqlForAll(bundles), [bundles]);
+  const total = countPendingChanges(pendingByTable) + schemaChanges.length;
+  const allSql = useMemo(
+    () => applyAllScripts(rowStatementsForAll(bundles), schemaChanges).join('\n\n'),
+    [bundles, schemaChanges]
+  );
   const busy = applyingAll || applyingKey !== null;
 
   useEffect(() => {
@@ -181,8 +193,8 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
               <ListChecks className="w-8 h-8 text-muted-foreground/50" />
               <p className="text-sm text-foreground font-medium">No pending changes</p>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Edit a cell or delete rows from a table. Staged work appears here
-                until you approve or discard it.
+                Edit a cell, delete rows, or change a table, index, view or function.
+                Staged work appears here until you approve or discard it.
               </p>
             </div>
           )}
@@ -196,6 +208,37 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
                 {allSql}
               </pre>
             </div>
+          )}
+
+          {schemaChanges.length > 0 && (
+            <section className="space-y-2">
+              <div className="flex items-center gap-1.5 px-1 text-[10px] uppercase tracking-wider font-bold text-muted-foreground font-mono">
+                <Layers className="w-3 h-3" />
+                <span>Schema changes · {schemaChanges.length}</span>
+              </div>
+              {schemaChanges.map((change) => {
+                const key = `schema:${change.key}`;
+                const kind =
+                  change.action === 'drop' ? 'drop' : change.action === 'add' ? 'insert' : 'update';
+                return (
+                  <ChangeCard
+                    key={key}
+                    kind={kind}
+                    badge={change.action === 'add' ? 'add' : change.action}
+                    title={change.title}
+                    sql={schemaChangeScript(change)}
+                    mode={mode}
+                    busy={busy}
+                    applying={applyingKey === key}
+                    armed={armed === key}
+                    onArmApprove={() => armOrRun(key, () => onApproveSchema(change.key))}
+                    onCancel={() => onCancelSchema(change.key)}
+                  >
+                    <SchemaChangeVisual change={change} />
+                  </ChangeCard>
+                );
+              })}
+            </section>
           )}
 
           {bundles.map((bundle) => (
@@ -516,6 +559,7 @@ function KindGroup({
 
 function ChangeCard({
   kind,
+  badge: badgeLabel,
   title,
   sql,
   mode,
@@ -527,6 +571,8 @@ function ChangeCard({
   children,
 }: {
   kind: 'insert' | 'update' | 'delete' | 'truncate' | 'drop';
+  /** Badge text when it differs from `kind`. */
+  badge?: string;
   title: string;
   sql: string;
   mode: ReviewMode;
@@ -557,7 +603,7 @@ function ChangeCard({
         <div className="min-w-0 space-y-1.5">
           <div className="flex items-center gap-1.5">
             <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${badge}`}>
-              {kind}
+              {badgeLabel ?? kind}
             </span>
             <span className="text-[11px] font-mono text-foreground truncate">{title}</span>
           </div>
@@ -656,6 +702,42 @@ function DeleteVisual({
             {formatCellValue(value)}
           </span>
         </div>
+      ))}
+    </div>
+  );
+}
+
+const OBJECT_LABEL: Record<StagedSchemaChange['objectKind'], string> = {
+  column: 'Column',
+  index: 'Index',
+  table: 'Table',
+  view: 'View',
+  function: 'Function',
+  procedure: 'Procedure',
+};
+
+function SchemaChangeVisual({ change }: { change: StagedSchemaChange }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline gap-2 font-mono text-[11px]">
+        <span className="text-muted-foreground w-24 truncate shrink-0">
+          {OBJECT_LABEL[change.objectKind]}
+        </span>
+        <span className="text-foreground break-all">
+          {change.parent ? `${change.parent} · ` : `${change.schema}.`}
+          {change.name}
+        </span>
+      </div>
+      {!change.transactional && (
+        <p className="text-[10px] text-muted-foreground font-mono">
+          Runs outside a transaction, after the other changes.
+        </p>
+      )}
+      {change.warnings.map((warning) => (
+        <p key={warning} className="flex items-start gap-1.5 text-[10px] text-amber-300 font-mono">
+          <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+          <span>{warning}</span>
+        </p>
       ))}
     </div>
   );

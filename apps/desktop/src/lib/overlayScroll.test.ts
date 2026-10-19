@@ -8,6 +8,7 @@ import {
   overlayScrollIdleMs,
   overlayThumbDragPosition,
   overlayThumbMetrics,
+  overlayThumbZIndex,
   shouldIgnoreWheel,
   showOverlayScrollbar,
 } from "./overlayScroll";
@@ -89,6 +90,23 @@ describe("overlay scrollbars", () => {
     expect(css).toMatch(
       /\.scrollbar-none(?:\.is-scrolling)?::-webkit-scrollbar[\s\S]*width:\s*0/,
     );
+  });
+
+  test("a thumb sits just above its scroller's layer, under popovers", () => {
+    expect(overlayThumbZIndex([{ position: "static", zIndex: "auto" }])).toBe(1);
+    expect(
+      overlayThumbZIndex([
+        { position: "static", zIndex: "999" },
+        { position: "relative", zIndex: "auto" },
+        { position: "fixed", zIndex: "50" },
+      ]),
+    ).toBe(51);
+    expect(overlayThumbZIndex([{ position: "fixed", zIndex: "200" }])).toBe(201);
+  });
+
+  test("app CSS keeps the thumb's default layer low", async () => {
+    const css = await Bun.file(new URL("../index.css", import.meta.url)).text();
+    expect(css).not.toMatch(/\.overlay-scroll-thumb\s*\{[^}]*z-index:\s*2147483000/);
   });
 
   test("installs overlay scrolling for the whole app", async () => {

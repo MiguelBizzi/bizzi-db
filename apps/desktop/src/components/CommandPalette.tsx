@@ -13,8 +13,11 @@ import {
   ArrowRight,
   X,
   ListChecks,
+  SquareFunction,
+  Workflow,
+  Eye,
 } from 'lucide-react';
-import { DatabaseSchema, TableSchema, SavedQuery } from '../types';
+import { DatabaseSchema, RoutineDefinition, TableSchema, SavedQuery } from '../types';
 import { knownRowCount } from '../lib/format';
 import { shortcutLabel } from '../lib/commands/shortcutLabel';
 
@@ -33,6 +36,9 @@ interface CommandPaletteProps {
   onOpenActivityLog: () => void;
   onOpenPendingChanges: () => void;
   onOpenNewQuery: () => void;
+  onSelectRoutine?: (routine: RoutineDefinition) => void;
+  onNewRoutine?: () => void;
+  onNewView?: () => void;
   onSelectDatabase: (dbId: string) => void;
 }
 
@@ -53,6 +59,9 @@ const CommandPaletteBody: React.FC<CommandPaletteProps> = ({
   onOpenActivityLog,
   onOpenPendingChanges,
   onOpenNewQuery,
+  onSelectRoutine,
+  onNewRoutine,
+  onNewView,
 }) => {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -79,6 +88,36 @@ const CommandPaletteBody: React.FC<CommandPaletteProps> = ({
             onClose();
           },
         },
+        ...(onNewView
+          ? [
+              {
+                id: 'action-new-view',
+                label: 'Create New View',
+                icon: Eye,
+                iconClass: 'text-amber-400',
+                shortcut: shortcutLabel('file.newView'),
+                run: () => {
+                  onNewView();
+                  onClose();
+                },
+              },
+            ]
+          : []),
+        ...(onNewRoutine
+          ? [
+              {
+                id: 'action-new-function',
+                label: 'Create New Function',
+                icon: SquareFunction,
+                iconClass: 'text-sky-400',
+                shortcut: shortcutLabel('file.newFunction'),
+                run: () => {
+                  onNewRoutine();
+                  onClose();
+                },
+              },
+            ]
+          : []),
         {
           id: 'action-erd',
           label: 'Open Interactive Visual Schema ERD',
@@ -128,12 +167,22 @@ const CommandPaletteBody: React.FC<CommandPaletteProps> = ({
       onOpenErd,
       onOpenMetrics,
       onOpenNewQuery,
+      onNewRoutine,
+      onNewView,
     ]
   );
 
   const filteredTables = useMemo(
     () => (currentDatabase?.tables || []).filter((table) => matches(table.name)),
     [currentDatabase, normalizedQuery]
+  );
+
+  const filteredRoutines = useMemo(
+    () =>
+      onSelectRoutine
+        ? (currentDatabase?.routines || []).filter((routine) => matches(routine.name))
+        : [],
+    [currentDatabase, normalizedQuery, onSelectRoutine]
   );
 
   const filteredQueries = useMemo(
@@ -154,6 +203,13 @@ const CommandPaletteBody: React.FC<CommandPaletteProps> = ({
           onClose();
         },
       })),
+      ...filteredRoutines.map((routine) => ({
+        id: `routine-${routine.id}`,
+        run: () => {
+          onSelectRoutine?.(routine);
+          onClose();
+        },
+      })),
       ...filteredQueries.map((saved) => ({
         id: `query-${saved.id}`,
         run: () => {
@@ -165,8 +221,10 @@ const CommandPaletteBody: React.FC<CommandPaletteProps> = ({
     [
       quickActions,
       filteredTables,
+      filteredRoutines,
       filteredQueries,
       onSelectTable,
+      onSelectRoutine,
       onSelectQuery,
       onClose,
     ]
@@ -373,6 +431,45 @@ const CommandPaletteBody: React.FC<CommandPaletteProps> = ({
             </div>
           )}
 
+          {filteredRoutines.length > 0 && (
+            <div>
+              <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground font-mono">
+                Functions ({filteredRoutines.length})
+              </div>
+              <div className="space-y-1 mt-1">
+                {filteredRoutines.map((routine) => {
+                  const index = nextIndex();
+                  const Icon = routine.kind === 'procedure' ? Workflow : SquareFunction;
+                  return (
+                    <button
+                      key={routine.id}
+                      type="button"
+                      role="option"
+                      aria-selected={index === selectedIndex}
+                      ref={index === selectedIndex ? selectedRef : undefined}
+                      onMouseEnter={() => setSelectedIndex(index)}
+                      onClick={() => {
+                        onSelectRoutine?.(routine);
+                        onClose();
+                      }}
+                      className={itemClass(index)}
+                    >
+                      <div className="flex items-center gap-2.5 font-mono min-w-0">
+                        <Icon className="w-4 h-4 text-sky-400 shrink-0" />
+                        <span className="truncate">
+                          {routine.name}({routine.identityArguments})
+                        </span>
+                      </div>
+                      <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px] font-mono shrink-0">
+                        {routine.schema}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {filteredQueries.length > 0 && (
             <div>
               <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground font-mono">
@@ -411,7 +508,7 @@ const CommandPaletteBody: React.FC<CommandPaletteProps> = ({
 
           {items.length === 0 && (
             <div className="px-3 py-8 text-center text-muted-foreground">
-              No matching tables, queries, or commands.
+              No matching tables, functions, queries, or commands.
             </div>
           )}
         </div>

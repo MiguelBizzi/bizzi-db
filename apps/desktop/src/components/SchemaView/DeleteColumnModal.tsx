@@ -153,7 +153,7 @@ const DeleteColumnModalBody: React.FC<DeleteColumnModalProps> = ({
               className="pressable flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md transition-colors disabled:opacity-50"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              <span>{submitting ? 'Deleting…' : 'Delete column'}</span>
+              <span>{submitting ? 'Staging…' : 'Stage delete'}</span>
             </button>
           </div>
         </form>

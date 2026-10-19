@@ -110,12 +110,153 @@ pub struct ColumnDefinition {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+pub struct IndexKey {
+    pub expression: String,
+    #[serde(default)]
+    pub is_expression: bool,
+    #[serde(default)]
+    pub descending: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nulls_first: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub opclass: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collation: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum IndexConstraintKind {
+    Primary,
+    Unique,
+    Exclusion,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct IndexConstraint {
+    pub name: String,
+    pub kind: IndexConstraintKind,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct IndexStorageParam {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct IndexDefinition {
     pub name: String,
     pub columns: Vec<String>,
     pub is_unique: bool,
     #[serde(rename = "type")]
     pub index_type: String,
+    #[serde(default)]
+    pub keys: Vec<IndexKey>,
+    #[serde(default)]
+    pub include_columns: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub predicate: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub definition: Option<String>,
+    #[serde(default)]
+    pub is_primary: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub constraint: Option<IndexConstraint>,
+    #[serde(default = "default_true")]
+    pub is_valid: bool,
+    #[serde(default)]
+    pub nulls_not_distinct: bool,
+    #[serde(default)]
+    pub storage_params: Vec<IndexStorageParam>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tablespace: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size_bytes: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scans: Option<i64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RoutineKind {
+    Function,
+    Procedure,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ParameterMode {
+    In,
+    Out,
+    InOut,
+    Variadic,
+    Table,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineParameter {
+    #[serde(default)]
+    pub name: String,
+    pub data_type: String,
+    pub mode: ParameterMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineDefinition {
+    pub id: String,
+    pub oid: String,
+    pub schema: String,
+    pub name: String,
+    pub kind: RoutineKind,
+    pub identity_arguments: String,
+    pub parameters: Vec<RoutineParameter>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub return_type: Option<String>,
+    #[serde(default)]
+    pub returns_set: bool,
+    pub language: String,
+    pub volatility: String,
+    #[serde(default)]
+    pub is_strict: bool,
+    #[serde(default)]
+    pub security_definer: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parallel: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub leakproof: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rows: Option<f64>,
+    #[serde(default)]
+    pub has_sql_body: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineSource {
+    pub definition: String,
+    pub body: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineSourceRequest {
+    pub connection_id: String,
+    pub schema: String,
+    pub oid: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -137,6 +278,8 @@ pub struct TableSchema {
     pub is_view: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub view_sql: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_materialized: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -151,6 +294,13 @@ pub struct DatabaseSchema {
     pub environment: Environment,
     pub status: ConnectionStatus,
     pub tables: Vec<TableSchema>,
+    #[serde(default)]
+    pub routines: Vec<RoutineDefinition>,
+    /// Languages routines can be written in.
+    #[serde(default)]
+    pub languages: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub server_version_num: Option<i32>,
     pub total_size_mb: f64,
     pub active_connections: i64,
     pub queries_per_second: f64,
@@ -165,6 +315,8 @@ pub enum TabType {
     Metrics,
     ActivityLog,
     SchemaDesigner,
+    FunctionDesigner,
+    ViewDesigner,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -180,6 +332,8 @@ pub struct WorkspaceTab {
     pub table_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub table_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routine_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sql_content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -590,6 +744,25 @@ mod tests {
         assert!(SslMode::Require.danger_accept_invalid_certs());
         assert!(!SslMode::Enabled.danger_accept_invalid_certs());
         assert!(!SslMode::Disabled.danger_accept_invalid_certs());
+    }
+
+    #[test]
+    fn legacy_index_payload_loads_with_defaults() {
+        let json = r#"{"name":"i","columns":["a"],"isUnique":false,"type":"BTREE"}"#;
+        let index: IndexDefinition = serde_json::from_str(json).unwrap();
+        assert!(index.keys.is_empty());
+        assert!(index.is_valid);
+        assert!(index.constraint.is_none());
+    }
+
+    #[test]
+    fn function_designer_tab_round_trips() {
+        let json = r#"{"id":"t1","type":"function_designer","title":"f","routineId":"public.f()"}"#;
+        let tab: WorkspaceTab = serde_json::from_str(json).unwrap();
+        assert_eq!(tab.tab_type, TabType::FunctionDesigner);
+        assert_eq!(tab.routine_id.as_deref(), Some("public.f()"));
+        let encoded = serde_json::to_value(&tab).unwrap();
+        assert_eq!(encoded["type"], "function_designer");
     }
 
     #[test]

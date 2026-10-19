@@ -318,6 +318,14 @@ describe('buildTableDdlPreview', () => {
     expect(ddl).toContain(`"email" text NOT NULL DEFAULT ''`);
     expect(ddl).toContain('CREATE UNIQUE INDEX "users_email_idx" ON "shop"."users" USING BTREE ("email")');
   });
+
+  test("uses the database's own index definition when known", () => {
+    const definition = 'CREATE INDEX idx_lower ON shop.users USING btree (lower(email)) WHERE active';
+    const t = table('users', [column('email')], {
+      indexes: [{ name: 'idx_lower', columns: [], isUnique: false, type: 'BTREE', definition }],
+    });
+    expect(buildTableDdlPreview(t)).toContain(`${definition};`);
+  });
 });
 
 describe('buildTruncateTableSql / buildDropTableSql', () => {

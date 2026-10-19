@@ -11,8 +11,10 @@ import {
 import { Checkbox } from "../ui/Checkbox";
 import { Select } from "../ui/Select";
 import { ColumnDraftFields } from "./ColumnDraftFields";
+import { useTabFormState } from "../../lib/tabFormState";
 
 interface CreateTableDesignerProps {
+  tabId?: string;
   tables: TableSchema[];
   dialect?: DatabaseDialect;
   disabled?: boolean;
@@ -38,6 +40,7 @@ function initialColumns(): NewTableColumn[] {
 }
 
 export const CreateTableDesigner: React.FC<CreateTableDesignerProps> = ({
+  tabId,
   tables,
   dialect = "PostgreSQL",
   disabled,
@@ -51,10 +54,10 @@ export const CreateTableDesigner: React.FC<CreateTableDesignerProps> = ({
     return names;
   }, [tables]);
 
-  const [schema, setSchema] = useState(schemas[0] ?? "public");
-  const [name, setName] = useState("");
-  const [columns, setColumns] = useState<NewTableColumn[]>(initialColumns);
-  const [showErrors, setShowErrors] = useState(false);
+  const [schema, setSchema] = useTabFormState(tabId, "schema", schemas[0] ?? "public");
+  const [name, setName] = useTabFormState(tabId, "name", "");
+  const [columns, setColumns] = useTabFormState<NewTableColumn[]>(tabId, "columns", initialColumns);
+  const [showErrors, setShowErrors] = useTabFormState(tabId, "showErrors", false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 

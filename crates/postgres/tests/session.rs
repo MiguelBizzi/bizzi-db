@@ -17,6 +17,8 @@ fn pg_config() -> ConnectConfig {
     }
 }
 
+static FINGERPRINT_DDL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 async fn connect() -> Box<dyn Session> {
     PostgresAdapter
         .connect(&pg_config())
@@ -218,6 +220,7 @@ async fn introspect_seed_tables_pks_fks_and_enums() {
 #[tokio::test]
 #[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
 async fn schema_fingerprint_ignores_row_changes_and_detects_ddl() {
+    let _guard = FINGERPRINT_DDL.lock().await;
     let session = connect().await;
     let suffix = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -453,4 +456,310 @@ async fn success_has_no_error_info() {
     let results = session.execute("SELECT 1", None).await.expect("execute");
     assert!(results[0].error.is_none());
     assert!(results[0].error_info.is_none());
+}
+
+#[tokio::test]
+#[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
+async fn failed_transaction_does_not_poison_the_pool() {
+    let session = connect().await;
+    for _ in 0..3 {
+        let results = session
+            .execute("BEGIN; SELECT 1/0; COMMIT;", None)
+            .await
+            .expect("execute");
+        assert!(results.iter().any(|r| r.error.is_some()));
+    }
+    // Pool size is 2: every client has been through a failed BEGIN by now.
+    for _ in 0..4 {
+        let results = session.execute("SELECT 1 AS n", None).await.expect("next");
+        let first = results.into_iter().next().expect("one result");
+        assert!(first.error.is_none(), "{:?}", first.error);
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
+async fn introspect_index_details() {
+    use db_core::IndexConstraintKind;
+    let session = connect().await;
+    let schema = session.introspect().await.expect("introspect");
+    let table = |name: &str| {
+        schema
+            .tables
+            .iter()
+            .find(|t| t.schema == "shop" && t.name == name)
+            .unwrap_or_else(|| panic!("shop.{name}"))
+            .clone()
+    };
+    let users = table("users");
+    let index = |t: &db_core::TableSchema, name: &str| {
+        t.indexes
+            .iter()
+            .find(|i| i.name == name)
+            .unwrap_or_else(|| panic!("{name}"))
+            .clone()
+    };
+
+    let pkey = index(&users, "users_pkey");
+    assert!(pkey.is_primary);
+    assert_eq!(
+        pkey.constraint.as_ref().map(|c| c.kind),
+        Some(IndexConstraintKind::Primary)
+    );
+    let email_key = index(&users, "users_email_key");
+    assert_eq!(
+        email_key.constraint.as_ref().map(|c| c.kind),
+        Some(IndexConstraintKind::Unique)
+    );
+
+    let lower = index(&users, "idx_users_email_lower");
+    assert!(lower.columns.is_empty());
+    assert_eq!(lower.keys.len(), 1);
+    assert!(lower.keys[0].is_expression);
+    assert_eq!(lower.keys[0].expression, "lower(email)");
+    assert!(lower
+        .definition
+        .as_deref()
+        .unwrap()
+        .starts_with("CREATE INDEX"));
+
+    let partial = index(&users, "idx_users_role");
+    assert_eq!(partial.predicate.as_deref(), Some("is_active"));
+    assert!(partial.constraint.is_none());
+
+    let orders = table("orders");
+    let placed = index(&orders, "idx_orders_placed");
+    assert!(placed.keys[0].descending);
+    assert_eq!(placed.keys[0].nulls_first, None);
+
+    let covering = index(&orders, "idx_orders_user_status");
+    assert_eq!(covering.columns, vec!["user_id", "status"]);
+    assert_eq!(covering.include_columns, vec!["total"]);
+    assert_eq!(covering.storage_params.len(), 1);
+    assert_eq!(covering.storage_params[0].name, "fillfactor");
+    assert!(covering.size_bytes.unwrap_or(0) > 0);
+    assert!(covering.scans.is_some());
+
+    let products = table("products");
+    assert_eq!(index(&products, "idx_products_tags").index_type, "GIN");
+    // Unique-column flags still only come from single plain-column indexes.
+    let email = users.columns.iter().find(|c| c.name == "email").unwrap();
+    assert_eq!(email.is_unique, Some(true));
+}
+
+#[tokio::test]
+#[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
+async fn introspect_routines_and_fetch_source() {
+    use db_core::{ParameterMode, RoutineKind};
+    let session = connect().await;
+    let schema = session.introspect().await.expect("introspect");
+    assert!(schema.languages.contains(&"plpgsql".to_string()));
+    assert!(schema.languages.contains(&"sql".to_string()));
+    assert!(schema.server_version_num.unwrap_or(0) >= 110_000);
+    let routine = |id: &str| {
+        schema
+            .routines
+            .iter()
+            .find(|r| r.id == id)
+            .unwrap_or_else(|| panic!("{id}"))
+            .clone()
+    };
+
+    let total = routine("shop.order_total(p_subtotal numeric, p_tax numeric, p_shipping numeric)");
+    assert_eq!(total.kind, RoutineKind::Function);
+    assert_eq!(total.language, "sql");
+    assert_eq!(total.volatility, "immutable");
+    assert_eq!(total.parallel.as_deref(), Some("safe"));
+    assert_eq!(total.return_type.as_deref(), Some("numeric"));
+    assert_eq!(total.comment.as_deref(), Some("Grand total of an order."));
+    assert_eq!(total.parameters.len(), 3);
+    assert_eq!(total.parameters[0].default, None);
+    assert_eq!(total.parameters[1].default.as_deref(), Some("0"));
+
+    let stats = routine("shop.user_order_stats(p_user_id bigint, OUT order_count bigint, OUT lifetime_value numeric)");
+    assert_eq!(stats.parameters.len(), 3);
+    assert_eq!(stats.parameters[1].mode, ParameterMode::Out);
+    assert_eq!(stats.parameters[1].name, "order_count");
+
+    let by_status = routine("shop.orders_by_status(p_status shop.order_status)");
+    assert!(by_status.returns_set);
+    assert_eq!(by_status.rows, Some(50.0));
+    assert_eq!(by_status.parameters[1].mode, ParameterMode::Table);
+
+    let purge = routine("ops.purge_audit_log(IN p_older_than interval)");
+    assert_eq!(purge.kind, RoutineKind::Procedure);
+    assert_eq!(purge.return_type, None);
+
+    let source = session
+        .routine_source(&stats.schema, &stats.oid)
+        .await
+        .expect("routine source");
+    assert!(source
+        .definition
+        .starts_with("CREATE OR REPLACE FUNCTION shop.user_order_stats"));
+    assert!(source.body.contains("INTO order_count, lifetime_value"));
+    assert!(session.routine_source("public", &stats.oid).await.is_err());
+}
+
+#[tokio::test]
+#[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
+async fn schema_fingerprint_detects_routine_and_index_ddl() {
+    let _guard = FINGERPRINT_DDL.lock().await;
+    let session = connect().await;
+    let suffix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let func = format!("shop.fp_fn_{suffix}");
+    let create = format!("CREATE FUNCTION {func}() RETURNS int LANGUAGE sql AS $$ SELECT 1 $$");
+    session.execute(&create, None).await.expect("create fn");
+    let before = session.schema_fingerprint().await.expect("fp");
+
+    let replace =
+        format!("CREATE OR REPLACE FUNCTION {func}() RETURNS int LANGUAGE sql AS $$ SELECT 2 $$");
+    session.execute(&replace, None).await.expect("replace fn");
+    let after_body = session.schema_fingerprint().await.expect("fp");
+    assert_ne!(before, after_body);
+
+    let index = format!("fp_idx_{suffix}");
+    let create_index =
+        format!("CREATE INDEX {index} ON shop.orders (notes) WHERE notes IS NOT NULL");
+    session
+        .execute(&create_index, None)
+        .await
+        .expect("create index");
+    let after_index = session.schema_fingerprint().await.expect("fp");
+    assert_ne!(after_body, after_index);
+
+    let cleanup = format!("DROP INDEX shop.{index}; DROP FUNCTION {func}();");
+    let results = session.execute(&cleanup, None).await.expect("cleanup");
+    assert!(results.iter().all(|r| r.error.is_none()));
+}
+
+#[tokio::test]
+#[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
+async fn introspect_seed_index_and_routine_variety() {
+    use db_core::IndexConstraintKind;
+    let session = connect().await;
+    let schema = session.introspect().await.expect("introspect");
+    let index = |table: &str, name: &str| {
+        let (schema_name, table_name) = table.split_once('.').unwrap();
+        schema
+            .tables
+            .iter()
+            .find(|t| t.schema == schema_name && t.name == table_name)
+            .unwrap_or_else(|| panic!("{table}"))
+            .indexes
+            .iter()
+            .find(|i| i.name == name)
+            .unwrap_or_else(|| panic!("{name}"))
+            .clone()
+    };
+
+    let exclusion = index("ops.maintenance_windows", "maintenance_windows_no_overlap");
+    assert_eq!(exclusion.index_type, "GIST");
+    assert_eq!(
+        exclusion.constraint.map(|c| c.kind),
+        Some(IndexConstraintKind::Exclusion)
+    );
+    let nnd = index("ops.api_keys", "uq_api_keys_owner_label");
+    assert!(nnd.is_unique && nnd.nulls_not_distinct);
+    assert!(nnd.keys[1].is_expression);
+    let last_login = index("shop.users", "idx_users_last_login");
+    assert!(last_login.keys[0].descending);
+    assert_eq!(last_login.keys[0].nulls_first, Some(false));
+    let finished = index("ops.background_jobs", "idx_jobs_finished");
+    assert_eq!(finished.keys[0].nulls_first, Some(true));
+    let pattern = index("shop.products", "idx_products_name_pattern");
+    assert_eq!(pattern.keys[0].opclass.as_deref(), Some("text_pattern_ops"));
+    let collated = index("shop.categories", "idx_categories_name_c");
+    assert_eq!(collated.keys[0].collation.as_deref(), Some("\"C\""));
+    let brin = index("analytics.page_views", "idx_page_views_viewed_brin");
+    assert_eq!(brin.index_type, "BRIN");
+    assert_eq!(brin.storage_params.len(), 2);
+    assert_eq!(
+        index("shop.payments", "idx_payments_provider_hash").index_type,
+        "HASH"
+    );
+    assert_eq!(
+        index("analytics.sessions", "idx_sessions_ip").index_type,
+        "SPGIST"
+    );
+    assert_eq!(
+        index("shop.mv_revenue_by_day", "idx_mv_revenue_day").index_type,
+        "BTREE"
+    );
+
+    let routine = |id: &str| {
+        schema
+            .routines
+            .iter()
+            .find(|r| r.id == id)
+            .unwrap_or_else(|| panic!("{id}"))
+            .clone()
+    };
+    assert!(
+        routine("shop.order_item_total(p_quantity integer, p_unit_price numeric)").has_sql_body
+    );
+    assert_eq!(
+        schema
+            .routines
+            .iter()
+            .filter(|r| r.schema == "shop" && r.name == "format_price")
+            .count(),
+        2
+    );
+    let variadic = routine("ops.join_nonempty(p_separator text, VARIADIC p_parts text[])");
+    assert_eq!(
+        variadic.parameters[1].mode,
+        db_core::ParameterMode::Variadic
+    );
+    assert!(
+        routine("ops.record_audit(p_action text, p_entity text, p_entity_id text)")
+            .security_definer
+    );
+    assert_eq!(
+        routine("shop.is_valid_email(p_email text)").leakproof,
+        Some(true)
+    );
+    assert!(schema.routines.iter().any(|r| r.name == "DailyActiveUsers"));
+    let requeue = routine("ops.requeue_failed_jobs(INOUT p_requeued integer)");
+    assert_eq!(requeue.parameters[0].mode, db_core::ParameterMode::InOut);
+
+    for sql in [
+        "DROP FUNCTION analytics.session_duration(timestamptz, timestamptz)",
+        "DROP FUNCTION ops.touch_updated_at()",
+    ] {
+        let results = session.execute(sql, None).await.expect("execute");
+        let error = results[0].error.as_deref().unwrap_or_default();
+        assert!(error.contains("depend"), "{sql}: {error}");
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
+async fn introspect_view_definitions() {
+    let session = connect().await;
+    let schema = session.introspect().await.expect("introspect");
+    let table = |name: &str| {
+        schema
+            .tables
+            .iter()
+            .find(|t| t.schema == "shop" && t.name == name)
+            .unwrap_or_else(|| panic!("shop.{name}"))
+            .clone()
+    };
+    let view = table("v_order_summary");
+    assert_eq!(view.is_view, Some(true));
+    assert_eq!(view.is_materialized, None);
+    assert!(view
+        .view_sql
+        .as_deref()
+        .unwrap()
+        .contains("FROM shop.orders o"));
+    let matview = table("mv_revenue_by_day");
+    assert_eq!(matview.is_materialized, Some(true));
+    assert!(matview.view_sql.is_some());
+    let plain = table("orders");
+    assert_eq!(plain.view_sql, None);
 }

@@ -37,6 +37,16 @@ export const COMMANDS: readonly Command[] = [
   { id: 'file.newQuery', label: 'New Query Tab', accelerator: 'CmdOrCtrl+T', enabled: connectionOpen },
   { id: 'file.newConnection', label: 'New Connection…', accelerator: 'CmdOrCtrl+N', enabled: () => true },
   { id: 'file.newTable', label: 'New Table…', accelerator: 'CmdOrCtrl+Shift+N', enabled: connectionOpen },
+  { id: 'file.newView', label: 'New View…', accelerator: 'CmdOrCtrl+Alt+V', enabled: connectionOpen },
+  { id: 'file.newFunction', label: 'New Function…', accelerator: 'CmdOrCtrl+Alt+F', enabled: connectionOpen },
+  {
+    id: 'file.newIndex',
+    label: 'New Index…',
+    accelerator: 'CmdOrCtrl+Shift+I',
+    enabled: (ctx) =>
+      ctx.connectionOpen &&
+      (ctx.activeTabType === 'table_data' || ctx.activeTabType === 'schema_designer'),
+  },
   { id: 'file.saveQuery', label: 'Save Query…', accelerator: 'CmdOrCtrl+S', enabled: sqlEditorActive },
   {
     id: 'file.export',

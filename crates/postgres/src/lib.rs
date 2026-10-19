@@ -1,6 +1,7 @@
 mod error;
 mod filter;
 mod ident;
+mod objects;
 mod session;
 mod values;
 

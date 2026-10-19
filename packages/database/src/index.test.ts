@@ -1,5 +1,14 @@
 import { describe, expect, test } from 'bun:test';
-import { columnTypesFor, DIALECTS, dialectMeta, SUPPORTED_DIALECTS } from './index';
+import {
+  columnTypesFor,
+  DIALECTS,
+  dialectMeta,
+  indexMethod,
+  methodSupportsInclude,
+  storageParamsFor,
+  SUPPORTED_DIALECTS,
+  versionAtLeast,
+} from './index';
 
 describe('quoteSqlIdent', () => {
   test('wraps identifiers in double quotes and doubles embedded quotes', () => {
@@ -37,5 +46,41 @@ describe('columnTypesFor', () => {
     expect(columnTypesFor('SQLite')).toBeUndefined();
     expect(columnTypesFor('ClickHouse')).toBeUndefined();
     expect(columnTypesFor('DuckDB')).toBeUndefined();
+  });
+});
+
+describe('quoteLiteral', () => {
+  test('doubles single quotes', () => {
+    expect(DIALECTS.PostgreSQL.quoteLiteral("it's")).toBe("'it''s'");
+  });
+});
+
+describe('object capabilities', () => {
+  const indexes = DIALECTS.PostgreSQL.objects.indexes;
+
+  test('only btree supports unique and per-key ordering', () => {
+    const unique = indexes.methods.filter((m) => m.unique).map((m) => m.id);
+    const ordering = indexes.methods.filter((m) => m.ordering).map((m) => m.id);
+    expect(unique).toEqual(['btree']);
+    expect(ordering).toEqual(['btree']);
+  });
+
+  test('INCLUDE support follows the server version per method', () => {
+    const gist = indexMethod(indexes, 'GIST')!;
+    expect(methodSupportsInclude(gist, 110_000)).toBe(false);
+    expect(methodSupportsInclude(gist, 120_000)).toBe(true);
+    expect(methodSupportsInclude(indexMethod(indexes, 'gin')!, 170_000)).toBe(false);
+  });
+
+  test('version-gated storage params', () => {
+    const btree = indexMethod(indexes, 'btree')!;
+    expect(storageParamsFor(btree, 120_000).map((p) => p.name)).toEqual(['fillfactor']);
+    expect(storageParamsFor(btree, 160_000).map((p) => p.name)).toContain('deduplicate_items');
+  });
+
+  test('versionAtLeast treats unknown versions as supported and null as never', () => {
+    expect(versionAtLeast(undefined, 150_000)).toBe(true);
+    expect(versionAtLeast(140_000, 150_000)).toBe(false);
+    expect(versionAtLeast(160_000, null)).toBe(false);
   });
 });

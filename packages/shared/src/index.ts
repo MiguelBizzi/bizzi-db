@@ -33,11 +33,84 @@ export interface ColumnDefinition {
   };
 }
 
+export interface IndexKey {
+  expression: string;
+  isExpression: boolean;
+  descending: boolean;
+  nullsFirst?: boolean;
+  opclass?: string;
+  collation?: string;
+}
+
+export type IndexConstraintKind = 'primary' | 'unique' | 'exclusion';
+
+export interface IndexStorageParam {
+  name: string;
+  value: string;
+}
+
 export interface IndexDefinition {
   name: string;
   columns: string[];
   isUnique: boolean;
   type: string;
+  keys?: IndexKey[];
+  includeColumns?: string[];
+  predicate?: string;
+  definition?: string;
+  isPrimary?: boolean;
+  constraint?: { name: string; kind: IndexConstraintKind };
+  isValid?: boolean;
+  nullsNotDistinct?: boolean;
+  storageParams?: IndexStorageParam[];
+  tablespace?: string;
+  sizeBytes?: number;
+  scans?: number;
+}
+
+export type RoutineKind = 'function' | 'procedure';
+
+export type ParameterMode = 'in' | 'out' | 'inout' | 'variadic' | 'table';
+
+export interface RoutineParameter {
+  name: string;
+  dataType: string;
+  mode: ParameterMode;
+  default?: string;
+}
+
+export interface RoutineDefinition {
+  id: string;
+  oid: string;
+  schema: string;
+  name: string;
+  kind: RoutineKind;
+  identityArguments: string;
+  parameters: RoutineParameter[];
+  returnType?: string;
+  returnsSet: boolean;
+  language: string;
+  volatility: 'immutable' | 'stable' | 'volatile';
+  isStrict: boolean;
+  securityDefiner: boolean;
+  parallel?: 'safe' | 'restricted' | 'unsafe';
+  leakproof?: boolean;
+  cost?: number;
+  rows?: number;
+  hasSqlBody: boolean;
+  comment?: string;
+  owner?: string;
+}
+
+export interface RoutineSource {
+  definition: string;
+  body: string;
+}
+
+export interface RoutineSourceRequest {
+  connectionId: string;
+  schema: string;
+  oid: string;
 }
 
 export interface TableSchema {
@@ -54,6 +127,7 @@ export interface TableSchema {
   updatedAt: string;
   isView?: boolean;
   viewSql?: string;
+  isMaterialized?: boolean;
 }
 
 export interface DatabaseSchema {
@@ -66,6 +140,9 @@ export interface DatabaseSchema {
   environment: Environment;
   status: ConnectionStatus;
   tables: TableSchema[];
+  routines?: RoutineDefinition[];
+  languages?: string[];
+  serverVersionNum?: number;
   totalSizeMb: number;
   activeConnections: number;
   queriesPerSecond: number;
@@ -77,7 +154,9 @@ export type TabType =
   | 'erd_schema'
   | 'metrics'
   | 'activity_log'
-  | 'schema_designer';
+  | 'schema_designer'
+  | 'function_designer'
+  | 'view_designer';
 
 export interface WorkspaceTab {
   id: string;
@@ -86,6 +165,9 @@ export interface WorkspaceTab {
   databaseId?: string;
   tableId?: string;
   tableName?: string;
+  /** A `function_designer` tab's routine; absent while creating one. (A
+   *  `view_designer` tab uses `tableId`, absent while creating.) */
+  routineId?: string;
   sqlContent?: string;
   sqlQuery?: string;
   isPinned?: boolean;

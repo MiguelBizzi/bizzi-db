@@ -193,7 +193,7 @@ const EditColumnModalBody: React.FC<EditColumnModalProps> = ({
                 className="pressable flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-primary hover:opacity-90 text-primary-foreground text-xs font-semibold shadow-md transition-colors disabled:opacity-50"
               >
                 <Check className="w-3.5 h-3.5" />
-                <span>{submitting ? "Updating…" : "Update column"}</span>
+                <span>{submitting ? "Staging…" : "Stage update"}</span>
               </button>
             </div>
           </footer>

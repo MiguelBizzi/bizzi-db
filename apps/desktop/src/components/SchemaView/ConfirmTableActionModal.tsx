@@ -8,6 +8,8 @@ import {
   buildTruncateTableSql,
   canConfirmDelete,
 } from '../../lib/schemaChange';
+import { objectDdlFor } from '../../lib/ddl/registry';
+import { planScript } from '../../lib/ddl/types';
 
 interface ConfirmTableActionModalProps {
   table: TableSchema | null;
@@ -42,9 +44,17 @@ const ConfirmTableActionModalBody: React.FC<ConfirmTableActionModalProps> = ({
   if (!table || !action) return null;
 
   const isDrop = action === 'drop';
-  const sql = isDrop ? buildDropTableSql(table) : buildTruncateTableSql(table);
+  const isView = Boolean(table.isView);
+  const viewDrop = isView && isDrop ? objectDdlFor('PostgreSQL')?.dropView(table) : undefined;
+  const sql =
+    viewDrop && viewDrop.ok
+      ? planScript(viewDrop)
+      : isDrop
+        ? buildDropTableSql(table)
+        : buildTruncateTableSql(table);
   const matched = canConfirmDelete(typed, table.name);
-  const title = isDrop ? 'Delete table' : 'Empty table';
+  const viewNoun = table.isMaterialized ? 'materialized view' : 'view';
+  const title = isView ? `Delete ${viewNoun}` : isDrop ? 'Delete table' : 'Empty table';
   const titleId = isDrop ? 'delete-table-title' : 'empty-table-title';
   const Icon = isDrop ? Trash2 : Eraser;
 
@@ -86,7 +96,14 @@ const ConfirmTableActionModalBody: React.FC<ConfirmTableActionModalProps> = ({
           <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-200 text-[11px] font-mono flex items-start gap-2">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
             <span>
-              {isDrop ? (
+              {isView ? (
+                <>
+                  Dropping the {viewNoun}{' '}
+                  <span className="font-bold">{table.schema}.{table.name}</span> removes it;
+                  the tables it reads are not affected. PostgreSQL refuses if other objects
+                  depend on it.
+                </>
+              ) : isDrop ? (
                 <>
                   This cannot be undone. Dropping{' '}
                   <span className="font-bold">{table.schema}.{table.name}</span> will

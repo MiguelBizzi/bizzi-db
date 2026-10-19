@@ -534,6 +534,7 @@ export function buildTableDdlPreview(table: TableSchema): string {
     .join(',\n');
   const indexes = table.indexes
     .map((index) => {
+      if (index.definition) return `${index.definition};`;
       const unique = index.isUnique ? 'UNIQUE ' : '';
       const colsSql = index.columns.map((name) => quote(name)).join(', ');
       return `CREATE ${unique}INDEX ${quote(index.name)} ON ${qualifyTable(table.schema, table.name)} USING ${index.type} (${colsSql});`;
