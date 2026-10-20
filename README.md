@@ -22,6 +22,7 @@
   <a href="Cargo.toml"><img src="https://img.shields.io/badge/Built_with-Tauri_%C2%B7_React_%C2%B7_Rust-d87943" alt="Built with Tauri, React, and Rust"></a>
   <a href="https://github.com/MiguelBizzi/bizzi-db/releases/latest"><img src="https://img.shields.io/badge/Platform-macOS-15171c" alt="Available for macOS"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-d87943" alt="MIT license"></a>
+  <a href="https://github.com/MiguelBizzi/bizzi-db/actions/workflows/test.yml"><img src="https://github.com/MiguelBizzi/bizzi-db/actions/workflows/test.yml/badge.svg?branch=main" alt="Test status"></a>
 </p>
 
 Bizzi DB is a PostgreSQL client written with [Tauri](https://tauri.app), React, and Rust. It runs on your machine, keeps your connections and passwords local, and starts quickly without a browser engine behind it. There is no account to create and no cloud service in between.
@@ -67,11 +68,11 @@ To try Bizzi DB without a server of your own, run the local test database descri
 
 Bizzi DB is local-only. There is no application backend. Read [SECURITY.md](SECURITY.md) for the data flow, accepted risks, and the update trust model.
 
-To report a vulnerability or a credential or data-exposure bug, please contact the maintainers privately instead of opening a public issue.
+To report a vulnerability or a credential or data-exposure bug, use [Report a vulnerability](https://github.com/MiguelBizzi/bizzi-db/security/advisories/new) instead of opening a public issue.
 
 ## Contributing
 
-Found a bug or have an idea? [Open an issue](https://github.com/MiguelBizzi/bizzi-db/issues). Pull requests are welcome against `main`.
+Found a bug or have an idea? [Open an issue](https://github.com/MiguelBizzi/bizzi-db/issues). Pull requests are welcome against `main`. Read [CONTRIBUTING.md](CONTRIBUTING.md) first; it covers setup, tests and the sign-off every commit needs. Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md), and [GOVERNANCE.md](GOVERNANCE.md) explains how decisions are made.
 
 ### Development
 
