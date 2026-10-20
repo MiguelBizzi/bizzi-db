@@ -20,8 +20,8 @@ pub(crate) fn category_for_sqlstate(code: &str) -> QueryErrorCategory {
     use QueryErrorCategory::*;
     match code {
         "42601" | "42602" | "42611" | "42622" => Syntax,
-        "42P01" | "42703" | "42883" | "42704" | "42P02" | "42702" | "42725" | "42P09"
-        | "3F000" | "3D000" => Reference,
+        "42P01" | "42703" | "42883" | "42704" | "42P02" | "42702" | "42725" | "42P09" | "3F000"
+        | "3D000" => Reference,
         "42501" => Permission,
         "57014" | "55P03" => Timeout,
         "57P01" | "57P02" | "57P03" | "53300" => Connection,
@@ -172,7 +172,10 @@ mod tests {
         assert_eq!(error.severity.as_deref(), Some("ERROR"));
         assert_eq!(error.code.as_deref(), Some("23505"));
         assert_eq!(error.message, "duplicate key");
-        assert_eq!(error.detail.as_deref(), Some("Key (id)=(1) already exists."));
+        assert_eq!(
+            error.detail.as_deref(),
+            Some("Key (id)=(1) already exists.")
+        );
         assert_eq!(error.hint.as_deref(), Some("try again"));
         assert_eq!(error.schema.as_deref(), Some("public"));
         assert_eq!(error.table.as_deref(), Some("t"));
@@ -202,7 +205,11 @@ mod tests {
         for position in [Some(0), Some(sql.len() as u32 + 2), None] {
             let mut p = parts("42601");
             p.original_position = position;
-            assert_eq!(query_error_from_parts(p, sql).position, None, "{position:?}");
+            assert_eq!(
+                query_error_from_parts(p, sql).position,
+                None,
+                "{position:?}"
+            );
         }
     }
 }

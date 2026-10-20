@@ -184,16 +184,11 @@ impl Storage {
     fn backfill_sort_order(&self) -> Result<(), StorageError> {
         let mut stmt = self
             .conn
-            .prepare(
-                "SELECT id, folder_id FROM connections ORDER BY name, id",
-            )
+            .prepare("SELECT id, folder_id FROM connections ORDER BY name, id")
             .map_err(|e| StorageError::msg(e.to_string()))?;
         let rows = stmt
             .query_map([], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, Option<String>>(1)?,
-                ))
+                Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
             })
             .map_err(|e| StorageError::msg(e.to_string()))?;
         let mut groups: std::collections::HashMap<String, Vec<String>> =
@@ -321,10 +316,7 @@ impl Storage {
         Ok(ids)
     }
 
-    pub fn list_ids_in_group(
-        &self,
-        folder_id: Option<&str>,
-    ) -> Result<Vec<String>, StorageError> {
+    pub fn list_ids_in_group(&self, folder_id: Option<&str>) -> Result<Vec<String>, StorageError> {
         let mut stmt = self
             .conn
             .prepare(
@@ -663,9 +655,7 @@ impl Storage {
             .optional()
             .map_err(|e| StorageError::msg(e.to_string()))?;
         match value {
-            Some(json) => {
-                serde_json::from_str(&json).map_err(|e| StorageError::msg(e.to_string()))
-            }
+            Some(json) => serde_json::from_str(&json).map_err(|e| StorageError::msg(e.to_string())),
             None => Ok(AppSettings::default()),
         }
     }
@@ -1169,12 +1159,21 @@ mod tests {
         db.upsert_connection(&sample_profile("c1")).unwrap();
         db.set_connection_folder("c1", Some("folder_1")).unwrap();
         assert_eq!(
-            db.get_connection("c1").unwrap().unwrap().folder_id.as_deref(),
+            db.get_connection("c1")
+                .unwrap()
+                .unwrap()
+                .folder_id
+                .as_deref(),
             Some("folder_1")
         );
 
         db.set_connection_folder("c1", None).unwrap();
-        assert!(db.get_connection("c1").unwrap().unwrap().folder_id.is_none());
+        assert!(db
+            .get_connection("c1")
+            .unwrap()
+            .unwrap()
+            .folder_id
+            .is_none());
 
         let mut assigned = sample_profile("c2");
         assigned.folder_id = Some("folder_1".into());
@@ -1204,7 +1203,8 @@ mod tests {
     #[test]
     fn delete_folder_ungroups_or_removes_connections() {
         let db = Storage::open_in_memory().unwrap();
-        db.upsert_folder(&sample_folder("folder_1", "Prod")).unwrap();
+        db.upsert_folder(&sample_folder("folder_1", "Prod"))
+            .unwrap();
         db.upsert_folder(&sample_folder("folder_2", "Staging"))
             .unwrap();
         let mut keep = sample_profile("c1");
@@ -1216,7 +1216,12 @@ mod tests {
 
         let ungrouped = db.delete_folder("folder_1", false).unwrap();
         assert_eq!(ungrouped, vec!["c1".to_string()]);
-        assert!(db.get_connection("c1").unwrap().unwrap().folder_id.is_none());
+        assert!(db
+            .get_connection("c1")
+            .unwrap()
+            .unwrap()
+            .folder_id
+            .is_none());
         assert!(db.get_folder("folder_1").unwrap().is_none());
 
         let removed = db.delete_folder("folder_2", true).unwrap();
@@ -1238,7 +1243,8 @@ mod tests {
     #[test]
     fn place_connection_reorders_inside_and_across_folders() {
         let db = Storage::open_in_memory().unwrap();
-        db.upsert_folder(&sample_folder("folder_1", "Prod")).unwrap();
+        db.upsert_folder(&sample_folder("folder_1", "Prod"))
+            .unwrap();
         db.upsert_connection(&sample_profile("c1")).unwrap();
         db.upsert_connection(&sample_profile("c2")).unwrap();
         db.upsert_connection(&sample_profile("c3")).unwrap();
@@ -1250,7 +1256,8 @@ mod tests {
         );
 
         db.place_connection("c1", Some("folder_1"), None).unwrap();
-        db.place_connection("c2", Some("folder_1"), Some("c1")).unwrap();
+        db.place_connection("c2", Some("folder_1"), Some("c1"))
+            .unwrap();
         assert!(db.list_ids_in_group(None).unwrap() == vec!["c3".to_string()]);
         assert_eq!(
             db.list_ids_in_group(Some("folder_1")).unwrap(),

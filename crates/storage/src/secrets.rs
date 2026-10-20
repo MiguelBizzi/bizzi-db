@@ -204,27 +204,17 @@ impl<K: SecretStore, L: SecretStore> DualSecretStore<K, L> {
         }
     }
 
-    pub fn set(
-        &self,
-        keychain_enabled: bool,
-        key: &str,
-        value: &str,
-    ) -> Result<(), StorageError> {
+    pub fn set(&self, keychain_enabled: bool, key: &str, value: &str) -> Result<(), StorageError> {
         self.preferred(keychain_enabled).set_password(key, value)
     }
 
-    pub fn get(
-        &self,
-        keychain_enabled: bool,
-        key: &str,
-    ) -> Result<Option<String>, StorageError> {
+    pub fn get(&self, keychain_enabled: bool, key: &str) -> Result<Option<String>, StorageError> {
         if let Some(value) = self.preferred(keychain_enabled).get_password(key)? {
             return Ok(Some(value));
         }
         match self.other(keychain_enabled).get_password(key)? {
             Some(value) => {
-                self.preferred(keychain_enabled)
-                    .set_password(key, &value)?;
+                self.preferred(keychain_enabled).set_password(key, &value)?;
                 Ok(Some(value))
             }
             None => Ok(None),
@@ -330,10 +320,7 @@ mod tests {
         assert_eq!(store.get(true, "c1").unwrap().as_deref(), Some("local"));
 
         store.set(true, "c1", "keychain").unwrap();
-        assert_eq!(
-            store.get(true, "c1").unwrap().as_deref(),
-            Some("keychain")
-        );
+        assert_eq!(store.get(true, "c1").unwrap().as_deref(), Some("keychain"));
         assert_eq!(store.get(false, "c1").unwrap().as_deref(), Some("local"));
     }
 
@@ -385,9 +372,7 @@ mod tests {
     #[test]
     fn copy_keychain_into_local_surfaces_keychain_errors() {
         let store = DualSecretStore::new(FailingSecrets, InMemorySecrets::default());
-        let err = store
-            .copy_keychain_into_local(&["c1".into()])
-            .unwrap_err();
+        let err = store.copy_keychain_into_local(&["c1".into()]).unwrap_err();
         assert!(err.to_string().contains("locked"));
     }
 

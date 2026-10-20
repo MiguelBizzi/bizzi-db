@@ -124,6 +124,9 @@ mod tests {
     #[test]
     fn query_error_serialises_camel_case_and_skips_none() {
         let value = serde_json::to_value(QueryError::new(QueryErrorCategory::Syntax, "x")).unwrap();
-        assert_eq!(value, serde_json::json!({"category": "syntax", "message": "x"}));
+        assert_eq!(
+            value,
+            serde_json::json!({"category": "syntax", "message": "x"})
+        );
     }
 }
