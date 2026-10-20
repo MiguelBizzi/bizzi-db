@@ -1,4 +1,10 @@
-import type { QueryErrorCategory, QueryErrorInfo, QueryErrorPosition } from '../types';
+import type {
+  QueryErrorCategory,
+  QueryErrorInfo,
+  QueryErrorPosition,
+  QueryExecutionResult,
+} from '../types';
+import { queryErrorText } from './sqlQuery';
 
 const CATEGORY_LABELS: Record<QueryErrorCategory, string> = {
   syntax: 'Syntax error',
@@ -56,4 +62,27 @@ export function errorFacts(info: QueryErrorInfo): { label: string; value: string
     ['Schema', info.schema],
   ];
   return rows.flatMap(([label, value]) => (value ? [{ label, value }] : []));
+}
+
+/** Plain text of what `QueryErrorCard` shows, for the clipboard. */
+export function queryErrorCopyText(result: QueryExecutionResult): string {
+  const info = result.errorInfo;
+  if (!info) return queryErrorText(result.error);
+
+  const lines = [
+    categoryLabel(info.category) + (info.code ? ` (${info.code})` : ''),
+    info.message,
+  ];
+  const excerpt = errorExcerpt(result.query, info.position);
+  if (info.position && excerpt) {
+    const gutter = String(excerpt.lineNumber).length + 3;
+    lines.push(
+      `Line ${info.position.line}, column ${info.position.column}`,
+      `${excerpt.lineNumber} │ ${excerpt.text}`,
+      `${' '.repeat(gutter + excerpt.caretColumn - 1)}^`
+    );
+  }
+  for (const fact of errorFacts(info)) lines.push(`${fact.label}: ${fact.value}`);
+  if (info.hint) lines.push(`Hint: ${info.hint}`);
+  return lines.join('\n');
 }
