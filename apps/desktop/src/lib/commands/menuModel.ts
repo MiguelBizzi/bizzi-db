@@ -128,6 +128,7 @@ export function buildMenuModel(): MenuNode[] {
       label: 'View',
       items: [
         item('view.palette'),
+        item('view.toggleSidebar'),
         separator(),
         item('view.erd'),
         item('view.metrics'),

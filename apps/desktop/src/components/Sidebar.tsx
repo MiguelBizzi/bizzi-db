@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import {
   Table as TableIcon,
@@ -12,6 +12,8 @@ import {
   EllipsisVertical,
   SquareFunction,
   Workflow,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { DatabaseSchema, RoutineDefinition, TableSchema } from '../types';
 import { filterRoutines } from '../lib/routineTabs';
@@ -27,6 +29,12 @@ import {
   type TableManagementHandlers,
 } from './tableManagementMenu';
 import { tableMatchesSearch } from '../lib/tableSearch';
+import { shortcutLabel } from '../lib/commands/shortcutLabel';
+import { COLLAPSED_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH } from '../lib/sidebarLayout';
+
+const TOGGLE_SIDEBAR_SHORTCUT = shortcutLabel('view.toggleSidebar');
+const RAIL_BUTTON_CLASS =
+  'p-2 rounded-md bg-muted hover:bg-accent text-primary border border-sidebar-border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-muted';
 
 const EXPLORER_SKELETON_COUNT = 7;
 const EXPLORER_SKELETON_NAME_WIDTHS = [
@@ -49,6 +57,11 @@ const EXPLORER_SKELETON_STAT_WIDTHS = [
 ];
 
 interface SidebarProps {
+  width?: number;
+  collapsed?: boolean;
+  /** True while the edge is being dragged, so the width follows the pointer without easing. */
+  resizing?: boolean;
+  onToggleCollapsed?: () => void;
   currentDatabase: DatabaseSchema;
   activeTableId?: string;
   onSelectTableData: (table: TableSchema) => void;
@@ -69,6 +82,10 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
+  width = DEFAULT_SIDEBAR_WIDTH,
+  collapsed = false,
+  resizing = false,
+  onToggleCollapsed,
   currentDatabase,
   activeTableId,
   onSelectTableData,
@@ -104,6 +121,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [routinesOpen, setRoutinesOpen] = useState(true);
   const [createMenu, setCreateMenu] = useState<{ x: number; y: number } | null>(null);
   const routines = currentDatabase.routines ?? [];
+  const searchRef = useRef<HTMLInputElement>(null);
+  const focusSearchOnExpand = useRef(false);
+
+  useEffect(() => {
+    if (collapsed || !focusSearchOnExpand.current) return;
+    focusSearchOnExpand.current = false;
+    searchRef.current?.focus();
+  }, [collapsed]);
+
+  const refreshSchemas = () => {
+    if (refreshingSchemas) return;
+    setRefreshingSchemas(true);
+    void Promise.resolve(onRefreshSchemas?.()).finally(() => {
+      setRefreshingSchemas(false);
+    });
+  };
+
+  const toggleCreateMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (createMenu) {
+      setCreateMenu(null);
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    setCreateMenu({ x: rect.left, y: rect.bottom + 4 });
+  };
+
+  const expandToSearch = () => {
+    focusSearchOnExpand.current = true;
+    onToggleCollapsed?.();
+  };
 
   const allTags = Array.from(
     new Set(currentDatabase.tables.flatMap((t) => t.tags))
@@ -143,25 +190,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <aside className="w-72 bg-sidebar border-r border-sidebar-border flex flex-col h-full select-none shrink-0 overflow-hidden text-sidebar-foreground">
+    <aside
+      aria-label="Database explorer"
+      data-collapsed={collapsed}
+      style={{
+        width: collapsed ? COLLAPSED_SIDEBAR_WIDTH : width,
+        transition: resizing ? 'none' : 'width var(--motion-slow) var(--ease-out)',
+      }}
+      className={`relative bg-sidebar flex flex-col h-full select-none shrink-0 overflow-hidden text-sidebar-foreground ${
+        collapsed ? 'border-r border-sidebar-border' : ''
+      }`}
+    >
+      {/* Both layers stay mounted and cross-fade, so filters survive a collapse. */}
+      <div
+        inert={collapsed}
+        style={{
+          width,
+          opacity: collapsed ? 0 : 1,
+          transition: resizing ? 'none' : 'opacity var(--motion-base) var(--ease-out)',
+        }}
+        className="absolute inset-y-0 left-0 flex flex-col"
+      >
       {/* Explorer Top Bar */}
       <div className="p-3 border-b border-sidebar-border flex flex-col gap-2.5 bg-background/40">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs font-semibold text-sidebar-foreground tracking-wider uppercase">
-            <FolderTree className="w-3.5 h-3.5 text-primary" />
-            <span>Database Explorer</span>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0 text-xs font-semibold text-sidebar-foreground tracking-wider uppercase">
+            <FolderTree className="w-3.5 h-3.5 shrink-0 text-primary" />
+            <span className="truncate">Database Explorer</span>
           </div>
 
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => {
-                if (refreshingSchemas) return;
-                setRefreshingSchemas(true);
-                void Promise.resolve(onRefreshSchemas?.()).finally(() => {
-                  setRefreshingSchemas(false);
-                });
-              }}
+              onClick={refreshSchemas}
               disabled={refreshingSchemas}
               title="Refresh schemas"
               aria-label="Refresh schemas"
@@ -176,20 +237,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
               aria-haspopup="menu"
               aria-expanded={createMenu != null}
               onMouseDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                if (createMenu) {
-                  setCreateMenu(null);
-                  return;
-                }
-                const rect = event.currentTarget.getBoundingClientRect();
-                setCreateMenu({ x: rect.left, y: rect.bottom + 4 });
-              }}
+              onClick={toggleCreateMenu}
               className={`p-1 rounded-md hover:bg-accent text-primary border border-sidebar-border transition-colors ${
                 createMenu ? 'bg-accent' : 'bg-muted'
               }`}
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
+            {onToggleCollapsed && (
+              <button
+                type="button"
+                onClick={onToggleCollapsed}
+                title={`Collapse sidebar (${TOGGLE_SIDEBAR_SHORTCUT})`}
+                aria-label="Collapse sidebar"
+                className="p-1 rounded-md bg-muted hover:bg-accent text-primary border border-sidebar-border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+              >
+                <PanelLeftClose className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -197,6 +262,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="relative">
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
           <input
+            ref={searchRef}
             type="text"
             placeholder={routines.length > 0 ? 'Filter tables & functions...' : 'Filter tables...'}
             value={searchTerm}
@@ -428,6 +494,69 @@ export const Sidebar: React.FC<SidebarProps> = ({
         >
           <Network className="w-4 h-4" />
           <span>Interactive Visual ERD</span>
+        </button>
+      </div>
+      </div>
+
+      <div
+        inert={!collapsed}
+        style={{
+          width: COLLAPSED_SIDEBAR_WIDTH,
+          opacity: collapsed ? 1 : 0,
+          transition: resizing ? 'none' : 'opacity var(--motion-base) var(--ease-out)',
+        }}
+        className="absolute inset-y-0 left-0 flex flex-col items-center gap-2 py-3"
+      >
+        {onToggleCollapsed && (
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            title={`Expand sidebar (${TOGGLE_SIDEBAR_SHORTCUT})`}
+            aria-label="Expand sidebar"
+            className={RAIL_BUTTON_CLASS}
+          >
+            <PanelLeftOpen className="w-4 h-4" />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={expandToSearch}
+          title="Search tables"
+          aria-label="Search tables"
+          className={RAIL_BUTTON_CLASS}
+        >
+          <Search className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={refreshSchemas}
+          disabled={refreshingSchemas}
+          title="Refresh schemas"
+          aria-label="Refresh schemas"
+          className={RAIL_BUTTON_CLASS}
+        >
+          <RefreshCw className={`w-4 h-4 ${refreshingSchemas ? 'animate-spin' : ''}`} />
+        </button>
+        <button
+          type="button"
+          title="Create…"
+          aria-label="Create a table, view or function"
+          aria-haspopup="menu"
+          aria-expanded={createMenu != null}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={toggleCreateMenu}
+          className={`${RAIL_BUTTON_CLASS} ${createMenu ? 'bg-accent' : ''}`}
+        >
+          <Plus className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={onOpenErd}
+          title="Interactive Visual ERD"
+          aria-label="Interactive Visual ERD"
+          className="mt-auto p-2 rounded-md bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+        >
+          <Network className="w-4 h-4" />
         </button>
       </div>
       <AnimatePresence>

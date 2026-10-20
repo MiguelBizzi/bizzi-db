@@ -16,6 +16,7 @@ import {
   SquareFunction,
   Workflow,
   Eye,
+  PanelLeft,
 } from 'lucide-react';
 import { DatabaseSchema, RoutineDefinition, TableSchema, SavedQuery } from '../types';
 import { knownRowCount } from '../lib/format';
@@ -39,6 +40,7 @@ interface CommandPaletteProps {
   onSelectRoutine?: (routine: RoutineDefinition) => void;
   onNewRoutine?: () => void;
   onNewView?: () => void;
+  onToggleSidebar?: () => void;
   onSelectDatabase: (dbId: string) => void;
 }
 
@@ -62,6 +64,7 @@ const CommandPaletteBody: React.FC<CommandPaletteProps> = ({
   onSelectRoutine,
   onNewRoutine,
   onNewView,
+  onToggleSidebar,
 }) => {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -118,6 +121,21 @@ const CommandPaletteBody: React.FC<CommandPaletteProps> = ({
               },
             ]
           : []),
+        ...(onToggleSidebar
+          ? [
+              {
+                id: 'action-toggle-sidebar',
+                label: 'Toggle Sidebar',
+                icon: PanelLeft,
+                iconClass: 'text-primary',
+                shortcut: shortcutLabel('view.toggleSidebar'),
+                run: () => {
+                  onToggleSidebar();
+                  onClose();
+                },
+              },
+            ]
+          : []),
         {
           id: 'action-erd',
           label: 'Open Interactive Visual Schema ERD',
@@ -169,6 +187,7 @@ const CommandPaletteBody: React.FC<CommandPaletteProps> = ({
       onOpenNewQuery,
       onNewRoutine,
       onNewView,
+      onToggleSidebar,
     ]
   );
 
