@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { columnTypesFor } from "@db/database";
-import { AlertCircle, Check, Plus, Table2, Trash2 } from "lucide-react";
+import { Check, Plus, Table2, Trash2 } from "lucide-react";
+import { ErrorNotice } from "../ui/ErrorNotice";
 import type { DatabaseDialect, TableSchema } from "../../types";
 import {
   buildCreateTableSql,
@@ -138,10 +139,7 @@ export const CreateTableDesigner: React.FC<CreateTableDesignerProps> = ({
       </div>
 
       {submitError && (
-        <div className="px-4 py-2 text-[11px] font-mono border-b bg-rose-500/10 text-rose-300 border-rose-500/20 flex items-start gap-2">
-          <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-          <span className="break-all">{submitError}</span>
-        </div>
+        <ErrorNotice message={submitError} className="px-4 py-2 text-[11px] font-mono border-b bg-rose-500/10 text-rose-300 border-rose-500/20" />
       )}
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">

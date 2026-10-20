@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  AlertCircle,
   AlertTriangle,
   Check,
   Code,
@@ -10,6 +9,7 @@ import {
   Trash2,
   Workflow,
 } from "lucide-react";
+import { ErrorNotice } from "../ui/ErrorNotice";
 import { columnTypesFor, dialectMeta } from "@db/database";
 import type { DatabaseDialect, RoutineDefinition, RoutineSource } from "../../types";
 import { objectDdlFor } from "../../lib/ddl/registry";
@@ -335,10 +335,7 @@ export const RoutineDesigner: React.FC<RoutineDesignerProps> = ({
       )}
 
       {submitError && (
-        <div className="field-message px-4 py-2 text-[11px] font-mono border-b bg-rose-500/10 text-rose-300 border-rose-500/20 flex items-start gap-2">
-          <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-          <span className="break-all">{submitError}</span>
-        </div>
+        <ErrorNotice message={submitError} className="field-message px-4 py-2 text-[11px] font-mono border-b bg-rose-500/10 text-rose-300 border-rose-500/20" />
       )}
 
       {draft ? (

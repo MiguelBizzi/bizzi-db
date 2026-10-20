@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { OverlayPresence } from '../ui/OverlayPresence';
 import { Drawer, DrawerPanel } from '../ui/Drawer';
+import { CopyButton } from '../ui/CopyButton';
+import { ErrorNotice } from '../ui/ErrorNotice';
 import {
   Check,
   X,
@@ -175,15 +177,17 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
           </div>
         </header>
 
-        {(statusMessage || errorMessage) && (
+        {errorMessage && (
+          <ErrorNotice
+            message={errorMessage}
+            className="px-4 py-2 text-[11px] font-mono border-b bg-rose-500/10 text-rose-300 border-rose-500/20"
+          />
+        )}
+        {!errorMessage && statusMessage && (
           <div
-            className={`px-4 py-2 text-[11px] font-mono border-b ${
-              errorMessage
-                ? 'bg-rose-500/10 text-rose-300 border-rose-500/20'
-                : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
-            }`}
+            className="px-4 py-2 text-[11px] font-mono border-b bg-emerald-500/10 text-emerald-300 border-emerald-500/20 select-text"
           >
-            {errorMessage || statusMessage}
+            {statusMessage}
           </div>
         )}
 
@@ -201,10 +205,11 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
 
           {mode === 'query' && total > 0 && (
             <div className="p-3 rounded-xl bg-background border border-amber-500/20 space-y-1.5">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
-                Full script
+              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-amber-400">
+                <span>Full script</span>
+                <CopyButton text={allSql} label="Copy script" className="-my-1 -mr-1" />
               </div>
-              <pre className="text-[11px] font-mono text-foreground/90 whitespace-pre-wrap break-all leading-relaxed">
+              <pre className="select-text text-[11px] font-mono text-foreground/90 whitespace-pre-wrap break-all leading-relaxed">
                 {allSql}
               </pre>
             </div>
@@ -608,14 +613,15 @@ function ChangeCard({
             <span className="text-[11px] font-mono text-foreground truncate">{title}</span>
           </div>
           {mode === 'visual' ? (
-            children
+            <div className="select-text">{children}</div>
           ) : (
-            <pre className="text-[11px] font-mono text-foreground/90 whitespace-pre-wrap break-all leading-relaxed">
+            <pre className="select-text text-[11px] font-mono text-foreground/90 whitespace-pre-wrap break-all leading-relaxed">
               {sql}
             </pre>
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {sql && <CopyButton text={sql} label="Copy SQL" className="p-1.5" />}
           <button
             type="button"
             disabled={busy}

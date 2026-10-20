@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import type { QueryErrorCategory, QueryErrorInfo } from '../types';
-import { categoryLabel, errorExcerpt, errorFacts } from './queryError';
+import type { QueryErrorCategory, QueryErrorInfo, QueryExecutionResult } from '../types';
+import { categoryLabel, errorExcerpt, errorFacts, queryErrorCopyText } from './queryError';
 
 describe('categoryLabel', () => {
   test('names every category', () => {
@@ -81,5 +81,38 @@ describe('errorFacts', () => {
       { label: 'Schema', value: 'public' },
     ]);
     expect(errorFacts({ category: 'other', message: 'x', detail: '' })).toEqual([]);
+  });
+});
+
+describe('queryErrorCopyText', () => {
+  const base = { query: 'SELECT 1\nFROM nope', executionTimeMs: 3 } as QueryExecutionResult;
+
+  test('falls back to the raw error without structured info', () => {
+    expect(queryErrorCopyText({ ...base, error: ' boom ' })).toBe('boom');
+    expect(queryErrorCopyText({ ...base })).toBe('Query failed with no message from the server.');
+  });
+
+  test('includes everything the card shows, in order', () => {
+    const info: QueryErrorInfo = {
+      category: 'reference',
+      code: '42P01',
+      message: 'relation "nope" does not exist',
+      position: { offset: 15, line: 2, column: 6 },
+      detail: 'some detail',
+      table: 'nope',
+      hint: 'check the name',
+    } as QueryErrorInfo;
+    expect(queryErrorCopyText({ ...base, errorInfo: info })).toBe(
+      [
+        'Reference error (42P01)',
+        'relation "nope" does not exist',
+        'Line 2, column 6',
+        '2 │ FROM nope',
+        '         ^',
+        'Detail: some detail',
+        'Table: nope',
+        'Hint: check the name',
+      ].join('\n')
+    );
   });
 });

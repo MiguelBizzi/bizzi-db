@@ -1,7 +1,8 @@
 import { AlertCircle } from 'lucide-react';
-import { categoryLabel, errorExcerpt, errorFacts } from '../../lib/queryError';
+import { categoryLabel, errorExcerpt, errorFacts, queryErrorCopyText } from '../../lib/queryError';
 import { queryErrorText } from '../../lib/sqlQuery';
 import type { QueryExecutionResult } from '../../types';
+import { CopyButton } from '../ui/CopyButton';
 
 /** What the database said went wrong with a query, and where. */
 export function QueryErrorCard({ result }: { result: QueryExecutionResult }) {
@@ -10,13 +11,16 @@ export function QueryErrorCard({ result }: { result: QueryExecutionResult }) {
   const facts = info ? errorFacts(info) : [];
 
   return (
-    <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/40 text-red-400 space-y-3 font-mono text-xs shadow-lg">
+    <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/40 text-red-400 space-y-3 font-mono text-xs shadow-lg select-text">
       <div className="flex items-center gap-2 font-bold text-red-400">
         <AlertCircle className="w-5 h-5 shrink-0" />
         <span>{info ? categoryLabel(info.category) : 'SQL Execution Error'}</span>
-        {info?.code && (
-          <span className="ml-auto text-[11px] font-normal text-red-400/80">{info.code}</span>
-        )}
+        <span className="ml-auto flex items-center gap-1.5">
+          {info?.code && (
+            <span className="text-[11px] font-normal text-red-400/80">{info.code}</span>
+          )}
+          <CopyButton text={queryErrorCopyText(result)} label="Copy error" />
+        </span>
       </div>
 
       <p className="bg-background p-3 rounded-lg border border-red-500/30 leading-relaxed text-red-400 whitespace-pre-wrap break-words">

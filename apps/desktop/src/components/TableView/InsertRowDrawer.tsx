@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { OverlayPresence } from "../ui/OverlayPresence";
 import { Drawer, DrawerPanel } from "../ui/Drawer";
-import { AlertCircle, Check, Clock, Key, Link, Plus, X } from "lucide-react";
+import { Check, Clock, Key, Link, Plus, X } from "lucide-react";
+import { ErrorNotice } from "../ui/ErrorNotice";
 import type { ColumnDefinition, TableSchema } from "../../types";
 import { Select } from "../ui/Select";
 import { ForeignKeyPicker, type FkLookupFn } from "./ForeignKeyPicker";
@@ -180,10 +181,7 @@ const InsertRowDrawerBody: React.FC<InsertRowDrawerProps> = ({
         </header>
 
         {submitError && (
-          <div className="field-message px-4 py-2 text-[11px] font-mono border-b bg-rose-500/10 text-rose-300 border-rose-500/20 flex items-start gap-2">
-            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-            <span className="break-all">{submitError}</span>
-          </div>
+          <ErrorNotice message={submitError} className="field-message px-4 py-2 text-[11px] font-mono border-b bg-rose-500/10 text-rose-300 border-rose-500/20" />
         )}
 
         <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col">

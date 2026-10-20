@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { OverlayPresence } from '../ui/OverlayPresence';
 import { Modal, ModalPanel } from '../ui/Modal';
-import { AlertCircle, AlertTriangle, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Trash2, X } from 'lucide-react';
+import { ErrorNotice } from '../ui/ErrorNotice';
 import type { ColumnDefinition, TableSchema } from '../../types';
 import { buildDropColumnSql, canConfirmDelete } from '../../lib/schemaChange';
 
@@ -93,10 +94,7 @@ const DeleteColumnModalBody: React.FC<DeleteColumnModalProps> = ({
 
         <form onSubmit={handleSubmit} className="p-4 space-y-3">
           {submitError && (
-            <div className="field-message p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px] font-mono flex items-start gap-2">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-              <span className="break-all">{submitError}</span>
-            </div>
+            <ErrorNotice message={submitError} className="field-message p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px] font-mono" />
           )}
 
           <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-200 text-[11px] font-mono flex items-start gap-2">
