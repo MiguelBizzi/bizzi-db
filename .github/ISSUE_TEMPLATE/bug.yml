@@ -1,0 +1,48 @@
+name: Bug report
+description: Something in Bizzi DB does not work as expected
+labels: [bug, needs-triage]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Bizzi DB version
+      description: The version you installed, as named on the GitHub Release you downloaded it from.
+      placeholder: 0.1.18
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: macOS version
+      placeholder: macOS 15.1, Apple silicon
+    validations:
+      required: true
+  - type: input
+    id: postgres
+    attributes:
+      label: PostgreSQL version
+      description: Run `SELECT version();` if you are not sure.
+      placeholder: PostgreSQL 16.4
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the connection ...
+        2. Click ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error text or logs
+      description: Optional. Remove passwords, connection strings and any data you do not want public before pasting.
+      render: shell
