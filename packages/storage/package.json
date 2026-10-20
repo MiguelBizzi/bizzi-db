@@ -11,6 +11,6 @@
   },
   "dependencies": {
     "@db/shared": "workspace:*",
-    "@tauri-apps/api": "2.2.0"
+    "@tauri-apps/api": "2.12.4"
   }
 }
