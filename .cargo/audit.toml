@@ -1,0 +1,11 @@
+# The only consumer of `zip` is tauri-plugin-updater (cargo tree -i zip --target all). Every release of that
+# plugin, including the newest stable, depends on zip 2.x or 4.x, and the advisories are fixed only in zip >=9.
+# The affected `extract()` calls run on update archives, which the plugin verifies against the minisign public
+# key in tauri.conf.json before unpacking, and macOS updates are .tar.gz, not zip. App code never uses zip.
+# Drop these ignores once tauri-plugin-updater ships a release that depends on zip >=9.
+[advisories]
+ignore = [
+  "RUSTSEC-2026-0367",
+  "RUSTSEC-2026-0368",
+  "RUSTSEC-2026-0369",
+]
