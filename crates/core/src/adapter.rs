@@ -74,6 +74,8 @@ impl std::fmt::Debug for SshTunnelAuth {
 }
 
 #[async_trait]
+// async-trait 0.1.83 puts #[must_use] on methods whose futures are already must_use; clippy 1.99 flags that expansion.
+#[allow(clippy::double_must_use)]
 pub trait Session: Send + Sync {
     async fn introspect(&self) -> Result<DatabaseSchema, AdapterError>;
     async fn schema_fingerprint(&self) -> Result<String, AdapterError>;
@@ -114,6 +116,8 @@ pub trait Session: Send + Sync {
 }
 
 #[async_trait]
+// async-trait 0.1.83 puts #[must_use] on methods whose futures are already must_use; clippy 1.99 flags that expansion.
+#[allow(clippy::double_must_use)]
 pub trait Adapter: Send + Sync {
     async fn test_connection(&self, cfg: &ConnectConfig) -> Result<(u64, String), AdapterError>;
     async fn connect(&self, cfg: &ConnectConfig) -> Result<Box<dyn Session>, AdapterError>;
