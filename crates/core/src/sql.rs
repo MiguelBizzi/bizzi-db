@@ -528,9 +528,6 @@ mod tests {
     fn ranges_count_utf16_units_not_chars() {
         // The emoji is one char but two UTF-16 units, which is what the editor counts.
         let sql = "SELECT '😀'; SELECT 2";
-        assert_eq!(
-            split_sql_ranges(sql),
-            vec![range(0, 11), range(13, 21)]
-        );
+        assert_eq!(split_sql_ranges(sql), vec![range(0, 11), range(13, 21)]);
     }
 }
