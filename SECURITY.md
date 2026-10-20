@@ -54,7 +54,13 @@ There is still no application backend. If licensing or subscriptions are added l
 
 ## Reporting
 
-Please open a private report (or a GitHub security advisory if the repository is public) rather than a public issue for credential or data-exposure bugs.
+Please report vulnerabilities privately, never in a public issue. This applies especially to credential or data-exposure bugs.
+
+Use [Report a vulnerability](https://github.com/MiguelBizzi/bizzi-db/security/advisories/new) on the repository's Security tab. Only the maintainer can see the report.
+
+- **Supported versions:** only the latest release receives security fixes.
+- **Response:** expect an acknowledgement within 7 days.
+- **Disclosure:** please give us a reasonable chance to ship a fix before you disclose the issue publicly. Reporters are credited in the advisory unless they prefer otherwise.
 
 ## Distribution checklist (when shipping)
 
