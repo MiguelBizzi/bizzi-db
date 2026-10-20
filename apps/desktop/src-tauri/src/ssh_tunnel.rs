@@ -78,9 +78,10 @@ fn open_blocking(
                     let dest_host = dest_host.clone();
                     thread::spawn(move || {
                         if let Ok(session) = session.lock() {
-                            match session.channel_direct_tcpip(&dest_host, dest_port, None) {
-                                Ok(channel) => pump(local, channel),
-                                Err(_) => {}
+                            if let Ok(channel) =
+                                session.channel_direct_tcpip(&dest_host, dest_port, None)
+                            {
+                                pump(local, channel);
                             }
                         }
                     });
