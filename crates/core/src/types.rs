@@ -56,19 +56,11 @@ pub enum SshAuthMethod {
     PrivateKey,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
     #[serde(default)]
     pub keychain_enabled: bool,
-}
-
-impl Default for AppSettings {
-    fn default() -> Self {
-        Self {
-            keychain_enabled: false,
-        }
-    }
 }
 
 fn default_ssh_port() -> u16 {
@@ -614,7 +606,7 @@ fn default_true() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceState {
     pub tabs: Vec<WorkspaceTab>,
@@ -623,17 +615,6 @@ pub struct WorkspaceState {
     /// Last active tab of each connection, keyed by connection id.
     #[serde(default)]
     pub active_tab_by_connection: std::collections::HashMap<String, String>,
-}
-
-impl Default for WorkspaceState {
-    fn default() -> Self {
-        Self {
-            tabs: Vec::new(),
-            active_tab_id: None,
-            current_connection_id: None,
-            active_tab_by_connection: std::collections::HashMap::new(),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -769,7 +750,7 @@ mod tests {
     fn app_settings_default_disables_keychain() {
         let settings: AppSettings = serde_json::from_str("{}").unwrap();
         assert!(!settings.keychain_enabled);
-        let encoded = serde_json::to_value(&AppSettings::default()).unwrap();
+        let encoded = serde_json::to_value(AppSettings::default()).unwrap();
         assert_eq!(encoded["keychainEnabled"], false);
     }
 }

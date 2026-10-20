@@ -106,7 +106,7 @@ mod tests {
         assert_eq!(coerce_text("true"), json!(true));
         assert_eq!(coerce_text("FALSE"), json!(false));
         assert_eq!(coerce_text("42"), json!(42));
-        assert_eq!(coerce_text("3.14"), json!(3.14));
+        assert_eq!(coerce_text("2.75"), json!(2.75));
         assert_eq!(coerce_text("1e3"), json!(1000.0));
         assert_eq!(coerce_text("007"), json!("007"));
         assert_eq!(coerce_text("hello"), json!("hello"));
