@@ -129,9 +129,9 @@ jobs:
         if: runner.os == 'macOS'
         run: cargo clippy -p db-desktop --all-targets --locked -- -D warnings
 
-  # Every commit needs a Signed-off-by line (see CONTRIBUTING.md). Dependabot commits are exempt.
+  # Every commit needs a Signed-off-by line (see CONTRIBUTING.md).
   dco:
-    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
