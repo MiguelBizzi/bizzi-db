@@ -4,6 +4,19 @@ All notable changes to Bizzi DB are recorded here. The format follows [Keep a Ch
 
 New entries go under `## [Unreleased]`; the release process moves them under a version heading. Write for people who use the app, not for people who read commits. See [RELEASING.md](RELEASING.md).
 
+## [0.1.19] - 2026-10-20 - A collapsible sidebar, and errors you can copy
+
+The sidebar folds down to a slim rail or resizes to fit, error messages can be copied, and Bizzi DB is now set up for outside contributors.
+
+### New
+- Collapse the sidebar to an icon rail, or drag its edge to resize it. Both stay as you left them. Use View → Toggle Sidebar (Cmd+B) or the command palette.
+- Error messages have a copy button, and their text can be selected. This covers failed queries, pending changes, and the schema, view and function designers.
+
+### Better
+- There is now a contributing guide, a code of conduct and a governance note, with issue forms and a pull request template, so reporting a bug or sending a fix is easier.
+- Security problems can be reported privately from the repository's Security tab.
+- Release notes on GitHub are now taken from the changelog, and every change is built and checked automatically before it is merged.
+
 ## [0.1.18] - 2026-10-18 - A native menu bar, and objects managed in place
 
 Actions now live in a native menu with keyboard shortcuts, and you can design views, write functions and inspect indexes without leaving the app.

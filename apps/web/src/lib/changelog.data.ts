@@ -5,6 +5,35 @@ export const UPCOMING: UpcomingEntry | null = null;
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.19",
+    "date": "2026-10-20",
+    "releases": 1,
+    "title": "A collapsible sidebar, and errors you can copy",
+    "summary": "The sidebar folds down to a slim rail or resizes to fit, error messages can be copied, and Bizzi DB is now set up for outside contributors.",
+    "changes": [
+      {
+        "kind": "new",
+        "text": "Collapse the sidebar to an icon rail, or drag its edge to resize it. Both stay as you left them. Use View → Toggle Sidebar (Cmd+B) or the command palette."
+      },
+      {
+        "kind": "new",
+        "text": "Error messages have a copy button, and their text can be selected. This covers failed queries, pending changes, and the schema, view and function designers."
+      },
+      {
+        "kind": "better",
+        "text": "There is now a contributing guide, a code of conduct and a governance note, with issue forms and a pull request template, so reporting a bug or sending a fix is easier."
+      },
+      {
+        "kind": "better",
+        "text": "Security problems can be reported privately from the repository's Security tab."
+      },
+      {
+        "kind": "better",
+        "text": "Release notes on GitHub are now taken from the changelog, and every change is built and checked automatically before it is merged."
+      }
+    ]
+  },
+  {
     "version": "0.1.18",
     "date": "2026-10-18",
     "releases": 1,
