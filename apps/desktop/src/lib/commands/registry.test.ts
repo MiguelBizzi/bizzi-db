@@ -69,6 +69,7 @@ describe('COMMANDS registry invariants', () => {
         'conn.disconnect',
         'conn.refreshSchema',
         'view.palette',
+        'view.toggleSidebar',
         'view.erd',
         'view.metrics',
         'view.activity',
@@ -103,6 +104,7 @@ describe('COMMANDS registry invariants', () => {
       ['view.prevTab', 'Previous Tab', 'CmdOrCtrl+Shift+['],
       ['view.splitRight', 'Split Pane Right', 'CmdOrCtrl+Alt+\\'],
       ['view.splitDown', 'Split Pane Down', undefined],
+      ['view.toggleSidebar', 'Toggle Sidebar', 'CmdOrCtrl+B'],
     ];
     for (let n = 1; n <= 8; n++) spec.push([`view.tab.${n}`, `Tab ${n}`, `CmdOrCtrl+${n}`]);
     spec.push(['view.tab.9', 'Last Tab', 'CmdOrCtrl+9']);
@@ -197,6 +199,9 @@ describe('isCommandEnabled', () => {
     ['file.newQuery', {}, false],
     ['view.erd', { connectionOpen: true }, true],
     ['view.erd', {}, false],
+    ['view.toggleSidebar', { connectionOpen: true }, true],
+    ['view.toggleSidebar', {}, false],
+    ['view.toggleSidebar', { connectionOpen: true, modalOpen: true }, false],
     ['view.palette', { connectionOpen: true }, true],
     ['view.palette', { connectionOpen: false }, true],
     ['app.settings', {}, true],
@@ -468,6 +473,7 @@ describe('menuState for realistic app contexts', () => {
         'query.runAll',
         'query.review',
         'view.palette',
+        'view.toggleSidebar',
         'view.erd',
         'view.metrics',
         'view.activity',
@@ -530,7 +536,7 @@ describe('menuState for realistic app contexts', () => {
   test('the command palette stays available on the connection picker (no connection)', () => {
     const state = menuState(ctx({ connectionOpen: false }));
     expect(state.enabled['view.palette']).toBe(true);
-    for (const id of ['view.erd', 'view.metrics', 'view.activity', 'file.newQuery', 'query.review']) {
+    for (const id of ['view.erd', 'view.toggleSidebar', 'view.metrics', 'view.activity', 'file.newQuery', 'query.review']) {
       expect(state.enabled[id]).toBe(false);
     }
   });

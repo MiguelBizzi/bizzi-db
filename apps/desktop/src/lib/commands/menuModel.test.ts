@@ -134,7 +134,7 @@ describe('buildMenuModel', () => {
     ]);
   });
 
-  test('view submenu holds panels, tab navigation, the Go to Tab submenu, splits and fullscreen', () => {
+  test('view submenu holds the palette, sidebar toggle, panels, tab navigation, the Go to Tab submenu, splits and fullscreen', () => {
     const goToTab: MenuNode = {
       kind: 'submenu',
       id: 'view.goToTab',
@@ -143,6 +143,7 @@ describe('buildMenuModel', () => {
     };
     expect(submenu(buildMenuModel(), 'view').items).toEqual([
       { kind: 'item', commandId: 'view.palette' },
+      { kind: 'item', commandId: 'view.toggleSidebar' },
       { kind: 'separator' },
       { kind: 'item', commandId: 'view.erd' },
       { kind: 'item', commandId: 'view.metrics' },

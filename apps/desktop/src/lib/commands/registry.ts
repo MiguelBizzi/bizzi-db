@@ -119,6 +119,7 @@ export const COMMANDS: readonly Command[] = [
     enabled: () => true,
     allowInModal: true,
   },
+  { id: 'view.toggleSidebar', label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+B', enabled: connectionOpen },
   { id: 'view.erd', label: 'Schema Diagram (ERD)', accelerator: 'CmdOrCtrl+Shift+E', enabled: connectionOpen },
   { id: 'view.metrics', label: 'Database Metrics', accelerator: 'CmdOrCtrl+Shift+M', enabled: connectionOpen },
   { id: 'view.activity', label: 'Activity Log', accelerator: 'CmdOrCtrl+Shift+L', enabled: connectionOpen },

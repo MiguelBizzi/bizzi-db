@@ -68,6 +68,14 @@ import {
 } from '@db/storage';
 import { Database, Loader2 } from 'lucide-react';
 import { invokeErrorMessage } from './lib/invokeError';
+import { SidebarResizeHandle } from './components/ui/SidebarResizeHandle';
+import {
+  DEFAULT_SIDEBAR_WIDTH,
+  readSidebarCollapsed,
+  readSidebarWidth,
+  writeSidebarCollapsed,
+  writeSidebarWidth,
+} from './lib/sidebarLayout';
 import { firstExecutionError } from './lib/executionResult';
 import { resolveRoutine, routineTabTitle, type RoutineTarget } from './lib/routineTabs';
 import { objectDdlFor } from './lib/ddl/registry';
@@ -183,6 +191,14 @@ const EMPTY_WORKSPACE: WorkspaceState = {
   activeTabByConnection: {},
 };
 
+function safeLocalStorage(): Storage | undefined {
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
 export default function App() {
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
   const [folders, setFolders] = useState<ConnectionFolder[]>([]);
@@ -210,6 +226,11 @@ export default function App() {
   const [connectError, setConnectError] = useState<string | null>(null);
 
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => readSidebarWidth(safeLocalStorage()));
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() =>
+    readSidebarCollapsed(safeLocalStorage())
+  );
+  const [sidebarResizing, setSidebarResizing] = useState(false);
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
   const [isPendingChangesOpen, setIsPendingChangesOpen] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
@@ -987,6 +1008,18 @@ export default function App() {
     const id = pane ? pick(pane.tabIds, pane.activeTabId) : null;
     if (id) handleSelectPaneTab(activePaneId, id);
   };
+
+  const toggleSidebar = () => setSidebarCollapsed((collapsed) => !collapsed);
+  const updateSidebarWidth = (width: number) => setSidebarWidth(width);
+
+  useEffect(() => {
+    writeSidebarCollapsed(safeLocalStorage(), sidebarCollapsed);
+  }, [sidebarCollapsed]);
+
+  // Persist once the drag settles rather than on every pointer move.
+  useEffect(() => {
+    if (!sidebarResizing) writeSidebarWidth(safeLocalStorage(), sidebarWidth);
+  }, [sidebarWidth, sidebarResizing]);
 
   const handleResizeSplit = (splitId: string, sizes: [number, number]) => {
     setLayout((prev) => resizeSplit(prev, splitId, sizes));
@@ -1968,6 +2001,7 @@ export default function App() {
       'conn.refreshSchema': () => void refreshSchemas(),
       'conn.refreshTable': refreshActiveTable,
       'view.palette': () => setIsCommandPaletteOpen((open) => !open),
+      'view.toggleSidebar': toggleSidebar,
       'view.erd': openErd,
       'view.metrics': openMetrics,
       'view.activity': () => setIsActivityLogOpen(true),
@@ -2046,6 +2080,10 @@ export default function App() {
         <div className="flex-1 flex overflow-hidden relative">
           {currentDatabase ? (
             <Sidebar
+              width={sidebarWidth}
+              collapsed={sidebarCollapsed}
+              resizing={sidebarResizing}
+              onToggleCollapsed={toggleSidebar}
               currentDatabase={currentDatabase}
               activeTableId={activeTab?.type === 'table_data' ? activeTab.tableId : undefined}
               onSelectTableData={handleSelectTableData}
@@ -2085,6 +2123,14 @@ export default function App() {
             />
           ) : (
             <aside className="w-64 border-r border-border bg-card" />
+          )}
+          {currentDatabase && !sidebarCollapsed && (
+            <SidebarResizeHandle
+              width={sidebarWidth}
+              onResize={updateSidebarWidth}
+              onReset={() => updateSidebarWidth(DEFAULT_SIDEBAR_WIDTH)}
+              onDragChange={setSidebarResizing}
+            />
           )}
 
           <div className="flex-1 flex flex-col h-full overflow-hidden bg-background">
@@ -2147,6 +2193,7 @@ export default function App() {
         onSelectRoutine={(routine) => handleOpenRoutine(routine)}
         onNewRoutine={openNewRoutineDesigner}
         onNewView={openNewViewDesigner}
+        onToggleSidebar={currentDatabase ? toggleSidebar : undefined}
         onSelectDatabase={(dbId) => setCurrentDbId(dbId)}
       />
 
