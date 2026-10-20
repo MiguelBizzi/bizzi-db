@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   unit:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -29,6 +30,7 @@ jobs:
       - run: bun run test
 
   lint:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -48,6 +50,7 @@ jobs:
         run: bash .github/scripts/check-dco.test.sh
 
   audit:
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -60,6 +63,7 @@ jobs:
       - run: cargo audit
 
   integration:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -102,6 +106,12 @@ jobs:
   build:
     name: build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # A hung or slow build fails the job instead of spinning until GitHub's 6-hour limit.
+    timeout-minutes: 25
+    # bash -e on every OS: Windows defaults to PowerShell, which only reports the last command's exit code.
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -131,6 +141,7 @@ jobs:
 
   # Every commit needs a Signed-off-by line (see CONTRIBUTING.md).
   dco:
+    timeout-minutes: 5
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
