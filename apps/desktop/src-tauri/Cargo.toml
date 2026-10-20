@@ -8,7 +8,7 @@ name = "db_desktop_lib"
 crate-type = ["staticlib", "cdylib", "lib"]
 
 [build-dependencies]
-tauri-build = { version = "=2.0.4", features = [] }
+tauri-build = { version = "=2.2.0", features = [] }
 
 [dependencies]
 db-core = { path = "../../../crates/core" }
@@ -17,22 +17,22 @@ db-storage = { path = "../../../crates/storage" }
 serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "=2.2.0", features = [] }
-tauri-utils = "=2.2.0"
+tauri-utils = "=2.4.0"
 tokio.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 url = "=2.5.8"
-indexmap = "=2.6.0"
+indexmap = "=2.14.2"
 # Vendored OpenSSL so the universal macOS build can cross-compile
 # x86_64 without a second system OpenSSL.
-ssh2 = { version = "=0.9.4", features = ["vendored-openssl"] }
-rfd = "0.15"
+ssh2 = { version = "=0.9.6", features = ["vendored-openssl"] }
+rfd = "0.17"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-tauri-plugin-updater = "=2.2.0"
-tauri-plugin-process = "=2.2.0"
+tauri-plugin-updater = "=2.8.1"
+tauri-plugin-process = "=2.2.2"
 tauri-plugin-opener = "=2.3.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "0.5"
-objc2-app-kit = { version = "0.2", features = ["NSWindow", "NSView", "NSButton", "NSControl", "NSResponder"] }
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSView", "NSButton", "NSControl", "NSResponder"] }
