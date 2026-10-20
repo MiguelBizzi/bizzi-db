@@ -23,6 +23,18 @@ jobs:
         with:
           bun-version: 1.3.11
 
+      # Runs before any build so a tag without a CHANGELOG.md section fails in seconds, not after a notarized build.
+      - name: Extract release notes
+        id: notes
+        run: |
+          set -euo pipefail
+          notes="$(bun apps/web/scripts/release-notes.ts "${GITHUB_REF_NAME#v}")"
+          {
+            echo "body<<RELEASE_NOTES_EOF"
+            echo "$notes"
+            echo "RELEASE_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
@@ -44,7 +56,7 @@ jobs:
           projectPath: apps/desktop
           tagName: ${{ github.ref_name }}
           releaseName: Bizzi DB ${{ github.ref_name }}
-          releaseBody: See the assets below to download and install this version.
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: false
           prerelease: false
           args: --target universal-apple-darwin
