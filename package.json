@@ -18,8 +18,8 @@
     "db:reset": "docker compose down -v && docker compose up -d --wait"
   },
   "devDependencies": {
-    "turbo": "^2.5.4",
-    "typescript": "~5.8.2"
+    "turbo": "^2.11.9",
+    "typescript": "~5.8.3"
   },
   "overrides": {
     "@tauri-apps/api": "2.2.0",
