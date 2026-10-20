@@ -8,6 +8,7 @@
     "dev": "turbo run dev --filter=desktop",
     "dev:web": "turbo run dev --filter=web",
     "build": "turbo run build",
+    "changelog:generate": "bun apps/web/scripts/generate-changelog.ts",
     "lint": "turbo run lint",
     "test": "turbo run test && cargo test --workspace --exclude db-desktop --locked",
     "test:watch": "bun test --watch",
