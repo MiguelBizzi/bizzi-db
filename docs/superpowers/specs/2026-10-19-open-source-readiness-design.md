@@ -85,7 +85,7 @@ One-paragraph summary.
 
 - An optional `<!-- from: 0.1.14, releases: 5 -->` comment on a heading preserves the landing page's multi-tag milestones, so the page renders as it does today.
 - History is backfilled from `changelog.ts`.
-- `apps/web/scripts/` gains a generator that produces the `changelog.ts` data from `CHANGELOG.md`. The generated file stays committed, and CI fails if it is stale (`--check`). `changelog.test.ts` keeps asserting that the newest entry matches `package.json`.
+- `apps/web/scripts/` gains a generator that produces the `changelog.ts` data from `CHANGELOG.md`. The generated file stays committed, and a unit test in `changelog.test.ts` fails if it is stale, which CI already runs through `bun run test`. That file also keeps asserting that the newest entry matches `package.json`.
 - A `scripts/release-notes` script prints the section for a given version. `release.yml` runs it before `tauri-action` and passes the output as `releaseBody`. It fails the release if the section is missing or empty.
 - The macOS signing, notarization, DMG branding, updater manifest and verification steps in `release.yml` are not modified. This is checked by diffing the workflow.
 - `RELEASING.md` and `.cursor/rules/cut-release.mdc` change in step 2: edit `CHANGELOG.md` instead of `changelog.ts`.
@@ -117,7 +117,7 @@ Windows and Linux installers, Windows code signing, a CLA, GitHub Discussions, a
 ## Verification
 
 - A test PR from a branch shows every required check green.
-- Unit tests cover the changelog parser, the generator `--check` mode and release-notes extraction (including the missing-section failure).
+- Unit tests cover the changelog parser, the stale-generated-file check and release-notes extraction (including the missing-section failure).
 - `git diff` of `release.yml` confirms the signing path is unchanged.
 - Rulesets and settings are read back with `gh api` after they are applied.
 - No real release is cut as part of this work.

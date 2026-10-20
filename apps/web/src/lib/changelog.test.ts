@@ -6,8 +6,18 @@ import {
 } from './changelog';
 import { parseRelease } from './useLatestRelease';
 import rootPackage from '../../../../package.json';
+import { readFileSync } from 'node:fs';
+import { parseChangelog, renderChangelogData } from '../../scripts/changelogMarkdown';
+
+const readRepoFile = (relative: string) =>
+  readFileSync(new URL(relative, import.meta.url), 'utf8');
 
 describe('changelog', () => {
+  test('changelog.data.ts is current with CHANGELOG.md', () => {
+    const generated = renderChangelogData(parseChangelog(readRepoFile('../../../../CHANGELOG.md')));
+    expect(readRepoFile('./changelog.data.ts')).toBe(generated);
+  });
+
   test('newest entry is the version this repo ships', () => {
     expect(CHANGELOG[0]?.version).toBe(rootPackage.version);
   });
