@@ -5,7 +5,10 @@ import type {
   SshAuthMethod,
   SslMode,
 } from '../types';
+import type { Platform } from './commands/accelerator';
+import { currentPlatform } from './commands/shortcutLabel';
 import { defaultSslForHost } from './connectionSecurity';
+import { secretStoreName } from './platformCopy';
 
 export type ConnectionModalTab = 'connection' | 'security';
 
@@ -48,6 +51,8 @@ export type ConnectionFormValues = {
 export type ConnectionFormErrorOptions = {
   passwordRequired: boolean;
   keychainEnabled: boolean;
+  /** Defaults to the host platform. */
+  platform?: Platform;
 };
 
 const CONNECTION_TAB_FIELDS: ConnectionFormField[] = [
@@ -133,7 +138,7 @@ export function connectionFormErrors(
     if (!values.sshUser.trim()) next.sshUser = 'Required';
     if (values.sshAuth === 'password') {
       if (!options.keychainEnabled) {
-        next.sshPassword = 'Enable the system keychain to use SSH password authentication';
+        next.sshPassword = `Enable the ${secretStoreName(options.platform ?? currentPlatform())} to use SSH password authentication`;
       } else if (options.passwordRequired && !values.sshPassword) {
         next.sshPassword = 'Required';
       }
