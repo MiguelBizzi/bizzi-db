@@ -124,7 +124,10 @@ jobs:
   # Runs after the macOS job so the two never race on latest.json; tauri-action merges the Windows entry into it.
   publish-windows:
     needs: publish
+    # Off until Azure Trusted Signing is set up and the Windows prerelease checks pass (RELEASING.md).
+    if: vars.WINDOWS_RELEASE_ENABLED == 'true'
     runs-on: windows-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
 
@@ -187,3 +190,34 @@ jobs:
           $status = (Get-AuthenticodeSignature $exe.FullName).Status
           if ($status -ne 'Valid') { throw "$($exe.Name) Authenticode status is $status, expected Valid" }
           Write-Host "$($exe.Name) has a valid Authenticode signature"
+
+      # Runs after any failed step: withdraws a signed-but-not-Valid or partially uploaded
+      # installer and its updater entry. Assets that were never uploaded are not an error.
+      - name: Withdraw the Windows assets after a failure
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          assets=$(gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name' 2>/dev/null || true)
+          while IFS= read -r name; do
+            case "$name" in
+              *-setup.exe | *-setup.exe.sig)
+                gh release delete-asset "$TAG" "$name" --repo "$REPO" -y
+                echo "Deleted $name"
+                ;;
+            esac
+          done <<< "$assets"
+          dir="$RUNNER_TEMP/latest-json"
+          mkdir -p "$dir"
+          if gh release download "$TAG" --repo "$REPO" --pattern latest.json --dir "$dir" --clobber; then
+            jq 'del(.platforms["windows-x86_64"])' "$dir/latest.json" > "$dir/latest.edited.json"
+            mv "$dir/latest.edited.json" "$dir/latest.json"
+            gh release upload "$TAG" "$dir/latest.json" --repo "$REPO" --clobber
+            echo "Removed windows-x86_64 from latest.json"
+          else
+            echo "No latest.json on $TAG; nothing to edit"
+          fi
