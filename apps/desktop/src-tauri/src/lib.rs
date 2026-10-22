@@ -611,15 +611,14 @@ mod macos;
 
 pub fn run() {
     #[cfg(any(target_os = "windows", target_os = "linux"))]
-    let builder = tauri::Builder::default().plugin(tauri_plugin_single_instance::init(
-        |app, _args, _cwd| {
+    let builder =
+        tauri::Builder::default().plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.unminimize();
                 let _ = window.set_focus();
             }
-        },
-    ));
+        }));
     #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     let builder = tauri::Builder::default();
 
