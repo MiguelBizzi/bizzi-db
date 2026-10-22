@@ -7,9 +7,9 @@ import {
   type PredefinedMenuItemOptions,
   type SubmenuOptions,
 } from '@tauri-apps/api/menu';
-import { toTauriAccelerator, type Platform } from './accelerator';
+import { formatAccelerator, toTauriAccelerator, type Platform } from './accelerator';
 import type { MenuNode, PredefinedKind } from './menuModel';
-import { commandById } from './registry';
+import { acceleratorFor, commandById } from './registry';
 
 type StateValue = boolean | string;
 
@@ -87,6 +87,15 @@ const PREDEFINED: Record<PredefinedKind, PredefinedMenuItemOptions['item'] | nul
   bringAllToFront: null,
 };
 
+/**
+ * Off macOS the menu only displays the shortcut (after a tab, which Windows right-aligns):
+ * the webview keyboard listener runs the command, so the native accelerator must not fire too.
+ */
+export function menuItemText(label: string, accelerator: string | undefined, platform: Platform): string {
+  if (platform === 'macos' || !accelerator) return label;
+  return `${label}\t${formatAccelerator(accelerator, platform)}`;
+}
+
 function isTauriRuntime(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
@@ -95,7 +104,7 @@ interface BuildContext {
   api: MenuApi;
   platform: Platform;
   onRun(commandId: string): void;
-  items: Map<string, MenuItemHandle>;
+  items: Map<string, { handle: MenuItemHandle; accelerator: string | undefined }>;
   roles: Array<{ role: 'window' | 'help'; submenu: SubmenuHandle }>;
 }
 
@@ -113,13 +122,14 @@ async function buildNode(node: MenuNode, ctx: BuildContext): Promise<unknown | n
     }
     case 'item': {
       const command = commandById(node.commandId);
+      const accelerator = acceleratorFor(command, ctx.platform);
       const created = await ctx.api.MenuItem.new({
         id: node.commandId,
-        text: command.label,
-        ...(command.accelerator ? { accelerator: toTauriAccelerator(command.accelerator) } : {}),
+        text: menuItemText(command.label, accelerator, ctx.platform),
+        ...(ctx.platform === 'macos' && accelerator ? { accelerator: toTauriAccelerator(accelerator) } : {}),
         action: () => ctx.onRun(node.commandId),
       });
-      ctx.items.set(node.commandId, created);
+      ctx.items.set(node.commandId, { handle: created, accelerator });
       return created;
     }
     case 'submenu': {
@@ -193,7 +203,7 @@ export async function installMenu(opts: {
         // A key is cached only after its call succeeds, so failed keys are retried next time.
         for (const [id, value] of Object.entries(diffState(enabled, state.enabled))) {
           try {
-            await ctx.items.get(id)?.setEnabled(value as boolean);
+            await ctx.items.get(id)?.handle.setEnabled(value as boolean);
             enabled[id] = value as boolean;
           } catch (error) {
             failed.push({ id, error });
@@ -201,7 +211,8 @@ export async function installMenu(opts: {
         }
         for (const [id, value] of Object.entries(diffState(labels, state.labels))) {
           try {
-            await ctx.items.get(id)?.setText(value as string);
+            const item = ctx.items.get(id);
+            await item?.handle.setText(menuItemText(value as string, item.accelerator, opts.platform));
             labels[id] = value as string;
           } catch (error) {
             failed.push({ id, error });

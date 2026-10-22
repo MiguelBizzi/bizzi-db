@@ -312,4 +312,42 @@ describe('installMenu', () => {
     });
     expect(win.predefined[2]).toEqual({ item: 'Quit', text: 'Exit' });
   });
+  test('windows shows the shortcut as tab-separated text and registers no accelerator', async () => {
+    const tableModel: MenuNode[] = [
+      { kind: 'submenu', id: 'file', label: 'File', items: [{ kind: 'item', commandId: 'file.newTable' }] },
+      {
+        kind: 'submenu',
+        id: 'query',
+        label: 'Query',
+        items: [{ kind: 'item', commandId: 'query.run' }],
+      },
+    ];
+    const built = makeFakeApi();
+    const win = await installMenu({
+      model: tableModel,
+      platform: 'windows',
+      onRun: () => {},
+      api: built.api,
+      isTauri: alwaysTauri,
+    });
+    const table = built.items.get('file.newTable');
+    expect(table?.opts.text).toBe('New Table…\tCtrl+Shift+N');
+    expect(table?.opts).not.toHaveProperty('accelerator');
+    await win?.applyState({ enabled: {}, labels: { 'query.run': 'Run Selection' } });
+    expect(built.items.get('query.run')?.calls).toContain('text:Run Selection\tCtrl+Enter');
+  });
+
+  test('macOS keeps the native accelerator and the bare label', async () => {
+    const built = makeFakeApi();
+    await installMenu({
+      model: [{ kind: 'submenu', id: 'file', label: 'File', items: [{ kind: 'item', commandId: 'file.newTable' }] }],
+      platform: 'macos',
+      onRun: () => {},
+      api: built.api,
+      isTauri: alwaysTauri,
+    });
+    const table = built.items.get('file.newTable');
+    expect(table?.opts.text).toBe('New Table…');
+    expect(table?.opts.accelerator).toBe('CmdOrCtrl+Shift+N');
+  });
 });
