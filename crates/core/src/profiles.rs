@@ -59,7 +59,12 @@ pub fn validate_ssh_save_input(
     match input.ssh_auth {
         SshAuthMethod::Password => {
             if !keychain_enabled {
-                return Err("SSH password authentication requires the system keychain".into());
+                return Err(if cfg!(windows) {
+                    "SSH password authentication requires the Windows Credential Manager"
+                } else {
+                    "SSH password authentication requires the system keychain"
+                }
+                .into());
             }
             if input.ssh_password.is_empty() && input.id.is_none() {
                 return Err("SSH password is required".into());
@@ -414,7 +419,11 @@ mod tests {
         ssh.ssh_password = "ssh-secret".into();
         assert_eq!(
             validate_save_input(&ssh, false).unwrap_err(),
-            "SSH password authentication requires the system keychain"
+            if cfg!(windows) {
+                "SSH password authentication requires the Windows Credential Manager"
+            } else {
+                "SSH password authentication requires the system keychain"
+            }
         );
         assert!(validate_save_input(&ssh, true).is_ok());
 

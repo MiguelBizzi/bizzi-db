@@ -3,7 +3,7 @@ import { OverlayPresence } from "../ui/OverlayPresence";
 import { Modal, ModalPanel } from "../ui/Modal";
 import { Settings, X, AlertTriangle } from "lucide-react";
 import { currentPlatform } from "../../lib/commands/shortcutLabel";
-import { secretStoreName } from "../../lib/platformCopy";
+import { secretStoreLongName, secretStoreName } from "../../lib/platformCopy";
 import { Switch } from "../ui/Switch";
 import { Select, type SelectOption } from "../ui/Select";
 import type { MotionPreference } from "../../lib/motionPreference";
@@ -77,7 +77,8 @@ const SettingsModalBody: React.FC<SettingsModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const secretStore = secretStoreName(currentPlatform());
+  const platform = currentPlatform();
+  const secretStore = secretStoreName(platform);
   const storeLabel = secretStore.charAt(0).toUpperCase() + secretStore.slice(1);
 
   const checking = updateStatus.phase === "checking";
@@ -131,8 +132,9 @@ const SettingsModalBody: React.FC<SettingsModalProps> = ({
               </span>
             </div>
             <p className="text-[10px] text-muted-foreground">
-              When on, passwords and SSH secrets are stored in the operating system
-              keychain. When off, they are stored locally in an owner-only file.
+              When on, passwords and SSH secrets are stored in the{" "}
+              {secretStoreLongName(platform)}. When off, they are stored locally in
+              an owner-only file.
             </p>
           </div>
 

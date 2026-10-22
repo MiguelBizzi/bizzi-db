@@ -187,6 +187,22 @@ describe('connectionFormErrors', () => {
     ).toBeUndefined();
   });
 
+  test('names the platform secret store when SSH password auth is blocked', () => {
+    const values = {
+      ...defaultConnectionForm(),
+      password: 'secret',
+      sshEnabled: true,
+      sshHost: 'bastion',
+      sshUser: 'jump',
+      sshAuth: 'password' as const,
+      sshPassword: 'ssh-secret',
+    };
+    const message = (platform: 'macos' | 'windows') =>
+      connectionFormErrors(values, { passwordRequired: true, keychainEnabled: false, platform }).sshPassword;
+    expect(message('macos')).toBe('Enable the system keychain to use SSH password authentication');
+    expect(message('windows')).toBe('Enable the Windows Credential Manager to use SSH password authentication');
+  });
+
   test('requires an SSH password on create when using password auth', () => {
     const values = {
       ...defaultConnectionForm(),

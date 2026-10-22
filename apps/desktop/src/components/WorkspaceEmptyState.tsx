@@ -1,8 +1,6 @@
 import { Code, Plus, Table as TableIcon } from "lucide-react";
 import { shortcutLabel } from "../lib/commands/shortcutLabel";
 
-
-
 interface WorkspaceEmptyStateProps {
   onOpenNewQuery: () => void;
 }
