@@ -44,12 +44,12 @@ GitHub Actions secrets for a signed release:
 - `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 - Apple notarization: `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`
 
-Windows signing (Azure Trusted Signing), used by the `publish-windows` job:
+Windows signing (Azure Trusted Signing), optional, used by the `publish-windows` job:
 
 - Secrets: `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`
 - Repository variables: `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_SIGNING_PROFILE`, and `WINDOWS_RELEASE_ENABLED` (`true` turns the job on; anything else skips it)
 
-The endpoint must match `https://<region>.codesigning.azure.net`, so a wrong variable cannot send the credentials to another host. No unsigned Windows installer is published: a signing failure aborts the build, so no unsigned installer is produced. The job then downloads the published installer and fails unless its Authenticode status is `Valid`; on any failure a cleanup step deletes the `*-setup.exe` assets and removes `windows-x86_64` from `latest.json`.
+With none of the `AZURE_SIGNING_*` variables set, the Windows installer is published unsigned. Updates stay protected either way: the updater only installs packages signed with the minisign key above. With the variables set, the endpoint must match `https://<region>.codesigning.azure.net`, so a wrong variable cannot send the credentials to another host; a signing failure aborts the build, and the job fails unless the published installer's Authenticode status is `Valid`. Setting only some of the variables or secrets fails the job instead of shipping unsigned. On any failure a cleanup step deletes the `*-setup.exe` assets and removes `windows-x86_64` from `latest.json`.
 
 Bundle id `com.bizzidb.app` is locked after the first public install (app-data path, keychain service, updater identity).
 

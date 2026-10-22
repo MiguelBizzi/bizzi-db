@@ -124,7 +124,7 @@ jobs:
   # Runs after the macOS job so the two never race on latest.json; tauri-action merges the Windows entry into it.
   publish-windows:
     needs: publish
-    # Off until Azure Trusted Signing is set up and the Windows prerelease checks pass (RELEASING.md).
+    # Off until the repository variable is set (RELEASING.md). Signing is optional: see "Decide Windows signing".
     if: vars.WINDOWS_RELEASE_ENABLED == 'true'
     runs-on: windows-latest
     timeout-minutes: 90
@@ -156,18 +156,25 @@ jobs:
 
       - uses: ilammy/setup-nasm@72793074d3c8cdda771dba85f6deafe00623038b # v1
 
-      - name: Install the Azure Trusted Signing CLI
-        run: cargo install trusted-signing-cli --locked --version 0.11.0
-
       - run: bun install --frozen-lockfile
 
-      - name: Write the signing config
+      # Signs with Azure Trusted Signing when the AZURE_SIGNING_* variables are set; with none of them set the
+      # installer ships unsigned. Setting only some of them fails here, before the build.
+      - name: Decide Windows signing
+        id: signing
         shell: bash
         env:
           AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
           AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
           AZURE_SIGNING_PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
         run: bun apps/desktop/scripts/write-windows-sign-config.ts "$RUNNER_TEMP/windows-sign.conf.json"
+
+      - name: Install the Azure Trusted Signing CLI
+        if: steps.signing.outputs.signed == 'true'
+        run: cargo install trusted-signing-cli --locked --version 0.11.0
 
       - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
@@ -185,18 +192,20 @@ jobs:
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
-          args: --config ${{ runner.temp }}/windows-sign.conf.json
+          args: ${{ steps.signing.outputs.signed == 'true' && format('--config {0}/windows-sign.conf.json', runner.temp) || '' }}
 
       # Hard gate: a release without all three platforms strands the installed apps on that platform.
       - name: Verify updater manifest
         shell: bash
         run: bun apps/desktop/scripts/verify-updater-manifest.ts "${{ github.ref_name }}" "${{ github.repository }}" darwin-aarch64,darwin-x86_64,windows-x86_64
 
-      # Download what users will actually get; an unsigned installer must never stay published.
-      - name: Verify the published installer signature
+      # Download what users will actually get. When signing is configured, an installer whose signature is not
+      # Valid must never stay published; unsigned releases only check that the installer was uploaded.
+      - name: Verify the published installer
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIGNED: ${{ steps.signing.outputs.signed }}
         run: |
           $dir = Join-Path $env:RUNNER_TEMP 'published'
           New-Item -ItemType Directory -Force $dir | Out-Null
@@ -205,6 +214,10 @@ jobs:
           $exe = Get-ChildItem $dir -Filter '*-setup.exe' | Select-Object -First 1
           if (-not $exe) { throw 'no *-setup.exe among the release assets' }
           $status = (Get-AuthenticodeSignature $exe.FullName).Status
+          if ($env:SIGNED -ne 'true') {
+            Write-Host "::warning title=Windows installer not signed::$($exe.Name) is published unsigned (Authenticode status $status)"
+            exit 0
+          }
           if ($status -ne 'Valid') { throw "$($exe.Name) Authenticode status is $status, expected Valid" }
           Write-Host "$($exe.Name) has a valid Authenticode signature"
 

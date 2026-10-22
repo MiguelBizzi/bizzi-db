@@ -1,8 +1,10 @@
 const ENDPOINT = /^https:\/\/[a-z0-9-]+\.codesigning\.azure\.net\/?$/;
-const NAMES = ['AZURE_SIGNING_ENDPOINT', 'AZURE_SIGNING_ACCOUNT', 'AZURE_SIGNING_PROFILE'] as const;
+const VARIABLES = ['AZURE_SIGNING_ENDPOINT', 'AZURE_SIGNING_ACCOUNT', 'AZURE_SIGNING_PROFILE'] as const;
+const SECRETS = ['AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET', 'AZURE_TENANT_ID'] as const;
 
 export type WindowsSignConfig =
-  | { ok: true; config: object }
+  | { ok: true; signed: true; config: object }
+  | { ok: true; signed: false }
   | { ok: false; errors: string[] };
 
 /**
@@ -10,16 +12,22 @@ export type WindowsSignConfig =
  * Trusted Signing. Kept out of tauri.conf.json so a local Windows build works
  * unsigned. The endpoint is pinned to Azure so a bad repository variable
  * cannot send the signing credentials elsewhere.
+ *
+ * With none of the signing variables set, the release ships unsigned: the
+ * updater still verifies every update with its own minisign key. Setting only
+ * some of them is a mistake and fails, so a half-configured account never
+ * silently produces an unsigned build.
  */
 export function windowsSignConfig(
   env: Record<string, string | undefined>,
 ): WindowsSignConfig {
-  const errors: string[] = [];
-  const [endpoint, account, profile] = NAMES.map((name) => {
-    const value = env[name]?.trim();
-    if (!value) errors.push(`${name} is not set`);
-    return value ?? '';
-  });
+  const value = (name: string) => env[name]?.trim() ?? '';
+  if (VARIABLES.every((name) => !value(name))) return { ok: true, signed: false };
+
+  const errors = [...VARIABLES, ...SECRETS]
+    .filter((name) => !value(name))
+    .map((name) => `${name} is not set`);
+  const [endpoint, account, profile] = VARIABLES.map(value);
   if (endpoint && !ENDPOINT.test(endpoint)) {
     errors.push('AZURE_SIGNING_ENDPOINT must look like https://<region>.codesigning.azure.net');
   }
@@ -27,6 +35,7 @@ export function windowsSignConfig(
 
   return {
     ok: true,
+    signed: true,
     config: {
       bundle: {
         windows: {
