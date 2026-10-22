@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import { LogicalPosition } from '@tauri-apps/api/dpi';
 import { diffState, installMenu, type MenuApi } from './menuHost';
 import type { MenuNode } from './menuModel';
 
@@ -11,6 +12,7 @@ function makeFakeApi(opts: { menuThrows?: boolean; helpRoleThrows?: boolean; fai
   const log: string[] = [];
   const items = new Map<string, FakeItem>();
   const predefined: Array<{ item: unknown; text?: string }> = [];
+  const popups: unknown[] = [];
   const api: MenuApi = {
     Menu: {
       async new(o) {
@@ -18,6 +20,10 @@ function makeFakeApi(opts: { menuThrows?: boolean; helpRoleThrows?: boolean; fai
         return {
           setAsAppMenu: async () => void log.push('setAsAppMenu'),
           setAsWindowMenu: async () => void log.push('setAsWindowMenu'),
+          popup: async (at?: unknown) => {
+            log.push('popup');
+            popups.push(at);
+          },
           items: o.items,
         };
       },
@@ -59,7 +65,7 @@ function makeFakeApi(opts: { menuThrows?: boolean; helpRoleThrows?: boolean; fai
       },
     },
   };
-  return { api, log, items, predefined };
+  return { api, log, items, predefined, popups };
 }
 
 const model: MenuNode[] = [
@@ -98,19 +104,32 @@ describe('installMenu', () => {
     console.error = originalError;
   });
 
-  test('macOS sets the app menu once and never the window menu', async () => {
+  test('macOS sets the app menu once, never the window menu, and offers no popup', async () => {
     const { api, log } = makeFakeApi();
     const host = await installMenu({ model, platform: 'macos', onRun: () => {}, api, isTauri: alwaysTauri });
     expect(host).not.toBeNull();
     expect(log.filter((l) => l === 'setAsAppMenu')).toHaveLength(1);
     expect(log).not.toContain('setAsWindowMenu');
+    expect(host?.popup).toBeUndefined();
+    expect(log).not.toContain('popup');
   });
 
-  test('windows sets the window menu and not the app menu', async () => {
+  test('windows attaches no menu to the window or app', async () => {
     const { api, log } = makeFakeApi();
-    await installMenu({ model, platform: 'windows', onRun: () => {}, api, isTauri: alwaysTauri });
-    expect(log).toContain('setAsWindowMenu');
+    const host = await installMenu({ model, platform: 'windows', onRun: () => {}, api, isTauri: alwaysTauri });
+    expect(host).not.toBeNull();
+    expect(log).not.toContain('setAsWindowMenu');
     expect(log).not.toContain('setAsAppMenu');
+    expect(log).not.toContain('popup');
+  });
+
+  test('windows pops the menu up below the navbar at its left edge', async () => {
+    const { api, log, popups } = makeFakeApi();
+    const host = await installMenu({ model, platform: 'windows', onRun: () => {}, api, isTauri: alwaysTauri });
+    await host?.popup?.();
+    expect(log.filter((l) => l === 'popup')).toHaveLength(1);
+    expect(popups[0]).toBeInstanceOf(LogicalPosition);
+    expect(popups[0]).toMatchObject({ x: 16, y: 52 });
   });
 
   test('window and help roles are registered with NSApp on macOS only', async () => {

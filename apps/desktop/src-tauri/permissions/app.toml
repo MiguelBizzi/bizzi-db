@@ -28,6 +28,5 @@ commands.allow = [
   "workspace_save",
   "settings_get",
   "settings_save",
-  "ssh_pick_private_key",
-  "window_menu_set_visible"
+  "ssh_pick_private_key"
 ]

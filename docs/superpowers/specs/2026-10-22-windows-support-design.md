@@ -38,7 +38,7 @@ The open-source readiness spec (2026-10-19) decided that Windows stays a CI comp
 | G2 | WebView2 keeps browser keys: F5 / Ctrl+R reload the page (losing all state), Ctrl+P prints, Ctrl+F / F3 / Ctrl+G open a find bar, Alt+←/→ and the mouse back/forward buttons navigate. WKWebView has none of these. | Data loss on F5; UX differs from macOS. |
 | G3 | Ctrl+Alt is AltGr on many European layouts (AltGr+Q = `@` on German). A Ctrl+Alt shortcut matched naively would eat typed characters. | Typing breaks on non-US layouts. |
 | G4 | `titleBarStyle: "Overlay"` and `hiddenTitle` are macOS-only. Windows draws a native title bar above the app's own navbar, and `WindowControls` renders nothing off macOS. | Double header; UI differs. |
-| G5 | `setAsWindowMenu()` adds a native menu strip inside the window. | UI differs from macOS. |
+| G5 | `setAsWindowMenu()` attaches a native menu strip, which cannot render in the undecorated window (tao returns 0 from `WM_NCCALCSIZE`) and, hidden, still captures Alt. | UI differs from macOS; Alt is swallowed. |
 | G6 | No single-instance guard. Windows starts a second process on every shortcut click; two processes would share `workspace.sqlite`. | Data races; non-native. |
 | G7 | `libssh2-sys` uses WinCNG on Windows unless `openssl-on-win32` is enabled. WinCNG has no Ed25519. | Ed25519 SSH keys (the OpenSSH default) fail on Windows only. |
 | G8 | macOS-only copy: `QueryResultsView` says "(Cmd + Enter)"; `WorkspaceEmptyState`, `dataExport`, `WindowControls` each sniff the user agent themselves; "System keychain" is a macOS term. | Wrong labels on Windows. |
@@ -58,10 +58,10 @@ The open-source readiness spec (2026-10-19) decided that Windows stays a CI comp
 
 1. **One keyboard path off macOS.** On Windows (and Linux) a webview `keydown` listener (bubble phase) maps the event to an accelerator and runs the matching command through the same gate the menu uses. Native menu items carry no registered accelerator. Their label ends in `\t` + the shortcut, which is how Win32 right-aligns accelerator text. macOS keeps native accelerators unchanged. Because the listener runs in the bubble phase and skips `defaultPrevented` events, CodeMirror bindings still win, which is how macOS behaves today.
 2. **A disabled command never swallows its key.** The listener only calls `preventDefault` when the command ran. A Delete key in a text field still deletes text.
-3. **Browser keys are suppressed** (G2) whether or not a command claims them: F3, F5, Ctrl+F5, Ctrl+R, Ctrl+Shift+R, Ctrl+P, Ctrl+F, Ctrl+G, Ctrl+Shift+G, Ctrl+U, Ctrl+J, Ctrl+=, Ctrl+-, Ctrl+0, Alt+←, Alt+→, and mouse buttons 3 and 4.
+3. **Browser keys are suppressed** (G2) whether or not a command claims them: F3, F5, Shift+F5, Ctrl+F5, Ctrl+R, Ctrl+Shift+R, Ctrl+P, Ctrl+F, Ctrl+G, Ctrl+Shift+G, Ctrl+U, Ctrl+J, Ctrl+=, Ctrl+-, Ctrl+0, Alt+←, Alt+→, the BrowserRefresh, BrowserBack and BrowserForward keys, and mouse buttons 3 and 4.
 4. **AltGr guard** (G3): with Ctrl and Alt both held, a printable `event.key` that differs from the physical key's base character is typed text and is never a shortcut.
 5. **Frameless window on Windows** (G4). `decorations: false` in `tauri.windows.conf.json`. The navbar draws Windows caption buttons (minimize, maximize/restore, close; 46 px wide, full navbar height, flat monochrome glyphs, close hover `#c42b1c` with white glyph) at the right edge, where macOS has traffic lights at the left. Same navbar, same height, same colours. Double-click on the drag region toggles maximize.
-6. **Menu bar hidden by default; tapping Alt toggles it** (G5), the convention of Windows apps with custom chrome. A tap is Alt down then up with no other key or mouse press between and no blur. Commands remain reachable by shortcut and Ctrl+K without it.
+6. **No menu bar; tapping Alt opens the menu as a popup** (G5). The menu is never attached to the window (`setAsWindowMenu` is not called): tao 0.32's undecorated window returns 0 from `WM_NCCALCSIZE`, so a Win32 menu bar cannot render, and an attached hidden menu still captures Alt. Instead `Menu.popup` shows it at the navbar's left edge, just below the navbar (logical 16, 52). A tap is Alt down then up with no other key or mouse press between and no blur. Keyboard dispatch does not depend on the menu: shortcuts work before it is built, and an Alt tap does nothing until it exists. Commands remain reachable by shortcut and Ctrl+K.
 7. **Single instance on Windows and Linux** (G6) with `tauri-plugin-single-instance`; a second launch focuses the existing window. macOS keeps LaunchServices.
 8. **OpenSSL for SSH on Windows** (G7): `ssh2` gets `openssl-on-win32` on Windows targets, vendored like macOS. CI installs NASM.
 9. **Installer: NSIS only, per-user** (`installMode: "currentUser"`, no admin prompt), x64 only. Windows on ARM runs it under emulation; a native arm64 build is out of scope. Updater install mode `passive`.
@@ -112,7 +112,7 @@ The open-source readiness spec (2026-10-19) decided that Windows stays a CI comp
 | Tab 1–8, Last Tab | ⌘1–⌘9 | Ctrl+1–Ctrl+9 |
 | Split Pane Right | ⌥⌘\ | Ctrl+Alt+\ |
 | Full Screen | ⌃⌘F (system) | **F11** |
-| Show/hide menu bar | — | **Alt** (tap) |
+| Open menu | — | **Alt** (tap) |
 | Run in SQL editor | ⌘↵ | Ctrl+Enter (editor binding) |
 | Autocomplete | ⌃Space | Ctrl+Space |
 

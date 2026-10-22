@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { getLocalContext, registerScope, type CommandScope } from './commandBus';
 import { EMPTY_CONTEXT, type CommandContext } from './context';
 import type { MenuHost } from './menuHost';
 import { menuState } from './registry';
-import { createMenuSync, installKeyboard, mergeMenuContext } from './useAppMenu';
+import { createMenuSync, installKeyboard, installMenuKeyboard, mergeMenuContext } from './useAppMenu';
 
 type State = Parameters<MenuHost['applyState']>[0];
 
@@ -200,16 +200,45 @@ describe('createMenuSync.run result', () => {
   });
 });
 
+type Listener = (e: Record<string, unknown>) => void;
+
+function captureOf(options: unknown): boolean {
+  return typeof options === 'boolean' ? options : Boolean((options as { capture?: boolean } | undefined)?.capture);
+}
+
+/** Records one listener per event type; removal must match the listener and its capture flag. */
+function fakeTarget() {
+  const listeners = new Map<string, Listener>();
+  const captures = new Map<string, boolean>();
+  const target = {
+    addEventListener: (type: string, fn: Listener, options?: unknown) => {
+      listeners.set(type, fn);
+      captures.set(type, captureOf(options));
+    },
+    removeEventListener: (type: string, fn: Listener, options?: unknown) => {
+      if (listeners.get(type) === fn && captures.get(type) === captureOf(options)) listeners.delete(type);
+    },
+  } as unknown as Pick<Window, 'addEventListener' | 'removeEventListener'>;
+  const fire = (type: string, props: Record<string, unknown> = {}) => {
+    let prevented = false;
+    listeners.get(type)?.({
+      key: '',
+      code: '',
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      preventDefault: () => void (prevented = true),
+      ...props,
+    });
+    return prevented;
+  };
+  return { listeners, captures, target, fire };
+}
+
 describe('installKeyboard', () => {
-  type Listener = (e: Record<string, unknown>) => void;
   function setup(run: (id: string) => boolean = () => true) {
-    const listeners = new Map<string, Listener>();
-    const target = {
-      addEventListener: (type: string, fn: Listener) => void listeners.set(type, fn),
-      removeEventListener: (type: string, fn: Listener) => {
-        if (listeners.get(type) === fn) listeners.delete(type);
-      },
-    } as unknown as Pick<Window, 'addEventListener' | 'removeEventListener'>;
+    const { listeners, captures, target, fire } = fakeTarget();
     const ran: string[] = [];
     let altTaps = 0;
     const dispose = installKeyboard({
@@ -221,21 +250,7 @@ describe('installKeyboard', () => {
       },
       onAltTap: () => void altTaps++,
     });
-    const fire = (type: string, props: Record<string, unknown> = {}) => {
-      let prevented = false;
-      listeners.get(type)?.({
-        key: '',
-        code: '',
-        ctrlKey: false,
-        metaKey: false,
-        altKey: false,
-        shiftKey: false,
-        preventDefault: () => void (prevented = true),
-        ...props,
-      });
-      return prevented;
-    };
-    return { listeners, ran, altTaps: () => altTaps, dispose, fire };
+    return { listeners, captures, ran, altTaps: () => altTaps, dispose, fire };
   }
 
   test('Ctrl+K runs the palette and prevents default', () => {
@@ -280,10 +295,92 @@ describe('installKeyboard', () => {
     expect(k.altTaps()).toBe(1);
   });
 
+  test('pointer listeners use the capture phase, so stopPropagation cannot hide a click', () => {
+    const k = setup();
+    expect(k.captures.get('mousedown')).toBe(true);
+    expect(k.captures.get('mouseup')).toBe(true);
+  });
+
+  test('a throwing dispatcher is logged and never escapes the keydown listener', () => {
+    const error = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const k = setup(() => {
+        throw new Error('dispatch boom');
+      });
+      expect(() => k.fire('keydown', { key: 'k', code: 'KeyK', ctrlKey: true })).not.toThrow();
+      expect(error).toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
+  });
+
   test('the returned function removes every listener', () => {
     const k = setup();
     expect([...k.listeners.keys()].sort()).toEqual(['blur', 'keydown', 'keyup', 'mousedown', 'mouseup']);
     k.dispose();
+    expect(k.listeners.size).toBe(0);
+  });
+});
+
+describe('installMenuKeyboard', () => {
+  function setup() {
+    const t = fakeTarget();
+    const ran: string[] = [];
+    const keys = installMenuKeyboard({
+      platform: 'windows',
+      target: t.target,
+      run: (id) => {
+        ran.push(id);
+        return true;
+      },
+    });
+    const altTap = () => {
+      t.fire('keydown', { key: 'Alt', code: 'AltLeft', altKey: true });
+      t.fire('keyup', { key: 'Alt', code: 'AltLeft' });
+    };
+    return { ...t, ran, keys, altTap };
+  }
+
+  test('shortcuts dispatch before any menu host exists', () => {
+    const k = setup();
+    expect(k.fire('keydown', { key: 'k', code: 'KeyK', ctrlKey: true })).toBe(true);
+    expect(k.ran).toEqual(['view.palette']);
+  });
+
+  test('an Alt tap without a host does nothing', () => {
+    const k = setup();
+    expect(() => k.altTap()).not.toThrow();
+  });
+
+  test('an Alt tap pops the menu up once a host exists', () => {
+    const k = setup();
+    let popups = 0;
+    k.keys.setHost({ applyState: async () => {}, popup: async () => void popups++ });
+    k.altTap();
+    expect(popups).toBe(1);
+  });
+
+  test('a failed popup is logged', async () => {
+    const error = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const k = setup();
+      k.keys.setHost({
+        applyState: async () => {},
+        popup: async () => {
+          throw new Error('popup boom');
+        },
+      });
+      k.altTap();
+      await flush();
+      expect(error).toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  test('dispose removes the listeners', () => {
+    const k = setup();
+    k.keys.dispose();
     expect(k.listeners.size).toBe(0);
   });
 });

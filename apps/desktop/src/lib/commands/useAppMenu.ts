@@ -1,4 +1,3 @@
-import { windowMenuSetVisible } from '@db/core';
 import { useEffect, useRef } from 'react';
 import { invokeErrorMessage } from '../invokeError';
 import { toast } from '../toast';
@@ -88,8 +87,13 @@ export function installKeyboard(opts: {
   const { target } = opts;
   const tracker = createAltTapTracker();
   const onKeyDown = (e: KeyboardEvent) => {
-    tracker.keyDown(e.key);
-    if (decideKeydown(e, opts.platform, opts.run) !== 'pass') e.preventDefault();
+    // A dispatcher bug must never stop keys from reaching the focused input.
+    try {
+      tracker.keyDown(e.key);
+      if (decideKeydown(e, opts.platform, opts.run) !== 'pass') e.preventDefault();
+    } catch (error) {
+      console.error('Keyboard shortcut dispatch failed', error);
+    }
   };
   const onKeyUp = (e: KeyboardEvent) => {
     if (tracker.keyUp(e.key)) opts.onAltTap();
@@ -102,17 +106,44 @@ export function installKeyboard(opts: {
     if (isNavigationMouseButton(e.button)) e.preventDefault();
   };
   const onBlur = () => tracker.reset();
+  // Capture phase: components that stopPropagation on clicks must not hide them from the
+  // Alt tracker or the navigation-button suppression.
+  const capture = { capture: true };
   target.addEventListener('keydown', onKeyDown);
   target.addEventListener('keyup', onKeyUp);
-  target.addEventListener('mousedown', onMouseDown);
-  target.addEventListener('mouseup', onMouseUp);
+  target.addEventListener('mousedown', onMouseDown, capture);
+  target.addEventListener('mouseup', onMouseUp, capture);
   target.addEventListener('blur', onBlur);
   return () => {
     target.removeEventListener('keydown', onKeyDown);
     target.removeEventListener('keyup', onKeyUp);
-    target.removeEventListener('mousedown', onMouseDown);
-    target.removeEventListener('mouseup', onMouseUp);
+    target.removeEventListener('mousedown', onMouseDown, capture);
+    target.removeEventListener('mouseup', onMouseUp, capture);
     target.removeEventListener('blur', onBlur);
+  };
+}
+
+/**
+ * Off macOS: shortcuts dispatch from the start, independent of the native menu; an Alt tap
+ * pops the menu up once `setHost` provides one and is ignored until then.
+ */
+export function installMenuKeyboard(opts: {
+  platform: Platform;
+  target: Pick<Window, 'addEventListener' | 'removeEventListener'>;
+  run(commandId: string): boolean;
+}): { setHost(host: MenuHost | null): void; dispose(): void } {
+  let host: MenuHost | null = null;
+  const dispose = installKeyboard({
+    ...opts,
+    onAltTap: () => {
+      host?.popup?.().catch((error) => console.error('Failed to open the menu', error));
+    },
+  });
+  return {
+    setHost(next) {
+      host = next;
+    },
+    dispose,
   };
 }
 
@@ -170,38 +201,25 @@ export function useAppMenu(args: { context: CommandContext; handlers: Record<str
 
   useEffect(() => {
     let active = true;
-    let uninstallKeyboard: (() => void) | null = null;
+    const platform = currentPlatform();
     // Refs survive StrictMode's effect re-run, so the second run reuses the first install.
     if (!installRef.current) {
-      const platform = currentPlatform();
       installRef.current = installMenu({
         model: adaptMenuModel(buildMenuModel(), platform),
         platform,
         onRun: menu.run,
       });
     }
+    const keys = platform === 'macos' ? null : installMenuKeyboard({ platform, target: window, run: menu.run });
     void installRef.current.then((host) => {
       if (!active || !host) return;
       menu.setHost(host);
       menu.sync();
-      const platform = currentPlatform();
-      if (platform === 'macos') return;
-      let visible = false;
-      const setVisible = (next: boolean) => {
-        visible = next;
-        windowMenuSetVisible(next).catch((error) => console.error('Failed to toggle the menu bar', error));
-      };
-      setVisible(false);
-      uninstallKeyboard = installKeyboard({
-        platform,
-        target: window,
-        run: menu.run,
-        onAltTap: () => setVisible(!visible),
-      });
+      keys?.setHost(host);
     });
     return () => {
       active = false;
-      uninstallKeyboard?.();
+      keys?.dispose();
       menu.setHost(null);
     };
   }, [menu]);

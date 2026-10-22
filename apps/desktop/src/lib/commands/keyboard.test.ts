@@ -72,6 +72,23 @@ describe('acceleratorFromEvent', () => {
       'CmdOrCtrl+ENTER',
     );
   });
+
+  it('browser hardware keys produce their normalized forms', () => {
+    expect(acceleratorFromEvent(ev({ key: 'BrowserBack', code: 'BrowserBack' }), 'windows')).toBe('BROWSERBACK');
+    expect(acceleratorFromEvent(ev({ key: 'BrowserForward', code: 'BrowserForward' }), 'windows')).toBe(
+      'BROWSERFORWARD',
+    );
+    expect(acceleratorFromEvent(ev({ key: 'BrowserRefresh', code: 'BrowserRefresh' }), 'windows')).toBe(
+      'BROWSERREFRESH',
+    );
+    expect(acceleratorFromEvent(ev({ key: 'F5', code: 'F5', shiftKey: true }), 'windows')).toBe('Shift+F5');
+  });
+
+  it('a "+" key is never a shortcut and does not throw', () => {
+    expect(acceleratorFromEvent(ev({ key: '+', code: 'NumpadAdd', ctrlKey: true }), 'windows')).toBeNull();
+    expect(acceleratorFromEvent(ev({ key: '+', code: 'NumpadAdd' }), 'windows')).toBeNull();
+    expect(decideKeydown(ev({ key: '+', code: 'NumpadAdd', ctrlKey: true }), 'windows', () => true)).toBe('pass');
+  });
 });
 
 describe('decideKeydown', () => {
@@ -95,6 +112,14 @@ describe('decideKeydown', () => {
     );
   });
 
+  it('suppresses Shift+F5 and the browser hardware keys', () => {
+    const run = () => false;
+    expect(decideKeydown(ev({ key: 'F5', code: 'F5', shiftKey: true }), 'windows', run)).toBe('suppressed');
+    for (const key of ['BrowserRefresh', 'BrowserBack', 'BrowserForward']) {
+      expect(decideKeydown(ev({ key, code: key }), 'windows', run)).toBe('suppressed');
+    }
+  });
+
   it('passes while composing', () => {
     const run = vi.fn(() => true);
     expect(decideKeydown(ev({ key: 'k', code: 'KeyK', ctrlKey: true, isComposing: true }), 'windows', run)).toBe('pass');
@@ -116,6 +141,7 @@ describe('SUPPRESSED_BROWSER_KEYS', () => {
       [
         'F3',
         'F5',
+        'Shift+F5',
         'CmdOrCtrl+F5',
         'CmdOrCtrl+R',
         'CmdOrCtrl+Shift+R',
@@ -130,6 +156,9 @@ describe('SUPPRESSED_BROWSER_KEYS', () => {
         'CmdOrCtrl+0',
         'Alt+ARROWLEFT',
         'Alt+ARROWRIGHT',
+        'BROWSERREFRESH',
+        'BROWSERBACK',
+        'BROWSERFORWARD',
       ].sort(),
     );
   });
