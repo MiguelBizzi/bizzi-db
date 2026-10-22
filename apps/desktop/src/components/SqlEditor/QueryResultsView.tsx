@@ -10,6 +10,7 @@ import { inferQualifiedTable } from '../../lib/dataExport';
 import { resultTabLabel } from '../../lib/sqlQuery';
 import { analyzeQueryResult } from '../../lib/queryResultTable';
 import { hasUnloadedRows } from '../../lib/queryPaging';
+import { shortcutLabel } from '../../lib/commands/shortcutLabel';
 import { emptyPending } from '../../lib/pendingChanges';
 import { TableDataGrid } from '../TableView/TableDataGrid';
 import type { FkLookupFn } from '../TableView/ForeignKeyPicker';
@@ -83,7 +84,7 @@ export const QueryResultsView: React.FC<QueryResultsViewProps> = ({
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-muted-foreground bg-background font-mono text-xs h-full">
         <Table className="w-8 h-8 mb-2 opacity-40 text-primary" />
-        <p>Run a SQL query above (Cmd + Enter) to view execution results.</p>
+        <p>Run a SQL query above ({shortcutLabel('query.run')}) to view execution results.</p>
       </div>
     );
   }

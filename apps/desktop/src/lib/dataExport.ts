@@ -1,11 +1,12 @@
 import { DIALECTS } from '@db/database';
+import { formatAccelerator, type Platform } from './commands/accelerator';
+import { currentPlatform } from './commands/shortcutLabel';
 
 const quoteIdent = DIALECTS.PostgreSQL.quoteIdent;
 
-export const COPY_CSV_SHORTCUT =
-  typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent)
-    ? '⌘C'
-    : 'Ctrl+C';
+export function copyCsvShortcut(platform: Platform = currentPlatform()): string {
+  return formatAccelerator('CmdOrCtrl+C', platform);
+}
 
 export type DataExportFormat = 'csv' | 'json' | 'markdown' | 'sql';
 

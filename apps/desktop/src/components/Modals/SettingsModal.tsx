@@ -2,6 +2,8 @@ import React from "react";
 import { OverlayPresence } from "../ui/OverlayPresence";
 import { Modal, ModalPanel } from "../ui/Modal";
 import { Settings, X, AlertTriangle } from "lucide-react";
+import { currentPlatform } from "../../lib/commands/shortcutLabel";
+import { secretStoreName } from "../../lib/platformCopy";
 import { Switch } from "../ui/Switch";
 import { Select, type SelectOption } from "../ui/Select";
 import type { MotionPreference } from "../../lib/motionPreference";
@@ -75,6 +77,9 @@ const SettingsModalBody: React.FC<SettingsModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  const secretStore = secretStoreName(currentPlatform());
+  const storeLabel = secretStore.charAt(0).toUpperCase() + secretStore.slice(1);
+
   const checking = updateStatus.phase === "checking";
   const busy =
     checking ||
@@ -107,7 +112,7 @@ const SettingsModalBody: React.FC<SettingsModalProps> = ({
               htmlFor="settings-keychain"
               className="text-[10px] font-bold uppercase text-muted-foreground"
             >
-              System keychain
+              {storeLabel}
             </label>
             <div className="h-9 px-3 flex items-center gap-2 bg-background border border-border rounded-xl">
               <Switch
@@ -135,7 +140,7 @@ const SettingsModalBody: React.FC<SettingsModalProps> = ({
             <div className="p-2.5 rounded-xl border text-xs flex items-center gap-2 bg-amber-500/10 border-amber-500/30 text-amber-200">
               <AlertTriangle className="w-4 h-4 shrink-0" />
               <span>
-                Local secret storage is less secure. Enable the system keychain to
+                Local secret storage is less secure. Enable the {secretStore} to
                 protect credentials with the OS.
               </span>
             </div>

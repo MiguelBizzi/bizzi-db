@@ -1,10 +1,7 @@
 import { Code, Plus, Table as TableIcon } from "lucide-react";
+import { shortcutLabel } from "../lib/commands/shortcutLabel";
 
-const PALETTE_SHORTCUT = /Mac|iPhone|iPad|iPod/i.test(
-  typeof navigator === "undefined" ? "" : navigator.userAgent,
-)
-  ? "⌘K"
-  : "Ctrl+K";
+
 
 interface WorkspaceEmptyStateProps {
   onOpenNewQuery: () => void;
@@ -57,7 +54,7 @@ export function WorkspaceEmptyState({
         <p className="mt-3 text-[11px] font-mono text-muted-foreground">
           or press{" "}
           <kbd className="px-1.5 py-0.5 rounded-md bg-muted border border-border text-foreground">
-            {PALETTE_SHORTCUT}
+            {shortcutLabel('view.palette')}
           </kbd>{" "}
           for commands
         </p>
