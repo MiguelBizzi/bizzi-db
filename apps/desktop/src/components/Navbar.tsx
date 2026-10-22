@@ -25,11 +25,12 @@ import {
 import { useHoverMenu } from "../lib/hoverMenu";
 import { WindowControls } from "./WindowControls";
 import { WindowsCaptionButtons } from "./WindowsCaptionButtons";
-import { navbarPadding } from "../lib/windowChrome";
+import { navbarEndGroupClass, navbarPadding } from "../lib/windowChrome";
 import { currentPlatform, shortcutLabel } from "../lib/commands/shortcutLabel";
 
 const PALETTE_SHORTCUT = shortcutLabel("view.palette");
 const PLATFORM = currentPlatform();
+const END_GROUP_CLASS = navbarEndGroupClass(PLATFORM);
 
 interface NavbarProps {
   profiles: ConnectionProfile[];
@@ -184,6 +185,63 @@ export const Navbar: React.FC<NavbarProps> = ({
     }
   };
 
+  const toolbar = (
+    <div className="flex items-center gap-2">
+      {!isPicker && (
+        <>
+          <button
+            type="button"
+            onClick={onOpenPendingChanges}
+            title={
+              pendingCount > 0
+                ? `${pendingCount} pending change${pendingCount === 1 ? "" : "s"}`
+                : "Pending changes"
+            }
+            className={`relative p-2 rounded-lg border transition-colors ${
+              pendingCount > 0
+                ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                : "bg-muted hover:bg-accent border-border text-foreground"
+            }`}
+          >
+            {pendingCount > 0 && (
+              <span className="pending-changes-ring" aria-hidden />
+            )}
+            <ListChecks className="w-4 h-4 relative z-10" />
+            {pendingCount > 0 && (
+              <span className="absolute -top-1 -right-1 z-10 min-w-4 h-4 px-1 rounded-full bg-amber-500 text-amber-950 text-[9px] font-bold flex items-center justify-center leading-none">
+                {pendingCount > 99 ? "99+" : pendingCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={onOpenMetrics}
+            title="Database Metrics & Health"
+            className="p-2 rounded-lg bg-muted hover:bg-accent border border-border text-foreground transition-colors"
+          >
+            <Activity className="w-4 h-4 text-emerald-400" />
+          </button>
+
+          <button
+            onClick={onOpenActivityLog}
+            title="Activity Audit Log"
+            className="p-2 rounded-lg bg-muted hover:bg-accent border border-border text-foreground transition-colors"
+          >
+            <Logs className="w-4 h-4 text-secondary" />
+          </button>
+        </>
+      )}
+      <button
+        type="button"
+        onClick={onOpenSettings}
+        title="Settings"
+        className="p-2 rounded-lg bg-muted hover:bg-accent border border-border text-foreground transition-colors"
+      >
+        <Settings className="w-4 h-4 text-muted-foreground" />
+      </button>
+    </div>
+  );
+
   return (
     <header
       data-tauri-drag-region
@@ -336,61 +394,14 @@ export const Navbar: React.FC<NavbarProps> = ({
         </button>
       )}
 
-      <div className="flex items-center gap-2">
-        {!isPicker && (
-          <>
-            <button
-              type="button"
-              onClick={onOpenPendingChanges}
-              title={
-                pendingCount > 0
-                  ? `${pendingCount} pending change${pendingCount === 1 ? "" : "s"}`
-                  : "Pending changes"
-              }
-              className={`relative p-2 rounded-lg border transition-colors ${
-                pendingCount > 0
-                  ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                  : "bg-muted hover:bg-accent border-border text-foreground"
-              }`}
-            >
-              {pendingCount > 0 && (
-                <span className="pending-changes-ring" aria-hidden />
-              )}
-              <ListChecks className="w-4 h-4 relative z-10" />
-              {pendingCount > 0 && (
-                <span className="absolute -top-1 -right-1 z-10 min-w-4 h-4 px-1 rounded-full bg-amber-500 text-amber-950 text-[9px] font-bold flex items-center justify-center leading-none">
-                  {pendingCount > 99 ? "99+" : pendingCount}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={onOpenMetrics}
-              title="Database Metrics & Health"
-              className="p-2 rounded-lg bg-muted hover:bg-accent border border-border text-foreground transition-colors"
-            >
-              <Activity className="w-4 h-4 text-emerald-400" />
-            </button>
-
-            <button
-              onClick={onOpenActivityLog}
-              title="Activity Audit Log"
-              className="p-2 rounded-lg bg-muted hover:bg-accent border border-border text-foreground transition-colors"
-            >
-              <Logs className="w-4 h-4 text-secondary" />
-            </button>
-          </>
-        )}
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          title="Settings"
-          className="p-2 rounded-lg bg-muted hover:bg-accent border border-border text-foreground transition-colors"
-        >
-          <Settings className="w-4 h-4 text-muted-foreground" />
-        </button>
-      </div>
-      {PLATFORM === "windows" && <WindowsCaptionButtons />}
+      {END_GROUP_CLASS ? (
+        <div className={END_GROUP_CLASS}>
+          {toolbar}
+          <WindowsCaptionButtons />
+        </div>
+      ) : (
+        toolbar
+      )}
     </header>
   );
 };
