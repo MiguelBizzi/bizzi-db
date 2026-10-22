@@ -90,6 +90,44 @@ describe('handleTitlebarMouseDown', () => {
   });
 });
 
+describe('handleTitlebarMouseDown double click', () => {
+  const run = (target: TestNode, withToggle: boolean) => {
+    const calls = { drag: 0, toggle: 0 };
+    handleTitlebarMouseDown(
+      { button: 0, detail: 2, target: target as unknown as EventTarget, preventDefault() {} },
+      () => {
+        calls.drag += 1;
+      },
+      withToggle
+        ? () => {
+            calls.toggle += 1;
+          }
+        : undefined
+    );
+    return calls;
+  };
+
+  test('toggles maximize once from a child of the drag region', () => {
+    const titlebar = node('header', { 'data-tauri-drag-region': '' });
+    expect(run(node('span', {}, titlebar), true)).toEqual({ drag: 0, toggle: 1 });
+  });
+
+  test('leaves a double click on the drag region itself to Tauri', () => {
+    const titlebar = node('header', { 'data-tauri-drag-region': '' });
+    expect(run(titlebar, true)).toEqual({ drag: 0, toggle: 0 });
+  });
+
+  test('ignores controls', () => {
+    const titlebar = node('header', { 'data-tauri-drag-region': '' });
+    expect(run(node('button', {}, titlebar), true)).toEqual({ drag: 0, toggle: 0 });
+  });
+
+  test('does nothing without a toggleMaximize handler', () => {
+    const titlebar = node('header', { 'data-tauri-drag-region': '' });
+    expect(run(node('span', {}, titlebar), false)).toEqual({ drag: 0, toggle: 0 });
+  });
+});
+
 describe('window capabilities', () => {
   test('allows startDragging so the overlay titlebar can move the window', () => {
     expect(capabilities.permissions).toContain('core:window:allow-start-dragging');
