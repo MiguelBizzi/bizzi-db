@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { acceleratorFromEvent, decideKeydown, isNavigationMouseButton, type KeyEventLike } from './keyboard';
+import {
+  acceleratorFromEvent,
+  decideKeydown,
+  isNavigationMouseButton,
+  SUPPRESSED_BROWSER_KEYS, type KeyEventLike,
+} from './keyboard';
 
 function ev(partial: Partial<KeyEventLike>): KeyEventLike {
   return {
@@ -47,6 +52,16 @@ describe('acceleratorFromEvent', () => {
     expect(acceleratorFromEvent(ev({ key: 'Control', code: 'ControlLeft', ctrlKey: true }), 'windows')).toBeNull();
   });
 
+  it('Ctrl+Alt+Space is a shortcut', () => {
+    expect(acceleratorFromEvent(ev({ key: ' ', code: 'Space', ctrlKey: true, altKey: true }), 'windows')).toBe(
+      'CmdOrCtrl+Alt+SPACE',
+    );
+  });
+
+  it('AltGr digit characters are not shortcuts', () => {
+    expect(acceleratorFromEvent(ev({ key: '{', code: 'Digit7', ctrlKey: true, altKey: true }), 'windows')).toBeNull();
+  });
+
   it('function and named keys', () => {
     expect(acceleratorFromEvent(ev({ key: 'F5', code: 'F5' }), 'windows')).toBe('F5');
     expect(acceleratorFromEvent(ev({ key: 'Delete', code: 'Delete' }), 'windows')).toBe('DELETE');
@@ -80,12 +95,43 @@ describe('decideKeydown', () => {
     );
   });
 
+  it('passes while composing', () => {
+    const run = vi.fn(() => true);
+    expect(decideKeydown(ev({ key: 'k', code: 'KeyK', ctrlKey: true, isComposing: true }), 'windows', run)).toBe('pass');
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it('respects editor handling', () => {
     const run = vi.fn(() => true);
     expect(decideKeydown(ev({ key: 'f', code: 'KeyF', ctrlKey: true, defaultPrevented: true }), 'windows', run)).toBe(
       'pass',
     );
     expect(run).not.toHaveBeenCalled();
+  });
+});
+
+describe('SUPPRESSED_BROWSER_KEYS', () => {
+  it('pins the suppressed list', () => {
+    expect([...SUPPRESSED_BROWSER_KEYS].sort()).toEqual(
+      [
+        'F3',
+        'F5',
+        'CmdOrCtrl+F5',
+        'CmdOrCtrl+R',
+        'CmdOrCtrl+Shift+R',
+        'CmdOrCtrl+P',
+        'CmdOrCtrl+F',
+        'CmdOrCtrl+G',
+        'CmdOrCtrl+Shift+G',
+        'CmdOrCtrl+U',
+        'CmdOrCtrl+J',
+        'CmdOrCtrl+=',
+        'CmdOrCtrl+-',
+        'CmdOrCtrl+0',
+        'Alt+ARROWLEFT',
+        'Alt+ARROWRIGHT',
+      ].sort(),
+    );
   });
 });
 

@@ -36,4 +36,12 @@ describe('createAltTapTracker', () => {
     t.keyDown('Alt');
     expect(t.keyUp('Alt')).toBe(true);
   });
+
+  it('reset on blur forgets the held Alt', () => {
+    const t = createAltTapTracker();
+    t.keyDown('Alt');
+    t.reset();
+    t.keyDown('Alt');
+    expect(t.keyUp('Alt')).toBe(true);
+  });
 });

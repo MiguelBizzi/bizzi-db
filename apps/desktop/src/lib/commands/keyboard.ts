@@ -31,8 +31,7 @@ const PUNCTUATION_BY_CODE: Record<string, string> = {
 function baseKey(e: KeyEventLike): string | null {
   const letter = /^Key([A-Z])$/.exec(e.code);
   if (letter) {
-    const l = letter[1]!;
-    return /^[a-z]$/i.test(e.key) ? e.key.toUpperCase() : l;
+    return /^[a-z]$/i.test(e.key) ? e.key.toUpperCase() : letter[1]!;
   }
   const digit = /^Digit([0-9])$/.exec(e.code);
   if (digit) return digit[1]!;
@@ -43,7 +42,7 @@ function baseKey(e: KeyEventLike): string | null {
   return e.key === '' ? null : e.key;
 }
 
-/** Normalized accelerator for a keydown, or `null` when it can't be a shortcut. */
+/** `null` = the event cannot be a shortcut. */
 export function acceleratorFromEvent(e: KeyEventLike, platform: Platform): string | null {
   if (BARE_MODIFIERS.has(e.key)) return null;
   const mac = platform === 'macos';
@@ -51,7 +50,7 @@ export function acceleratorFromEvent(e: KeyEventLike, platform: Platform): strin
   const key = baseKey(e);
   if (key === null) return null;
   // AltGr is reported as Ctrl+Alt on Windows; a typed character that differs from the physical key is text input.
-  if (e.ctrlKey && e.altKey && e.key.length === 1 && e.key !== key && e.key !== key.toLowerCase()) return null;
+  if (e.ctrlKey && e.altKey && e.key.length === 1 && e.key !== ' ' && e.key !== key && e.key !== key.toLowerCase()) return null;
   const parts: string[] = [];
   if (mac) {
     if (e.ctrlKey) parts.push('Ctrl');
