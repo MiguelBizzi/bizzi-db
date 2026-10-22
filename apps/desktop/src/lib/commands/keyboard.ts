@@ -48,7 +48,8 @@ export function acceleratorFromEvent(e: KeyEventLike, platform: Platform): strin
   const mac = platform === 'macos';
   if (!mac && e.metaKey) return null;
   const key = baseKey(e);
-  if (key === null) return null;
+  // `+` is the accelerator separator, so it cannot be a key (e.g. NumpadAdd).
+  if (key === null || key === '+') return null;
   // AltGr is reported as Ctrl+Alt on Windows; a typed character that differs from the physical key is text input.
   if (e.ctrlKey && e.altKey && e.key.length === 1 && e.key !== ' ' && e.key !== key && e.key !== key.toLowerCase()) return null;
   const parts: string[] = [];
@@ -75,11 +76,15 @@ export function commandForAccelerator(
   });
 }
 
-/** Browser shortcuts the webview would otherwise act on (reload, print, find, zoom, history). */
+/**
+ * Browser shortcuts the webview would otherwise act on (reload, print, find, zoom, history),
+ * including the dedicated browser keys on some keyboards and mice.
+ */
 export const SUPPRESSED_BROWSER_KEYS: ReadonlySet<string> = new Set(
   [
     'F3',
     'F5',
+    'Shift+F5',
     'CmdOrCtrl+F5',
     'CmdOrCtrl+R',
     'CmdOrCtrl+Shift+R',
@@ -94,6 +99,9 @@ export const SUPPRESSED_BROWSER_KEYS: ReadonlySet<string> = new Set(
     'CmdOrCtrl+0',
     'Alt+ArrowLeft',
     'Alt+ArrowRight',
+    'BrowserRefresh',
+    'BrowserBack',
+    'BrowserForward',
   ].map(normalizeAccelerator),
 );
 

@@ -593,24 +593,6 @@ async fn ssh_pick_private_key() -> Result<Option<String>, String> {
     Ok(file.map(|handle| handle.path().to_string_lossy().into_owned()))
 }
 
-#[tauri::command]
-fn window_menu_set_visible(window: tauri::WebviewWindow, visible: bool) -> Result<(), String> {
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
-    {
-        let result = if visible {
-            window.show_menu()
-        } else {
-            window.hide_menu()
-        };
-        result.map_err(map_err)
-    }
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-    {
-        let _ = (window, visible);
-        Ok(())
-    }
-}
-
 fn db_path(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&dir).map_err(map_err)?;
@@ -694,8 +676,7 @@ pub fn run() {
             workspace_save,
             settings_get,
             settings_save,
-            ssh_pick_private_key,
-            window_menu_set_visible
+            ssh_pick_private_key
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

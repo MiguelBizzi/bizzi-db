@@ -1,3 +1,4 @@
+import { LogicalPosition } from '@tauri-apps/api/dpi';
 import {
   Menu,
   MenuItem,
@@ -40,6 +41,7 @@ export interface SubmenuHandle {
 export interface MenuHandle {
   setAsAppMenu(): Promise<unknown>;
   setAsWindowMenu(): Promise<unknown>;
+  popup(at?: unknown): Promise<void>;
 }
 
 export interface MenuApi {
@@ -65,7 +67,12 @@ export const tauriMenuApi: MenuApi = {
 
 export interface MenuHost {
   applyState(state: { enabled: Record<string, boolean>; labels: Record<string, string> }): Promise<void>;
+  /** Off macOS only: shows the menu as a popup under the title bar. */
+  popup?(): Promise<void>;
 }
+
+// Navbar left edge, just below the 52 px navbar.
+const POPUP_POSITION = { x: 16, y: 52 };
 
 // `null` = not supported by the Tauri 2.2.0 menu plugin (no `BringAllToFront` variant); skipped.
 const PREDEFINED: Record<PredefinedKind, PredefinedMenuItemOptions['item'] | null> = {
@@ -190,14 +197,20 @@ export async function installMenu(opts: {
       if (roleFailures.length > 0) {
         console.error('Failed to register menus with NSApp', roleFailures);
       }
-    } else {
-      await menu.setAsWindowMenu();
     }
+    // Off macOS the menu is never attached: tao's undecorated window returns 0 from
+    // WM_NCCALCSIZE, so a Win32 menu bar cannot render, and an attached hidden HMENU still
+    // captures Alt. The menu is shown as a popup instead.
+    const popup =
+      opts.platform === 'macos'
+        ? undefined
+        : () => menu.popup(new LogicalPosition(POPUP_POSITION.x, POPUP_POSITION.y));
 
     // Items start enabled with their registry label, so the first applyState applies everything.
     const enabled: Record<string, boolean> = {};
     const labels: Record<string, string> = {};
     return {
+      ...(popup ? { popup } : {}),
       async applyState(state) {
         const failed: Array<{ id: string; error: unknown }> = [];
         // A key is cached only after its call succeeds, so failed keys are retried next time.

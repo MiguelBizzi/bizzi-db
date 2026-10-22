@@ -18,7 +18,7 @@
 - No unsigned Windows installer is ever published.
 - NSIS only, `installMode: "currentUser"`, x64 only; updater `installMode: "passive"`.
 - Windows shortcuts are exactly the spec's shortcut map. Reserved on Windows: Ctrl+Z, Ctrl+Y, Ctrl+X, Ctrl+C, Ctrl+V, Ctrl+A, Alt+F4, Alt+Space, F10, F12, Ctrl+Escape.
-- Suppressed browser keys on Windows: F3, F5, Ctrl+F5, Ctrl+R, Ctrl+Shift+R, Ctrl+P, Ctrl+F, Ctrl+G, Ctrl+Shift+G, Ctrl+U, Ctrl+J, Ctrl+=, Ctrl+-, Ctrl+0, Alt+ArrowLeft, Alt+ArrowRight; mouse buttons 3 and 4.
+- Suppressed browser keys on Windows: F3, F5, Shift+F5, Ctrl+F5, Ctrl+R, Ctrl+Shift+R, Ctrl+P, Ctrl+F, Ctrl+G, Ctrl+Shift+G, Ctrl+U, Ctrl+J, Ctrl+=, Ctrl+-, Ctrl+0, Alt+ArrowLeft, Alt+ArrowRight, BrowserRefresh, BrowserBack, BrowserForward; mouse buttons 3 and 4.
 - Caption buttons: 46 px wide, full navbar height, close hover `#c42b1c` with white glyph.
 - Project rules in `.claude/rules/` apply (TDD, tests next to the unit, comments only for non-obvious why, menu-and-shortcuts checklist, new Tauri commands in `permissions/app.toml`, no shell/fs/http plugins). `bun run test` passes at the end of every task.
 - Work on `feat/windows-support` in a worktree off `main`. If `feat/open-source-readiness` has merged, keep its SHA-pinned `uses:` style and its `build` matrix; do not duplicate them. Stage by path; one commit per task.
@@ -28,7 +28,7 @@
 1. **Delete key while typing on Windows.** Delete is the Windows shortcut for Delete Selected Rows; in an input or the SQL editor it must still delete text, so a disabled command must never `preventDefault` (Task 2 test `passes a key whose command did not run`).
 2. **AltGr typing.** On a German layout AltGr+Q (reported as Ctrl+Alt+Q, key `@`) must type `@` and run nothing (Task 2 test `AltGr characters are not shortcuts`).
 3. **F5 / Ctrl+R with no table tab open** must not reload the webview and lose every tab (Task 2 test `suppresses browser reload when no command runs`).
-4. **Alt+Tab away and back** must not toggle the menu bar (Task 2 test `Alt released after blur is not a tap`).
+4. **Alt+Tab away and back** must not open the menu (Task 2 test `Alt released after blur is not a tap`).
 5. **Non-Latin layouts.** On a Russian layout Ctrl+K reports key `л`; it must still open the palette (Task 2 test `uses the physical key when the layout is not Latin`).
 
 ## File Structure
@@ -262,7 +262,7 @@ Needs a Windows 11 machine and a Windows 10 22H2 VM, plus the maintainer's Mac. 
 
 - [ ] **Step 1: Install** the prerelease `*-setup.exe`. Expected: no SmartScreen "unknown publisher" warning; publisher shows the Azure identity; no admin prompt; Start menu entry "Bizzi DB".
 - [ ] **Step 2: Window.** One header only; caption buttons right; hover colours; double-click title toggles maximize; drag; Aero Snap; resize from every edge; Win+↑/↓; close exits the process.
-- [ ] **Step 3: Keyboard.** Every row of the spec's shortcut map, with focus in the grid, in the SQL editor and in a text input. F5/Ctrl+R/Ctrl+P/Alt+← with no table open do nothing. Delete in a text input deletes text. German keyboard layout: AltGr+Q types `@` in the SQL editor. Alt tap shows and hides the menu bar; menu items show right-aligned shortcuts; Alt+Tab does not toggle it.
+- [ ] **Step 3: Keyboard.** Every row of the spec's shortcut map, with focus in the grid, in the SQL editor and in a text input. F5/Ctrl+R/Ctrl+P/Alt+← with no table open do nothing. Delete in a text input deletes text. German keyboard layout: AltGr+Q types `@` in the SQL editor. Alt tap opens the menu under the title bar; menu items show right-aligned shortcuts; Alt+Tab does not open it.
 - [ ] **Step 4: Integrations.** Second launch focuses the existing window. Save a connection with "system keychain" on → entry visible in Credential Manager. SSH tunnel with an Ed25519 key picked through the file dialog. Updater: install the previous prerelease, publish the next, accept the update → passive install and relaunch.
 - [ ] **Step 5: macOS regression pass** on the same prerelease: traffic lights, ⌘ shortcuts from the map, menu bar, close-to-Dock, DMG install, update.
 - [ ] **Step 6: Commit** the filled checklist `docs: Windows verification results`. Any failure becomes a bug fix with a reproducing test before Task 10.
