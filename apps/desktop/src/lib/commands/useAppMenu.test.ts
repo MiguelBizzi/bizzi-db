@@ -3,7 +3,7 @@ import { getLocalContext, registerScope, type CommandScope } from './commandBus'
 import { EMPTY_CONTEXT, type CommandContext } from './context';
 import type { MenuHost } from './menuHost';
 import { menuState } from './registry';
-import { createMenuSync, mergeMenuContext } from './useAppMenu';
+import { createMenuSync, installKeyboard, mergeMenuContext } from './useAppMenu';
 
 type State = Parameters<MenuHost['applyState']>[0];
 
@@ -186,5 +186,104 @@ describe('createMenuSync', () => {
     sync.run('app.checkUpdates');
     await flush();
     expect(errors.map((e) => (e as Error).message)).toEqual(['sync fail', 'async fail']);
+  });
+});
+
+describe('createMenuSync.run result', () => {
+  test('returns true for an enabled command with a handler and false for a disabled one', () => {
+    scopes.push(registerScope('test', { 'conn.refreshTable': () => undefined }));
+    let ctx: CommandContext = { ...EMPTY_CONTEXT, activeTabType: 'sql_editor' };
+    const sync = createMenuSync({ getContext: () => ctx, onError: () => undefined });
+    expect(sync.run('conn.refreshTable')).toBe(false);
+    ctx = { ...ctx, activeTabType: 'table_data' };
+    expect(sync.run('conn.refreshTable')).toBe(true);
+  });
+});
+
+describe('installKeyboard', () => {
+  type Listener = (e: Record<string, unknown>) => void;
+  function setup(run: (id: string) => boolean = () => true) {
+    const listeners = new Map<string, Listener>();
+    const target = {
+      addEventListener: (type: string, fn: Listener) => void listeners.set(type, fn),
+      removeEventListener: (type: string, fn: Listener) => {
+        if (listeners.get(type) === fn) listeners.delete(type);
+      },
+    } as unknown as Pick<Window, 'addEventListener' | 'removeEventListener'>;
+    const ran: string[] = [];
+    let altTaps = 0;
+    const dispose = installKeyboard({
+      platform: 'windows',
+      target,
+      run: (id) => {
+        ran.push(id);
+        return run(id);
+      },
+      onAltTap: () => void altTaps++,
+    });
+    const fire = (type: string, props: Record<string, unknown> = {}) => {
+      let prevented = false;
+      listeners.get(type)?.({
+        key: '',
+        code: '',
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        preventDefault: () => void (prevented = true),
+        ...props,
+      });
+      return prevented;
+    };
+    return { listeners, ran, altTaps: () => altTaps, dispose, fire };
+  }
+
+  test('Ctrl+K runs the palette and prevents default', () => {
+    const k = setup();
+    expect(k.fire('keydown', { key: 'k', code: 'KeyK', ctrlKey: true })).toBe(true);
+    expect(k.ran).toEqual(['view.palette']);
+  });
+
+  test('a key whose command does not run is left alone', () => {
+    const k = setup(() => false);
+    expect(k.fire('keydown', { key: 'Delete', code: 'Delete' })).toBe(false);
+  });
+
+  test('navigation mouse buttons are prevented, others are not', () => {
+    const k = setup();
+    expect(k.fire('mouseup', { button: 3 })).toBe(true);
+    expect(k.fire('mousedown', { button: 4 })).toBe(true);
+    expect(k.fire('mouseup', { button: 0 })).toBe(false);
+  });
+
+  test('Alt down then up calls onAltTap once', () => {
+    const k = setup();
+    k.fire('keydown', { key: 'Alt', code: 'AltLeft', altKey: true });
+    k.fire('keyup', { key: 'Alt', code: 'AltLeft' });
+    expect(k.altTaps()).toBe(1);
+  });
+
+  test('a mousedown between Alt down and up cancels the tap', () => {
+    const k = setup();
+    k.fire('keydown', { key: 'Alt', code: 'AltLeft', altKey: true });
+    k.fire('mousedown', { button: 0 });
+    k.fire('keyup', { key: 'Alt', code: 'AltLeft' });
+    expect(k.altTaps()).toBe(0);
+  });
+
+  test('blur clears held Alt state, so only the later full tap counts', () => {
+    const k = setup();
+    k.fire('keydown', { key: 'Alt', code: 'AltLeft', altKey: true });
+    k.fire('blur');
+    k.fire('keydown', { key: 'Alt', code: 'AltLeft', altKey: true });
+    k.fire('keyup', { key: 'Alt', code: 'AltLeft' });
+    expect(k.altTaps()).toBe(1);
+  });
+
+  test('the returned function removes every listener', () => {
+    const k = setup();
+    expect([...k.listeners.keys()].sort()).toEqual(['blur', 'keydown', 'keyup', 'mousedown', 'mouseup']);
+    k.dispose();
+    expect(k.listeners.size).toBe(0);
   });
 });
