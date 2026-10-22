@@ -33,6 +33,14 @@ tauri-plugin-updater = "=2.2.0"
 tauri-plugin-process = "=2.2.0"
 tauri-plugin-opener = "=2.3.1"
 
+[target.'cfg(windows)'.dependencies]
+# macOS and Linux link the system/vendored OpenSSL without these features;
+# Windows needs OpenSSL for ed25519 host keys that the WinCNG backend lacks.
+ssh2 = { version = "=0.9.4", features = ["vendored-openssl", "openssl-on-win32"] }
+
+[target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = "=2.2.4"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.5"
 objc2-app-kit = { version = "0.2", features = ["NSWindow", "NSView", "NSButton", "NSControl", "NSResponder"] }

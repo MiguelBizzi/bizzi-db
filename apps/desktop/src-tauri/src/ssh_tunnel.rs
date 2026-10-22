@@ -156,3 +156,13 @@ fn pump(mut local: TcpStream, mut channel: ssh2::Channel) {
     }
     let _ = channel.close();
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn ssh_backend_supports_ed25519_host_keys() {
+        let session = ssh2::Session::new().unwrap();
+        let algs = session.supported_algs(ssh2::MethodType::HostKey).unwrap();
+        assert!(algs.contains(&"ssh-ed25519"), "{algs:?}");
+    }
+}
