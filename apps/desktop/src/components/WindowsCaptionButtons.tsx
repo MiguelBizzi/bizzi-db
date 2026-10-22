@@ -2,6 +2,9 @@ import { useEffect, useState, type ReactNode } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { captionButtons, type CaptionAction } from "../lib/windowChrome";
 
+const IS_TAURI =
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
 const GLYPHS: Record<CaptionAction, ReactNode> = {
   minimize: <path d="M0 5h10" />,
   maximize: <rect x="0.5" y="0.5" width="9" height="9" />,
@@ -25,6 +28,7 @@ export function WindowsCaptionButtons() {
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
+    if (!IS_TAURI) return;
     const win = getCurrentWindow();
     const sync = () => {
       void win
@@ -40,7 +44,7 @@ export function WindowsCaptionButtons() {
   }, []);
 
   return (
-    <div data-no-drag className="ml-2 flex h-full items-stretch self-stretch">
+    <div data-no-drag className="flex h-full items-stretch self-stretch">
       {captionButtons(maximized).map(({ action, label }) => (
         <button
           key={action}
