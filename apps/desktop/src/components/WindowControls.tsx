@@ -1,9 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-const IS_APPLE_PLATFORM = /Mac|iPhone|iPad|iPod/i.test(
-  typeof navigator === "undefined" ? "" : navigator.userAgent,
-);
+import { currentPlatform } from "../lib/commands/shortcutLabel";
+
+const IS_APPLE_PLATFORM = currentPlatform() === "macos";
 const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 

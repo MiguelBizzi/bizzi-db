@@ -24,9 +24,12 @@ import {
 } from "../lib/connectionFolders";
 import { useHoverMenu } from "../lib/hoverMenu";
 import { WindowControls } from "./WindowControls";
-import { shortcutLabel } from "../lib/commands/shortcutLabel";
+import { WindowsCaptionButtons } from "./WindowsCaptionButtons";
+import { navbarPadding } from "../lib/windowChrome";
+import { currentPlatform, shortcutLabel } from "../lib/commands/shortcutLabel";
 
 const PALETTE_SHORTCUT = shortcutLabel("view.palette");
+const PLATFORM = currentPlatform();
 
 interface NavbarProps {
   profiles: ConnectionProfile[];
@@ -189,9 +192,13 @@ export const Navbar: React.FC<NavbarProps> = ({
           void getCurrentWindow()
             .startDragging()
             .catch(() => {});
+        }, PLATFORM === "macos" ? undefined : () => {
+          void getCurrentWindow()
+            .toggleMaximize()
+            .catch(() => {});
         });
       }}
-      className="relative h-13 bg-card border-b border-border text-card-foreground flex items-center justify-between pl-24 pr-4 select-none z-30 shrink-0"
+      className={`relative h-13 bg-card border-b border-border text-card-foreground flex items-center justify-between ${navbarPadding(PLATFORM)} select-none z-30 shrink-0`}
     >
       <WindowControls />
       <div className="flex items-center gap-3 min-w-0">
@@ -383,6 +390,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <Settings className="w-4 h-4 text-muted-foreground" />
         </button>
       </div>
+      {PLATFORM === "windows" && <WindowsCaptionButtons />}
     </header>
   );
 };

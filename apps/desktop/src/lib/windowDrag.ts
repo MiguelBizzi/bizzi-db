@@ -48,9 +48,25 @@ export function handleTitlebarMouseDown(
     target: EventTarget | null;
     preventDefault: () => void;
   },
-  startDrag: () => void
+  startDrag: () => void,
+  toggleMaximize?: () => void
 ): void {
-  if (event.button !== 0 || event.detail !== 1) return;
+  if (event.button !== 0) return;
+  if (event.detail === 2) {
+    // Tauri's injected drag script already toggles maximize when the region element itself is hit.
+    const target = asDragNode(event.target);
+    if (
+      toggleMaximize &&
+      target &&
+      target.getAttribute('data-tauri-drag-region') == null &&
+      shouldStartWindowDrag(event.target)
+    ) {
+      event.preventDefault();
+      toggleMaximize();
+    }
+    return;
+  }
+  if (event.detail !== 1) return;
   if (!shouldStartWindowDrag(event.target)) return;
   event.preventDefault();
   startDrag();
