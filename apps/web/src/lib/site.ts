@@ -15,7 +15,7 @@ export const SITE_TITLE =
 export const SITE_DESCRIPTION =
   'A local-first PostgreSQL desktop client. Connections, queries, and SSH run in Rust. The UI is Tauri 2 — a system WebView, not Electron.';
 
-export type DownloadPlatformId = 'macos';
+export type DownloadPlatformId = 'macos' | 'windows';
 
 export type DownloadPlatform = {
   id: DownloadPlatformId;
@@ -31,10 +31,16 @@ export const DOWNLOAD_PLATFORMS: DownloadPlatform[] = [
     detail: 'Universal DMG',
     href: RELEASES_URL,
   },
+  {
+    id: 'windows',
+    label: 'Windows',
+    detail: 'x64 installer',
+    href: RELEASES_URL,
+  },
 ];
 
 export function detectPreferredPlatform(
-  _userAgent: string,
+  userAgent: string,
 ): DownloadPlatformId {
-  return 'macos';
+  return /Windows/.test(userAgent) ? 'windows' : 'macos';
 }

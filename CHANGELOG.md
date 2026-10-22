@@ -4,6 +4,15 @@ All notable changes to Bizzi DB are recorded here. The format follows [Keep a Ch
 
 New entries go under `## [Unreleased]`; the release process moves them under a version heading. Write for people who use the app, not for people who read commits. See [RELEASING.md](RELEASING.md).
 
+## [Unreleased] - Bizzi DB for Windows
+
+Bizzi DB now runs on Windows, with the same look as on macOS and the keyboard shortcuts Windows users expect.
+
+### New
+- A Windows x64 installer is published with each release. It installs for your user only and updates itself from inside the app like the macOS version. It is not code-signed yet, so the first install shows a SmartScreen warning: choose More info, then Run anyway.
+- On Windows, shortcuts use Ctrl and Alt, Delete removes selected rows, F5 refreshes the table, Ctrl+Tab moves between tabs and F11 toggles full screen. Tap Alt to open the menu.
+- Passwords on Windows are kept in Windows Credential Manager when the system keychain is turned on in Settings.
+
 ## [0.1.19] - 2026-10-20 - A collapsible sidebar, and errors you can copy
 
 The sidebar folds down to a slim rail or resizes to fit, error messages can be copied, and Bizzi DB is now set up for outside contributors.
