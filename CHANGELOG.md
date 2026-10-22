@@ -4,7 +4,7 @@ All notable changes to Bizzi DB are recorded here. The format follows [Keep a Ch
 
 New entries go under `## [Unreleased]`; the release process moves them under a version heading. Write for people who use the app, not for people who read commits. See [RELEASING.md](RELEASING.md).
 
-## [Unreleased] - Bizzi DB for Windows
+## [0.1.20] - 2026-10-22 - Bizzi DB for Windows
 
 Bizzi DB now runs on Windows, with the same look as on macOS and the keyboard shortcuts Windows users expect.
 
