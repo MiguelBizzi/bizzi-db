@@ -1,16 +1,23 @@
 import { describe, expect, test } from 'bun:test';
 import { windowsSignConfig } from './windowsSignConfig';
 
-const env = {
+const vars = {
   AZURE_SIGNING_ENDPOINT: 'https://eus.codesigning.azure.net',
   AZURE_SIGNING_ACCOUNT: 'bizzi-signing',
   AZURE_SIGNING_PROFILE: 'bizzi-public',
 };
+const secrets = {
+  AZURE_CLIENT_ID: 'client',
+  AZURE_CLIENT_SECRET: 'secret',
+  AZURE_TENANT_ID: 'tenant',
+};
+const env = { ...vars, ...secrets };
 
 describe('windowsSignConfig', () => {
   test('builds the tauri signCommand from the signing variables', () => {
     expect(windowsSignConfig(env)).toEqual({
       ok: true,
+      signed: true,
       config: {
         bundle: {
           windows: {
@@ -30,6 +37,18 @@ describe('windowsSignConfig', () => {
     });
   });
 
+  test('is unsigned when no signing variable is set', () => {
+    expect(windowsSignConfig({})).toEqual({ ok: true, signed: false });
+    expect(windowsSignConfig({ AZURE_SIGNING_ENDPOINT: ' ', AZURE_SIGNING_ACCOUNT: '' })).toEqual({
+      ok: true,
+      signed: false,
+    });
+  });
+
+  test('ignores leftover Azure secrets when signing is not configured', () => {
+    expect(windowsSignConfig(secrets)).toEqual({ ok: true, signed: false });
+  });
+
   test.each(Object.keys(env))('names %s when it is missing or blank', (name) => {
     for (const value of [undefined, '  ']) {
       const result = windowsSignConfig({ ...env, [name]: value });
@@ -41,10 +60,18 @@ describe('windowsSignConfig', () => {
     }
   });
 
-  test('reports every missing variable', () => {
-    const result = windowsSignConfig({});
+  test('reports every missing value once signing is partly configured', () => {
+    const result = windowsSignConfig({ AZURE_SIGNING_ACCOUNT: 'bizzi-signing' });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.errors).toHaveLength(3);
+    if (!result.ok) expect(result.errors).toHaveLength(5);
+  });
+
+  test('never puts a secret value in an error', () => {
+    const result = windowsSignConfig({ ...env, AZURE_SIGNING_ENDPOINT: 'https://evil.example' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      for (const value of Object.values(secrets)) expect(result.errors.join('\n')).not.toContain(value);
+    }
   });
 
   test.each([
@@ -63,6 +90,6 @@ describe('windowsSignConfig', () => {
       ...env,
       AZURE_SIGNING_ENDPOINT: 'https://weu.codesigning.azure.net/',
     });
-    expect(result.ok).toBe(true);
+    expect(result.ok && result.signed).toBe(true);
   });
 });

@@ -15,7 +15,7 @@
 - macOS behaviour must not change: no edits to `macos.rs`, the macOS `release.yml` job, `tauri.conf.json` keys that macOS reads, or the macOS menu model. Every macOS test that passes today passes unchanged (only expected lists that gain a new command id change).
 - Tauri crates stay pinned (`tauri =2.2.0`, `@tauri-apps/api 2.2.0`). New crates are exact-pinned with `=` and must not move a pinned crate in `Cargo.lock`.
 - Never change the bundle id `com.bizzidb.app`, regenerate updater keys, retag, or force-push a tag.
-- No unsigned Windows installer is ever published.
+- No unsigned Windows installer is published while Azure signing is configured. (Amended 2026-10-22: without it, releases ship unsigned; see the spec's decision 10.)
 - NSIS only, `installMode: "currentUser"`, x64 only; updater `installMode: "passive"`.
 - Windows shortcuts are exactly the spec's shortcut map. Reserved on Windows: Ctrl+Z, Ctrl+Y, Ctrl+X, Ctrl+C, Ctrl+V, Ctrl+A, Alt+F4, Alt+Space, F10, F12, Ctrl+Escape.
 - Suppressed browser keys on Windows: F3, F5, Shift+F5, Ctrl+F5, Ctrl+R, Ctrl+Shift+R, Ctrl+P, Ctrl+F, Ctrl+G, Ctrl+Shift+G, Ctrl+U, Ctrl+J, Ctrl+=, Ctrl+-, Ctrl+0, Alt+ArrowLeft, Alt+ArrowRight, BrowserRefresh, BrowserBack, BrowserForward; mouse buttons 3 and 4.
