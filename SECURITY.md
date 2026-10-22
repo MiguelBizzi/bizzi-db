@@ -19,7 +19,7 @@ The updater plugin is an approved exception to “no extra network plugins.” I
 
 ## Local files
 
-On Unix, `Storage::open` sets the app-data directory to `0700` and `workspace.sqlite` to `0600`. The database itself is not encrypted at rest (SQLCipher is a future option). Other local OS users must not be able to read the file; a process running as the same user still can.
+On Unix, `Storage::open` sets the app-data directory to `0700` and `workspace.sqlite` to `0600`. On Windows the app-data folder relies on the user-profile ACL instead, which already limits it to the user, SYSTEM and administrators. The database itself is not encrypted at rest (SQLCipher is a future option). Other local OS users must not be able to read the file; a process running as the same user still can.
 
 ## Transit
 
@@ -44,7 +44,12 @@ GitHub Actions secrets for a signed release:
 - `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 - Apple notarization: `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`
 
-Release CI currently builds a universal macOS DMG only. Windows Authenticode secrets are unused until that target is restored.
+Windows signing (Azure Trusted Signing), used by the `publish-windows` job:
+
+- Secrets: `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`
+- Repository variables: `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_SIGNING_PROFILE`
+
+The endpoint must match `https://<region>.codesigning.azure.net`, so a wrong variable cannot send the credentials to another host. No unsigned Windows installer is published: the job fails unless the downloaded release asset has a valid Authenticode signature.
 
 Bundle id `com.bizzidb.app` is locked after the first public install (app-data path, keychain service, updater identity).
 
