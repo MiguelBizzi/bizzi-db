@@ -32,6 +32,9 @@ jobs:
   unit-windows:
     timeout-minutes: 60
     runs-on: windows-latest
+    # Vendored OpenSSL needs Strawberry Perl; under bash, Git's own perl comes first on PATH and lacks modules.
+    env:
+      OPENSSL_SRC_PERL: C:\Strawberry\perl\bin\perl.exe
     # bash -e: Windows defaults to PowerShell, which only reports the last command's exit code.
     defaults:
       run:
@@ -147,9 +150,13 @@ jobs:
         with:
           toolchain: stable
           components: clippy
-      # Vendored OpenSSL for ssh2 on Windows is built with NASM.
+      # Vendored OpenSSL for ssh2 on Windows is built with NASM and Strawberry Perl; under bash, Git's own perl
+      # comes first on PATH and lacks the modules OpenSSL's Configure needs.
       - uses: ilammy/setup-nasm@72793074d3c8cdda771dba85f6deafe00623038b # v1
         if: runner.os == 'Windows'
+      - name: Use Strawberry Perl for OpenSSL
+        if: runner.os == 'Windows'
+        run: echo 'OPENSSL_SRC_PERL=C:\Strawberry\perl\bin\perl.exe' >> "$GITHUB_ENV"
       - name: Install Linux webview libraries
         if: runner.os == 'Linux'
         run: |

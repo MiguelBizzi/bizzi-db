@@ -18,6 +18,10 @@ serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "=2.2.0", features = [] }
 tauri-utils = "=2.2.0"
+# The runtime crates tauri 2.2.0 was released with. tauri-runtime-wry 2.4 uses webview2-com 0.36 while
+# tauri 2.2.0 uses 0.34, and the two WebView2 types do not unify, so the Windows build fails.
+tauri-runtime = "=2.3.0"
+tauri-runtime-wry = "=2.3.0"
 tokio.workspace = true
 uuid.workspace = true
 chrono.workspace = true
