@@ -32,6 +32,8 @@ import {
   applyParsedConnection,
   parseConnectionString,
 } from "../../lib/connectionString";
+import { currentPlatform } from "../../lib/commands/shortcutLabel";
+import { secretStoreName } from "../../lib/platformCopy";
 import { invokeErrorMessage } from "../../lib/invokeError";
 
 interface ConnectionModalProps {
@@ -101,6 +103,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
 }) => {
   const isEdit = Boolean(editingProfile);
   const copy = connectionModalCopy(isEdit);
+  const secretStore = secretStoreName(currentPlatform());
   const [form, setForm] = useState<ConnectionFormValues>(defaultConnectionForm);
   const [connectionString, setConnectionString] = useState("");
   const [parseError, setParseError] = useState<string | null>(null);
@@ -685,8 +688,8 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
                         {!keychainEnabled && (
                           <div className="p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 bg-amber-500/10 border-amber-500/30 text-amber-200">
                             <span>
-                              SSH password authentication requires the system
-                              keychain.
+                              SSH password authentication requires the{" "}
+                              {secretStore}.
                             </span>
                             <button
                               type="button"
@@ -695,7 +698,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
                               }}
                               className="px-2 py-1 rounded-lg bg-primary text-primary-foreground font-bold shrink-0"
                             >
-                              Enable keychain
+                              Enable {secretStore}
                             </button>
                           </div>
                         )}

@@ -11,7 +11,7 @@ import {
   FileText,
 } from 'lucide-react';
 import {
-  COPY_CSV_SHORTCUT,
+  copyCsvShortcut,
   DATA_EXPORT_FORMATS,
   DataExportFormat,
   DataExportInput,
@@ -191,7 +191,7 @@ export function DataExportMenu({
         label={busy === 'copy' ? 'Copying…' : copied ? 'Copied' : 'Copy'}
         icon={copied && !busy ? Check : Copy}
         iconClass={copied && !busy ? 'text-emerald-400' : undefined}
-        title={idle ? idleReason : `Copy (${COPY_CSV_SHORTCUT} for CSV)`}
+        title={idle ? idleReason : `Copy (${copyCsvShortcut()} for CSV)`}
         open={open === 'copy'}
         disabled={idle || busy !== null}
         onToggle={() => setOpen(open === 'copy' ? null : 'copy')}

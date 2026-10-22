@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  copyCsvShortcut,
   exportFileName,
   formatExport,
   inferQualifiedTable,
@@ -100,5 +101,12 @@ describe('inferQualifiedTable', () => {
       schema: '',
       table: 'query_result',
     });
+  });
+});
+
+describe('copyCsvShortcut', () => {
+  test('follows the platform modifier', () => {
+    expect(copyCsvShortcut('windows')).toBe('Ctrl+C');
+    expect(copyCsvShortcut('macos')).toBe('⌘C');
   });
 });
