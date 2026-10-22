@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
 import { clampedScrollAfterWheel } from "./tableScroll";
 
 describe("table scrollport", () => {
@@ -10,11 +11,11 @@ describe("table scrollport", () => {
 
   test("does not force always-visible thin bars in components", async () => {
     const hits: string[] = [];
-    for await (const file of new Bun.Glob("**/*.{tsx,css}").scan({
-      cwd: new URL("..", import.meta.url).pathname,
-    })) {
+    // A URL pathname is `/D:/…` on Windows, which is not a valid path there.
+    const srcDir = join(import.meta.dir, "..");
+    for await (const file of new Bun.Glob("**/*.{tsx,css}").scan({ cwd: srcDir })) {
       if (file.endsWith(".css") || file.includes("tableScroll.test")) continue;
-      const text = await Bun.file(new URL(`../${file}`, import.meta.url)).text();
+      const text = await Bun.file(join(srcDir, file)).text();
       if (
         text.includes("scrollbar-thin") ||
         text.includes("scrollbar-thumb") ||
