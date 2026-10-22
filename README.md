@@ -20,7 +20,7 @@
 
 <p align="center">
   <a href="Cargo.toml"><img src="https://img.shields.io/badge/Built_with-Tauri_%C2%B7_React_%C2%B7_Rust-d87943" alt="Built with Tauri, React, and Rust"></a>
-  <a href="https://github.com/MiguelBizzi/bizzi-db/releases/latest"><img src="https://img.shields.io/badge/Platform-macOS-15171c" alt="Available for macOS"></a>
+  <a href="https://github.com/MiguelBizzi/bizzi-db/releases/latest"><img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-15171c" alt="Available for macOS and Windows"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-d87943" alt="MIT license"></a>
   <a href="https://github.com/MiguelBizzi/bizzi-db/actions/workflows/test.yml"><img src="https://github.com/MiguelBizzi/bizzi-db/actions/workflows/test.yml/badge.svg?branch=main" alt="Test status"></a>
 </p>
@@ -51,7 +51,8 @@ Bizzi DB is a PostgreSQL client written with [Tauri](https://tauri.app), React, 
 | Platform | Installation |
 |---|---|
 | **macOS** | [Download the universal DMG](https://github.com/MiguelBizzi/bizzi-db/releases/latest) for Apple silicon or Intel. Drag Bizzi DB into Applications and open it. |
-| **Windows and Linux** | Not available yet. |
+| **Windows** | [Download the x64 installer](https://github.com/MiguelBizzi/bizzi-db/releases/latest) (`Bizzi DB_<version>_x64-setup.exe`) and run it. It installs for your user only, so no administrator rights are needed. The installer is not code-signed yet: the first time, SmartScreen shows "Windows protected your PC". Choose **More info → Run anyway**. |
+| **Linux** | Not available yet. |
 | **From source** | See [Development](#development). |
 
 The first install is always manual. After that, Bizzi DB updates itself from the same GitHub Release.
@@ -76,7 +77,7 @@ Found a bug or have an idea? [Open an issue](https://github.com/MiguelBizzi/bizz
 
 ### Development
 
-You need [Bun](https://bun.sh) 1.3 or later, [Rust](https://rustup.rs) 1.88 or later, and [Docker](https://www.docker.com) for the local test database.
+You need [Bun](https://bun.sh) 1.3 or later, [Rust](https://rustup.rs) 1.88 or later, and [Docker](https://www.docker.com) for the local test database. On Windows you also need the Visual Studio Build Tools (C++ workload), [Strawberry Perl](https://strawberryperl.com) and [NASM](https://www.nasm.us), which the bundled OpenSSL build uses.
 
 ```sh
 bun install
