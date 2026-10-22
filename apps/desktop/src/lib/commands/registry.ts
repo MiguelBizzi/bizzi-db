@@ -1,3 +1,4 @@
+import type { Platform } from './accelerator';
 import type { CommandContext } from './context';
 
 export interface Command {
@@ -5,6 +6,8 @@ export interface Command {
   label: string;
   dynamicLabel?(ctx: CommandContext): string;
   accelerator?: string;
+  /** Replaces `accelerator` on Windows and Linux; macOS always uses `accelerator`. */
+  nonMacAccelerator?: string;
   enabled(ctx: CommandContext): boolean;
   allowInModal?: boolean;
   typingConflict?: boolean;
@@ -77,6 +80,7 @@ export const COMMANDS: readonly Command[] = [
     id: 'edit.deleteRows',
     label: 'Delete Selected Rows',
     accelerator: 'CmdOrCtrl+Backspace',
+    nonMacAccelerator: 'Delete',
     enabled: (ctx) => tableDataActive(ctx) && ctx.selectedRowCount > 0,
     typingConflict: true,
   },
@@ -104,11 +108,12 @@ export const COMMANDS: readonly Command[] = [
   { id: 'conn.edit', label: 'Edit Connection…', enabled: connectionOpen },
   { id: 'conn.reconnect', label: 'Reconnect', enabled: connectionOpen },
   { id: 'conn.disconnect', label: 'Disconnect', enabled: connectionOpen },
-  { id: 'conn.refreshSchema', label: 'Refresh Schema', accelerator: 'CmdOrCtrl+Shift+R', enabled: connectionOpen },
+  { id: 'conn.refreshSchema', label: 'Refresh Schema', accelerator: 'CmdOrCtrl+Shift+R', nonMacAccelerator: 'CmdOrCtrl+F5', enabled: connectionOpen },
   {
     id: 'conn.refreshTable',
     label: 'Refresh Table',
     accelerator: 'CmdOrCtrl+R',
+    nonMacAccelerator: 'F5',
     enabled: tableDataActive,
   },
   {
@@ -123,11 +128,12 @@ export const COMMANDS: readonly Command[] = [
   { id: 'view.erd', label: 'Schema Diagram (ERD)', accelerator: 'CmdOrCtrl+Shift+E', enabled: connectionOpen },
   { id: 'view.metrics', label: 'Database Metrics', accelerator: 'CmdOrCtrl+Shift+M', enabled: connectionOpen },
   { id: 'view.activity', label: 'Activity Log', accelerator: 'CmdOrCtrl+Shift+L', enabled: connectionOpen },
-  { id: 'view.nextTab', label: 'Next Tab', accelerator: 'CmdOrCtrl+Shift+]', enabled: paneHasTabs(2) },
-  { id: 'view.prevTab', label: 'Previous Tab', accelerator: 'CmdOrCtrl+Shift+[', enabled: paneHasTabs(2) },
+  { id: 'view.nextTab', label: 'Next Tab', accelerator: 'CmdOrCtrl+Shift+]', nonMacAccelerator: 'CmdOrCtrl+Tab', enabled: paneHasTabs(2) },
+  { id: 'view.prevTab', label: 'Previous Tab', accelerator: 'CmdOrCtrl+Shift+[', nonMacAccelerator: 'CmdOrCtrl+Shift+Tab', enabled: paneHasTabs(2) },
   ...goToTabCommands,
   { id: 'view.splitRight', label: 'Split Pane Right', accelerator: 'CmdOrCtrl+Alt+\\', enabled: tabActive },
   { id: 'view.splitDown', label: 'Split Pane Down', enabled: tabActive },
+  { id: 'view.toggleFullscreen', label: 'Full Screen', nonMacAccelerator: 'F11', enabled: () => true },
   { id: 'help.docs', label: 'Documentation', enabled: () => true },
   { id: 'help.releaseNotes', label: 'Release Notes', enabled: () => true },
   { id: 'help.reportIssue', label: 'Report an Issue', enabled: () => true },
@@ -138,6 +144,11 @@ export function commandById(id: string): Command {
   const cmd = COMMANDS.find((c) => c.id === id);
   if (!cmd) throw new Error(`Unknown command "${id}"`);
   return cmd;
+}
+
+/** The accelerator `cmd` carries on `platform`, if any. */
+export function acceleratorFor(cmd: Command, platform: Platform): string | undefined {
+  return platform === 'macos' ? cmd.accelerator : (cmd.nonMacAccelerator ?? cmd.accelerator);
 }
 
 export function isCommandEnabled(cmd: Command, ctx: CommandContext): boolean {

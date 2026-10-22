@@ -58,10 +58,12 @@ describe('buildMenuModel', () => {
     const ids = itemIds(buildMenuModel());
     const known = new Set(COMMANDS.map((c) => c.id));
     for (const id of ids) expect(known.has(id)).toBe(true);
-    for (const cmd of COMMANDS) {
+    // macOS keeps the predefined full screen item; Windows and Linux get the command from the adapter.
+    const inModel = COMMANDS.filter((c) => c.id !== 'view.toggleFullscreen');
+    for (const cmd of inModel) {
       expect(ids.filter((id) => id === cmd.id).length).toBe(1);
     }
-    expect(ids.length).toBe(COMMANDS.length);
+    expect(ids.length).toBe(inModel.length);
   });
 
   test('edit submenu begins with predefined undo', () => {
@@ -196,8 +198,21 @@ describe('adaptMenuModel', () => {
     expect(adaptMenuModel(model, 'macos')).toEqual(model);
   });
 
+  test('macos keeps the predefined full screen item', () => {
+    expect(submenu(adaptMenuModel(buildMenuModel(), 'macos'), 'view').items).toContainEqual({
+      kind: 'predefined',
+      item: 'fullscreen',
+    });
+  });
+
   for (const platform of ['windows', 'linux'] as const) {
     describe(platform, () => {
+      test('replaces the predefined full screen item with the registry command', () => {
+        const items = submenu(adaptMenuModel(buildMenuModel(), platform), 'view').items;
+        expect(items).toContainEqual({ kind: 'item', commandId: 'view.toggleFullscreen' });
+        expect(items).not.toContainEqual({ kind: 'predefined', item: 'fullscreen' });
+      });
+
       test('removes the app submenu', () => {
         const out = adaptMenuModel(buildMenuModel(), platform);
         expect(out.some((n) => n.kind === 'submenu' && n.id === 'app')).toBe(false);
@@ -260,7 +275,8 @@ describe('adaptMenuModel', () => {
 
       test('keeps the nested Go to Tab submenu inside View', () => {
         const view = submenu(adaptMenuModel(buildMenuModel(), platform), 'view');
-        expect(view).toEqual(submenu(buildMenuModel(), 'view'));
+        const neutral = submenu(buildMenuModel(), 'view');
+        expect(view.items.slice(0, -1)).toEqual(neutral.items.slice(0, -1));
       });
 
       test('does not mutate its input', () => {

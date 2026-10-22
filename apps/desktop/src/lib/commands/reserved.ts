@@ -1,3 +1,5 @@
+import type { Platform } from './accelerator';
+
 /** Accelerators owned by the OS or the standard macOS menus; commands must not claim them. */
 export const RESERVED_ACCELERATORS: readonly string[] = [
   'CmdOrCtrl+Q',
@@ -14,3 +16,21 @@ export const RESERVED_ACCELERATORS: readonly string[] = [
   'CmdOrCtrl+V',
   'CmdOrCtrl+A',
 ];
+
+export const WINDOWS_RESERVED_ACCELERATORS: readonly string[] = [
+  'CmdOrCtrl+Z',
+  'CmdOrCtrl+Y',
+  'CmdOrCtrl+X',
+  'CmdOrCtrl+C',
+  'CmdOrCtrl+V',
+  'CmdOrCtrl+A',
+  'Alt+F4',
+  'Alt+Space',
+  'F10',
+  'F12',
+  'CmdOrCtrl+Escape',
+];
+
+export function reservedAccelerators(platform: Platform): readonly string[] {
+  return platform === 'macos' ? RESERVED_ACCELERATORS : WINDOWS_RESERVED_ACCELERATORS;
+}

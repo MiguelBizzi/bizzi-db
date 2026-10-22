@@ -3,7 +3,7 @@ import { startCompletion } from '@codemirror/autocomplete';
 import { EditorState } from '@codemirror/state';
 import { keymap, type KeyBinding } from '@codemirror/view';
 import { parseAccelerator, type Platform } from './commands/accelerator';
-import { COMMANDS, type Command } from './commands/registry';
+import { COMMANDS, acceleratorFor, type Command } from './commands/registry';
 import { currentPlatform } from './commands/shortcutLabel';
 import type { RunMode } from './runTarget';
 
@@ -120,8 +120,9 @@ function boundKeys(binding: KeyBinding, platform: Platform): string[] {
 function menuKeys(platform: Platform, commands: readonly Command[], allow: readonly string[]): Map<string, string> {
   const keys = new Map<string, string>();
   for (const cmd of commands) {
-    if (!cmd.accelerator || allow.includes(cmd.id)) continue;
-    keys.set(canonicalKey(acceleratorToCodeMirrorKey(cmd.accelerator), platform), cmd.id);
+    const accelerator = acceleratorFor(cmd, platform);
+    if (!accelerator || allow.includes(cmd.id)) continue;
+    keys.set(canonicalKey(acceleratorToCodeMirrorKey(accelerator), platform), cmd.id);
   }
   return keys;
 }

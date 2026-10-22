@@ -36,6 +36,13 @@ export function adaptMenuModel(model: MenuNode[], platform: Platform): MenuNode[
       asSubmenu(node).items.push(separator(), { kind: 'item', commandId: 'app.settings' });
     } else if (isSubmenu(node, 'file')) {
       asSubmenu(node).items.push(separator(), { kind: 'predefined', item: 'quit' });
+    } else if (isSubmenu(node, 'view')) {
+      const view = asSubmenu(node);
+      view.items = view.items.map((item) =>
+        item.kind === 'predefined' && item.item === 'fullscreen'
+          ? { kind: 'item', commandId: 'view.toggleFullscreen' }
+          : item,
+      );
     } else if (isSubmenu(node, 'help')) {
       const help = asSubmenu(node);
       help.items.unshift(...helpLead, ...(help.items.length > 0 ? [separator()] : []));

@@ -1,5 +1,5 @@
 import { formatAccelerator, type Platform } from './accelerator';
-import { commandById } from './registry';
+import { acceleratorFor, commandById } from './registry';
 
 /** Detect the host platform from the user agent; non-browser runtimes (bun test) default to macOS. */
 export function currentPlatform(): Platform {
@@ -13,6 +13,6 @@ export function currentPlatform(): Platform {
 
 /** Display string for a command's accelerator, or `''` when it has none. */
 export function shortcutLabel(id: string, platform: Platform = currentPlatform()): string {
-  const accelerator = commandById(id).accelerator;
+  const accelerator = acceleratorFor(commandById(id), platform);
   return accelerator ? formatAccelerator(accelerator, platform) : '';
 }

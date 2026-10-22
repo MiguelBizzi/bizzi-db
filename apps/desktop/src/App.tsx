@@ -2011,6 +2011,10 @@ export default function App() {
         [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`view.tab.${n}`, () => selectFocusedPaneTab((ids) => nthTabId(ids, n))])
       ),
       'view.splitRight': () => handleSplitPane(activePaneId, activeTabId, 'row', 'after'),
+      'view.toggleFullscreen': async () => {
+        const win = getCurrentWindow();
+        await win.setFullscreen(!(await win.isFullscreen()));
+      },
       'view.splitDown': () => handleSplitPane(activePaneId, activeTabId, 'column', 'after'),
       'help.docs': () => openExternalLink('docs'),
       'help.releaseNotes': () => openExternalLink('releaseNotes'),
