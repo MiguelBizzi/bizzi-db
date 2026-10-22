@@ -1,6 +1,6 @@
 import { formatAccelerator, type Platform } from './accelerator';
 import type { MenuNode } from './menuModel';
-import { commandById } from './registry';
+import { acceleratorFor, commandById } from './registry';
 
 export interface CheatSheetRow {
   label: string;
@@ -18,7 +18,8 @@ function collectRows(nodes: MenuNode[], platform: Platform, out: CheatSheetRow[]
       collectRows(node.items, platform, out);
     } else if (node.kind === 'item') {
       const cmd = commandById(node.commandId);
-      if (cmd.accelerator) out.push({ label: cmd.label, shortcut: formatAccelerator(cmd.accelerator, platform) });
+      const accelerator = acceleratorFor(cmd, platform);
+      if (accelerator) out.push({ label: cmd.label, shortcut: formatAccelerator(accelerator, platform) });
     }
   }
 }

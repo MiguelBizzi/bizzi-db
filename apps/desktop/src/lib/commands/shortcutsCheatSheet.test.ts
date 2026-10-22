@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { formatAccelerator, type Platform } from './accelerator';
 import { buildMenuModel, type MenuNode } from './menuModel';
 import { adaptMenuModel } from './platformAdapter';
-import { COMMANDS } from './registry';
+import { COMMANDS, acceleratorFor } from './registry';
 import { cheatSheetRows } from './shortcutsCheatSheet';
 
 const PLATFORMS: Platform[] = ['macos', 'windows', 'linux'];
@@ -16,17 +16,18 @@ describe('cheatSheetRows', () => {
     describe(platform, () => {
       test('every command with an accelerator appears exactly once across all groups', () => {
         const rows = rowsFor(platform).flatMap((g) => g.rows);
-        for (const cmd of COMMANDS.filter((c) => c.accelerator !== undefined)) {
-          const shortcut = formatAccelerator(cmd.accelerator as string, platform);
+        const accelerated = COMMANDS.filter((c) => acceleratorFor(c, platform) !== undefined);
+        for (const cmd of accelerated) {
+          const shortcut = formatAccelerator(acceleratorFor(cmd, platform) as string, platform);
           const matches = rows.filter((r) => r.label === cmd.label && r.shortcut === shortcut);
           expect(matches.length).toBe(1);
         }
-        expect(rows.length).toBe(COMMANDS.filter((c) => c.accelerator !== undefined).length);
+        expect(rows.length).toBe(accelerated.length);
       });
 
       test('commands without an accelerator never appear', () => {
         const labels = new Set(rowsFor(platform).flatMap((g) => g.rows.map((r) => r.label)));
-        for (const cmd of COMMANDS.filter((c) => c.accelerator === undefined)) {
+        for (const cmd of COMMANDS.filter((c) => acceleratorFor(c, platform) === undefined)) {
           expect(labels.has(cmd.label)).toBe(false);
         }
       });
@@ -70,6 +71,13 @@ describe('cheatSheetRows', () => {
     const groups = rowsFor('windows');
     const edit = groups.find((g) => g.group === 'Edit');
     expect(edit?.rows.find((r) => r.label === 'Settings…')?.shortcut).toBe('Ctrl+,');
+  });
+
+  test('Windows uses its own overrides for Delete Selected Rows and Full Screen', () => {
+    const groups = rowsFor('windows');
+    const rowsOf = (name: string) => groups.find((g) => g.group === name)?.rows ?? [];
+    expect(rowsOf('Edit')).toContainEqual({ label: 'Delete Selected Rows', shortcut: 'Delete' });
+    expect(rowsOf('View')).toContainEqual({ label: 'Full Screen', shortcut: 'F11' });
   });
 
   test('macOS groups are exactly the menus with accelerated commands, in menu order', () => {

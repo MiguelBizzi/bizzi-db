@@ -1,13 +1,14 @@
 import { describe, expect, test } from 'bun:test';
-import { normalizeAccelerator, parseAccelerator } from './accelerator';
+import { formatAccelerator, normalizeAccelerator, parseAccelerator, type Platform } from './accelerator';
 import { EMPTY_CONTEXT, type CommandContext } from './context';
-import { RESERVED_ACCELERATORS } from './reserved';
-import { COMMANDS, commandById, isCommandEnabled, menuState, type Command } from './registry';
+import { reservedAccelerators } from './reserved';
+import { COMMANDS, acceleratorFor, commandById, isCommandEnabled, menuState, type Command } from './registry';
 import { currentPlatform, shortcutLabel } from './shortcutLabel';
 
 const ctx = (over: Partial<CommandContext> = {}): CommandContext => ({ ...EMPTY_CONTEXT, ...over });
 
 const withAccelerator = COMMANDS.filter((c) => c.accelerator !== undefined);
+const PLATFORMS: Platform[] = ['macos', 'windows', 'linux'];
 
 describe('COMMANDS registry invariants', () => {
   test('every id is unique', () => {
@@ -21,16 +22,63 @@ describe('COMMANDS registry invariants', () => {
     }
   });
 
-  test('every accelerator is unique after normalization', () => {
-    const normalized = withAccelerator.map((c) => normalizeAccelerator(c.accelerator as string));
-    expect(new Set(normalized).size).toBe(normalized.length);
+  test('every non-mac override parses', () => {
+    for (const c of COMMANDS.filter((c) => c.nonMacAccelerator !== undefined)) {
+      expect(() => parseAccelerator(c.nonMacAccelerator as string)).not.toThrow();
+    }
   });
 
-  test('no accelerator is reserved', () => {
-    const reserved = new Set(RESERVED_ACCELERATORS.map(normalizeAccelerator));
-    for (const c of withAccelerator) {
-      expect(reserved.has(normalizeAccelerator(c.accelerator as string))).toBe(false);
+  for (const platform of PLATFORMS) {
+    const effective = COMMANDS.flatMap((c) => {
+      const acc = acceleratorFor(c, platform);
+      return acc === undefined ? [] : [acc];
+    });
+
+    test(`every accelerator is unique after normalization on ${platform}`, () => {
+      const normalized = effective.map(normalizeAccelerator);
+      expect(new Set(normalized).size).toBe(normalized.length);
+    });
+
+    test(`no accelerator is reserved on ${platform}`, () => {
+      const reserved = new Set(reservedAccelerators(platform).map(normalizeAccelerator));
+      for (const acc of effective) expect(reserved.has(normalizeAccelerator(acc))).toBe(false);
+    });
+  }
+
+  test('windows shortcut map matches the spec', () => {
+    const expected: Array<[string, string]> = [
+      ['edit.deleteRows', 'Delete'],
+      ['conn.refreshTable', 'F5'],
+      ['conn.refreshSchema', 'Ctrl+F5'],
+      ['view.nextTab', 'Ctrl+Tab'],
+      ['view.prevTab', 'Ctrl+Shift+Tab'],
+      ['view.toggleFullscreen', 'F11'],
+      ['file.newView', 'Ctrl+Alt+V'],
+      ['query.run', 'Ctrl+Enter'],
+      ['view.tab.9', 'Ctrl+9'],
+    ];
+    for (const [id, shortcut] of expected) {
+      const acc = acceleratorFor(commandById(id), 'windows');
+      expect(formatAccelerator(acc as string, 'windows')).toBe(shortcut);
     }
+  });
+
+  test('macOS accelerators are unchanged', () => {
+    expect(acceleratorFor(commandById('edit.deleteRows'), 'macos')).toBe('CmdOrCtrl+Backspace');
+    expect(acceleratorFor(commandById('view.toggleFullscreen'), 'macos')).toBeUndefined();
+  });
+
+  test('windows reserved list', () => {
+    const reserved = reservedAccelerators('windows').map(normalizeAccelerator);
+    for (const acc of ['Alt+F4', 'CmdOrCtrl+Y', 'F10', 'F12', 'Alt+Space', 'CmdOrCtrl+Escape']) {
+      expect(reserved).toContain(normalizeAccelerator(acc));
+    }
+  });
+
+  test('full screen is always enabled and not allowed in a modal', () => {
+    const cmd = commandById('view.toggleFullscreen');
+    expect(cmd.label).toBe('Full Screen');
+    expect(cmd.allowInModal ?? false).toBe(false);
   });
 
   test('registers the Phase 1 to Phase 4 command ids', () => {
@@ -86,6 +134,7 @@ describe('COMMANDS registry invariants', () => {
         'view.tab.9',
         'view.splitRight',
         'view.splitDown',
+        'view.toggleFullscreen',
         'help.docs',
         'help.releaseNotes',
         'help.reportIssue',
@@ -264,6 +313,8 @@ describe('isCommandEnabled', () => {
     ['view.splitRight', { activeTabType: 'table_data', modalOpen: true }, false],
     ['view.splitDown', { activeTabType: 'table_data' }, true],
     ['view.splitDown', {}, false],
+    ['view.toggleFullscreen', {}, true],
+    ['view.toggleFullscreen', { modalOpen: true }, false],
     // grid commands (Phase 3): typingConflict keeps them out of the way of text editing
     ['edit.find', { activeTabType: 'table_data' }, true],
     ['edit.find', { activeTabType: 'table_data', textInputFocused: true }, false],
@@ -482,6 +533,7 @@ describe('menuState for realistic app contexts', () => {
         'view.tab.9',
         'view.splitRight',
         'view.splitDown',
+        'view.toggleFullscreen',
         'help.docs',
         'help.releaseNotes',
         'help.reportIssue',
@@ -522,6 +574,7 @@ describe('menuState for realistic app contexts', () => {
         'app.checkUpdates',
         'file.closeWindow',
         'view.palette',
+        'view.toggleFullscreen',
         'file.newConnection',
         'conn.switch',
         'conn.back',
@@ -570,7 +623,7 @@ describe('shortcutLabel', () => {
     expect(shortcutLabel('view.tab.9', 'macos')).toBe('⌘9');
     expect(shortcutLabel('view.splitRight', 'macos')).toBe('⌥⌘\\');
     expect(shortcutLabel('view.splitRight', 'windows')).toBe('Ctrl+Alt+\\');
-    expect(shortcutLabel('view.nextTab', 'linux')).toBe('Ctrl+Shift+]');
+    expect(shortcutLabel('view.nextTab', 'linux')).toBe('Ctrl+Tab');
     expect(shortcutLabel('file.closeRight', 'macos')).toBe('');
     expect(shortcutLabel('view.splitDown', 'macos')).toBe('');
   });
@@ -590,7 +643,7 @@ describe('shortcutLabel', () => {
     expect(shortcutLabel('file.export', 'macos')).toBe('⌘E');
     expect(shortcutLabel('query.commit', 'macos')).toBe('⇧⌘S');
     expect(shortcutLabel('query.discard', 'macos')).toBe('');
-    expect(shortcutLabel('edit.deleteRows', 'windows')).toBe('Ctrl+Backspace');
+    expect(shortcutLabel('edit.deleteRows', 'windows')).toBe('Delete');
   });
 
   test('formats the connection and schema accelerators', () => {
@@ -598,7 +651,7 @@ describe('shortcutLabel', () => {
     expect(shortcutLabel('file.newTable', 'macos')).toBe('⇧⌘N');
     expect(shortcutLabel('conn.refreshSchema', 'macos')).toBe('⇧⌘R');
     expect(shortcutLabel('file.newConnection', 'windows')).toBe('Ctrl+N');
-    expect(shortcutLabel('conn.refreshSchema', 'linux')).toBe('Ctrl+Shift+R');
+    expect(shortcutLabel('conn.refreshSchema', 'linux')).toBe('Ctrl+F5');
     for (const id of ['conn.switch', 'conn.back', 'conn.edit', 'conn.reconnect', 'conn.disconnect']) {
       expect(shortcutLabel(id, 'macos')).toBe('');
     }
