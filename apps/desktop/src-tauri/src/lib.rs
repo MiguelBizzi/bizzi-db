@@ -593,6 +593,24 @@ async fn ssh_pick_private_key() -> Result<Option<String>, String> {
     Ok(file.map(|handle| handle.path().to_string_lossy().into_owned()))
 }
 
+#[tauri::command]
+fn window_menu_set_visible(window: tauri::WebviewWindow, visible: bool) -> Result<(), String> {
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    {
+        let result = if visible {
+            window.show_menu()
+        } else {
+            window.hide_menu()
+        };
+        result.map_err(map_err)
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    {
+        let _ = (window, visible);
+        Ok(())
+    }
+}
+
 fn db_path(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&dir).map_err(map_err)?;
@@ -610,13 +628,24 @@ fn secrets_path(db_path: &std::path::Path) -> PathBuf {
 mod macos;
 
 pub fn run() {
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    let builder = tauri::Builder::default().plugin(tauri_plugin_single_instance::init(
+        |app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        },
+    ));
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    let builder = tauri::Builder::default();
+
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    let builder = tauri::Builder::default()
+    let builder = builder
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init());
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    let builder = tauri::Builder::default();
 
     builder
         .setup(|app| {
@@ -665,7 +694,8 @@ pub fn run() {
             workspace_save,
             settings_get,
             settings_save,
-            ssh_pick_private_key
+            ssh_pick_private_key,
+            window_menu_set_visible
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
