@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { validateUpdaterManifest } from './updaterManifest';
+import {
+  DARWIN_PLATFORMS,
+  WINDOWS_PLATFORMS,
+  validateUpdaterManifest,
+} from './updaterManifest';
 
 const url = (arch: string) =>
   `https://github.com/MiguelBizzi/bizzi-db/releases/download/v0.1.8/Bizzi.DB_${arch}.app.tar.gz`;
@@ -65,5 +69,26 @@ describe('validateUpdaterManifest', () => {
       'v0.1.8',
     );
     expect(problems.join(' ')).toContain('https');
+  });
+
+  test('requires windows-x86_64 when the list includes it', () => {
+    const problems = validateUpdaterManifest(good, 'v0.1.8', [
+      ...DARWIN_PLATFORMS,
+      ...WINDOWS_PLATFORMS,
+    ]);
+    expect(problems).toEqual(['platform windows-x86_64 is missing']);
+  });
+
+  test('accepts a manifest that carries all three platforms', () => {
+    const full = {
+      ...good,
+      platforms: {
+        ...good.platforms,
+        'windows-x86_64': { signature: 'abc', url: 'https://example.com/a-setup.exe' },
+      },
+    };
+    expect(
+      validateUpdaterManifest(full, 'v0.1.8', [...DARWIN_PLATFORMS, ...WINDOWS_PLATFORMS]),
+    ).toEqual([]);
   });
 });

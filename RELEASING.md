@@ -11,10 +11,20 @@ Ship from `main` with a version bump and a `v*` tag. Cursor follows [`.cursor/ru
    git tag -a v0.1.1 -m "v0.1.1"
    git push origin v0.1.1
    ```
-5. [`.github/workflows/release.yml`](.github/workflows/release.yml) first takes the `CHANGELOG.md` section for the tag as the release notes. A tag with no section, or an empty one, fails here before anything is built. Tags must be plain `vX.Y.Z`. It then builds, signs, and uploads a universal macOS DMG and `latest.json`, re-styles and re-signs the DMG (`assets/brand/dmg/brand-dmg.sh`) and verifies both the file and the published asset (`verify-dmg.py`). A failing DMG check fails the run; fix it and use **Re-run failed jobs**, do not retag.
+5. [`.github/workflows/release.yml`](.github/workflows/release.yml) first takes the `CHANGELOG.md` section for the tag as the release notes. A tag with no section, or an empty one, fails here before anything is built. Tags must be plain `vX.Y.Z`. It then runs two jobs. `publish` (macOS) goes first: it builds, signs, and uploads a universal macOS DMG and `latest.json`, re-styles and re-signs the DMG (`assets/brand/dmg/brand-dmg.sh`) and verifies both the file and the published asset (`verify-dmg.py`). `publish-windows` needs it and runs only while the repository variable `WINDOWS_RELEASE_ENABLED` is `true` (otherwise it shows as skipped): it builds the NSIS installer, signs it with Azure Trusted Signing, merges `windows-x86_64` into `latest.json`, and fails unless the published installer has a valid Authenticode signature. If signing fails, the build aborts, so no unsigned installer is produced; if a signed installer is published but its status is not `Valid`, a cleanup step deletes the `*-setup.exe` assets and removes `windows-x86_64` from `latest.json` again. If either job fails, fix the cause and use **Re-run failed jobs** (a failed `publish-windows` leaves macOS users unaffected); do not retag.
 
 Pushing `main` without a tag does not ship. Published `v*` tags are immutable: do not retag, move or delete one. Do not regenerate the updater signing key. Do not change the bundle id `com.bizzidb.app` after the first public install.
 
 To try a build without offering it to installed apps, mark the GitHub Release as a **prerelease**. Installed copies only follow the latest non-prerelease.
 
-Required GitHub Actions secrets are listed in [`SECURITY.md`](SECURITY.md).
+Required GitHub Actions secrets and variables are listed in [`SECURITY.md`](SECURITY.md).
+
+## One-time Windows signing setup
+
+1. Create an Azure Trusted Signing account and certificate profile (public trust). Identity validation takes days; start first.
+2. Create an Entra app registration with the "Trusted Signing Certificate Profile Signer" role on the profile.
+3. Add the GitHub secrets `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, and the repository variables `AZURE_SIGNING_ENDPOINT` (for example `https://eus.codesigning.azure.net`), `AZURE_SIGNING_ACCOUNT`, `AZURE_SIGNING_PROFILE`.
+4. The existing `TAURI_SIGNING_PRIVATE_KEY` and password are reused for the Windows updater signature.
+5. Cut a prerelease and pass the Windows verification checklist (plan Task 9), then set the repository variable `WINDOWS_RELEASE_ENABLED` to `true`.
+
+Until `WINDOWS_RELEASE_ENABLED` is `true`, `publish-windows` is skipped and releases are macOS only. Keep it off until the Azure setup is done and the prerelease checks pass.

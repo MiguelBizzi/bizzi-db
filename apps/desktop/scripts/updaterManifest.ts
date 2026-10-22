@@ -1,4 +1,5 @@
-export const REQUIRED_PLATFORMS = ['darwin-aarch64', 'darwin-x86_64'] as const;
+export const DARWIN_PLATFORMS = ['darwin-aarch64', 'darwin-x86_64'] as const;
+export const WINDOWS_PLATFORMS = ['windows-x86_64'] as const;
 
 type Platform = { signature?: unknown; url?: unknown };
 
@@ -9,6 +10,7 @@ type Platform = { signature?: unknown; url?: unknown };
 export function validateUpdaterManifest(
   manifest: unknown,
   tag: string,
+  required: readonly string[] = DARWIN_PLATFORMS,
 ): string[] {
   if (!manifest || typeof manifest !== 'object') {
     return ['latest.json is missing or is not a JSON object'];
@@ -24,7 +26,7 @@ export function validateUpdaterManifest(
     problems.push(`version is ${String(version)} but the tag is ${expected}`);
   }
 
-  for (const name of REQUIRED_PLATFORMS) {
+  for (const name of required) {
     const entry = platforms?.[name];
     if (!entry) {
       problems.push(`platform ${name} is missing`);

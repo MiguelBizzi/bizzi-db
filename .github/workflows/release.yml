@@ -120,3 +120,70 @@ jobs:
           mkdir -p "$RUNNER_TEMP/published"
           gh release download "${{ github.ref_name }}" --pattern "*.dmg" --dir "$RUNNER_TEMP/published" --clobber
           "$DMG_PYTHON" assets/brand/dmg/verify-dmg.py "$RUNNER_TEMP/published/"*.dmg apps/desktop/src-tauri/tauri.conf.json $flags
+
+  # Runs after the macOS job so the two never race on latest.json; tauri-action merges the Windows entry into it.
+  publish-windows:
+    needs: publish
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: ilammy/setup-nasm@v1
+
+      - name: Install the Azure Trusted Signing CLI
+        run: cargo install trusted-signing-cli --locked --version 0.11.0
+
+      - run: bun install --frozen-lockfile
+
+      - name: Write the signing config
+        shell: bash
+        env:
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
+        run: bun apps/desktop/scripts/write-windows-sign-config.ts "$RUNNER_TEMP/windows-sign.conf.json"
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        with:
+          projectPath: apps/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: Bizzi DB ${{ github.ref_name }}
+          releaseBody: See the assets below to download and install this version.
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          args: --config ${{ runner.temp }}/windows-sign.conf.json
+
+      # Hard gate: a release without all three platforms strands the installed apps on that platform.
+      - name: Verify updater manifest
+        shell: bash
+        run: bun apps/desktop/scripts/verify-updater-manifest.ts "${{ github.ref_name }}" "${{ github.repository }}" darwin-aarch64,darwin-x86_64,windows-x86_64
+
+      # Download what users will actually get; an unsigned installer must never stay published.
+      - name: Verify the published installer signature
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'published'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          gh release download "${{ github.ref_name }}" --pattern "*-setup.exe" --dir $dir --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'could not download the published installer' }
+          $exe = Get-ChildItem $dir -Filter '*-setup.exe' | Select-Object -First 1
+          if (-not $exe) { throw 'no *-setup.exe among the release assets' }
+          $status = (Get-AuthenticodeSignature $exe.FullName).Status
+          if ($status -ne 'Valid') { throw "$($exe.Name) Authenticode status is $status, expected Valid" }
+          Write-Host "$($exe.Name) has a valid Authenticode signature"
