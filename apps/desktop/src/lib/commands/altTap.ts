@@ -3,6 +3,7 @@ export function createAltTapTracker(): {
   keyDown(key: string): void;
   keyUp(key: string): boolean;
   interrupt(): void;
+  reset(): void;
 } {
   let armed = false;
   let held = false;
@@ -25,6 +26,11 @@ export function createAltTapTracker(): {
     },
     interrupt() {
       armed = false;
+    },
+    // On blur the Alt keyup goes to another window, so the held state must be forgotten too.
+    reset() {
+      armed = false;
+      held = false;
     },
   };
 }
