@@ -16,7 +16,9 @@ use db_core::{
     Session, SqlRange, SshAuthMethod, TablePreviewRequest, TestConnectionResult, WorkspaceState,
 };
 use db_postgres::PostgresAdapter;
-use db_storage::{DualSecretStore, FileSecrets, KeychainSecrets, Storage};
+use db_storage::{
+    DualSecretStore, FileSecrets, KeychainSecrets, Storage, StorageError, KEYCHAIN_UNAVAILABLE,
+};
 use ssh_tunnel::SshTunnel;
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
@@ -549,6 +551,23 @@ fn settings_get(state: State<'_, AppState>) -> Result<AppSettings, String> {
         .map_err(map_err)
 }
 
+// A zero-connection migration touches no secret, so only the probe catches a missing keyring before the setting sticks.
+fn ensure_keychain_toggle(
+    previous: bool,
+    next: bool,
+    probe: impl FnOnce() -> Result<(), StorageError>,
+) -> Result<(), String> {
+    if !previous && next {
+        probe().map_err(|_| KEYCHAIN_UNAVAILABLE.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn keychain_available(state: State<'_, AppState>) -> bool {
+    state.secrets.keychain.probe().is_ok()
+}
+
 #[tauri::command]
 fn settings_save(state: State<'_, AppState>, settings: AppSettings) -> Result<AppSettings, String> {
     let previous = state
@@ -557,6 +576,9 @@ fn settings_save(state: State<'_, AppState>, settings: AppSettings) -> Result<Ap
         .map_err(map_err)?
         .load_app_settings()
         .map_err(map_err)?;
+    ensure_keychain_toggle(previous.keychain_enabled, settings.keychain_enabled, || {
+        state.secrets.keychain.probe()
+    })?;
     if previous.keychain_enabled != settings.keychain_enabled {
         let ids: Vec<String> = state
             .storage
@@ -679,6 +701,7 @@ pub fn run() {
             workspace_save,
             settings_get,
             settings_save,
+            keychain_available,
             ssh_pick_private_key
         ])
         .build(tauri::generate_context!())
@@ -689,4 +712,27 @@ pub fn run() {
             #[cfg(not(target_os = "macos"))]
             let _ = (app, event);
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn failing_probe() -> Result<(), StorageError> {
+        Err(StorageError::msg("x"))
+    }
+
+    #[test]
+    fn enabling_keychain_is_refused_when_unavailable_even_with_no_connections() {
+        let err = ensure_keychain_toggle(false, true, failing_probe).unwrap_err();
+        assert!(err.contains("not available"));
+        assert!(ensure_keychain_toggle(false, true, || Ok(())).is_ok());
+    }
+
+    #[test]
+    fn keychain_probe_only_runs_when_turning_it_on() {
+        assert!(ensure_keychain_toggle(true, false, failing_probe).is_ok());
+        assert!(ensure_keychain_toggle(true, true, failing_probe).is_ok());
+        assert!(ensure_keychain_toggle(false, false, failing_probe).is_ok());
+    }
 }

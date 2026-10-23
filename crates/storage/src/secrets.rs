@@ -34,32 +34,47 @@ impl KeychainSecrets {
     }
 }
 
+const PROBE_KEY: &str = "__bizzi_probe__";
+
+pub const KEYCHAIN_UNAVAILABLE: &str = "The system keychain is not available. Unlock or start your keyring (GNOME Keyring or KWallet), or turn off the system keychain in Settings.";
+
+// keyring surfaces raw D-Bus strings on Linux when no Secret Service is running; users get one readable message instead.
+pub fn keychain_error_message(_e: &keyring::Error) -> String {
+    KEYCHAIN_UNAVAILABLE.to_string()
+}
+
+fn keychain_err(e: keyring::Error) -> StorageError {
+    StorageError::msg(keychain_error_message(&e))
+}
+
+impl KeychainSecrets {
+    /// `Ok(None)` from the lookup means the keyring answered, so it is available.
+    pub fn probe(&self) -> Result<(), StorageError> {
+        self.get_password(PROBE_KEY).map(|_| ())
+    }
+}
+
 impl SecretStore for KeychainSecrets {
     fn set_password(&self, connection_id: &str, password: &str) -> Result<(), StorageError> {
-        let entry = keyring::Entry::new(&self.service, connection_id)
-            .map_err(|e| StorageError::msg(e.to_string()))?;
-        entry
-            .set_password(password)
-            .map_err(|e| StorageError::msg(e.to_string()))
+        let entry = keyring::Entry::new(&self.service, connection_id).map_err(keychain_err)?;
+        entry.set_password(password).map_err(keychain_err)
     }
 
     fn get_password(&self, connection_id: &str) -> Result<Option<String>, StorageError> {
-        let entry = keyring::Entry::new(&self.service, connection_id)
-            .map_err(|e| StorageError::msg(e.to_string()))?;
+        let entry = keyring::Entry::new(&self.service, connection_id).map_err(keychain_err)?;
         match entry.get_password() {
             Ok(p) => Ok(Some(p)),
             Err(keyring::Error::NoEntry) => Ok(None),
-            Err(e) => Err(StorageError::msg(e.to_string())),
+            Err(e) => Err(keychain_err(e)),
         }
     }
 
     fn delete_password(&self, connection_id: &str) -> Result<(), StorageError> {
-        let entry = keyring::Entry::new(&self.service, connection_id)
-            .map_err(|e| StorageError::msg(e.to_string()))?;
+        let entry = keyring::Entry::new(&self.service, connection_id).map_err(keychain_err)?;
         match entry.delete_password() {
             Ok(()) => Ok(()),
             Err(keyring::Error::NoEntry) => Ok(()),
-            Err(e) => Err(StorageError::msg(e.to_string())),
+            Err(e) => Err(keychain_err(e)),
         }
     }
 }
@@ -374,6 +389,21 @@ mod tests {
         let store = DualSecretStore::new(FailingSecrets, InMemorySecrets::default());
         let err = store.copy_keychain_into_local(&["c1".into()]).unwrap_err();
         assert!(err.to_string().contains("locked"));
+    }
+
+    #[test]
+    fn keyring_errors_read_as_one_message() {
+        let expected = "The system keychain is not available. Unlock or start your keyring (GNOME Keyring or KWallet), or turn off the system keychain in Settings.";
+        let no_storage = keyring::Error::NoStorageAccess(Box::new(std::io::Error::other(
+            "org.freedesktop.DBus.Error.ServiceUnknown",
+        )));
+        let msg = keychain_error_message(&no_storage);
+        assert_eq!(msg, expected);
+        assert!(!msg.contains("DBus"));
+        let platform = keyring::Error::PlatformFailure(Box::new(std::io::Error::other(
+            "org.freedesktop.DBus.Error.NoReply",
+        )));
+        assert_eq!(keychain_error_message(&platform), expected);
     }
 
     struct ReadOnlySecrets;

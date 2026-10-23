@@ -55,6 +55,7 @@ import {
   schemaRoutineSource,
   schemaSync,
   settingsGet,
+  keychainAvailable,
   settingsSave,
   sshPickPrivateKey,
   tablePreview,
@@ -238,6 +239,7 @@ export default function App() {
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
   const [switcherRequest, setSwitcherRequest] = useState(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isKeychainAvailable, setIsKeychainAvailable] = useState(true);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const closeShortcuts = useCallback(() => setIsShortcutsOpen(false), []);
   const shortcutGroups = useMemo(() => {
@@ -1526,6 +1528,21 @@ export default function App() {
     setDefaultFolderId(null);
   };
 
+  useEffect(() => {
+    if (!isSettingsOpen) return;
+    let cancelled = false;
+    keychainAvailable()
+      .then((ok) => {
+        if (!cancelled) setIsKeychainAvailable(ok);
+      })
+      .catch(() => {
+        if (!cancelled) setIsKeychainAvailable(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isSettingsOpen]);
+
   const handleToggleKeychain = async (enabled: boolean) => {
     const saved = await settingsSave({ keychainEnabled: enabled });
     setAppSettings(saved);
@@ -2268,6 +2285,7 @@ export default function App() {
       <SettingsModal
         isOpen={isSettingsOpen}
         keychainEnabled={appSettings.keychainEnabled}
+        keychainAvailable={isKeychainAvailable}
         appVersion={appVersion}
         updateStatus={updateStatus}
         motionPreference={motionPreference}

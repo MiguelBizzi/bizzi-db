@@ -16,6 +16,7 @@ import {
 interface SettingsModalProps {
   isOpen: boolean;
   keychainEnabled: boolean;
+  keychainAvailable: boolean;
   appVersion: string;
   updateStatus: AppUpdateStatus;
   motionPreference: MotionPreference;
@@ -66,6 +67,7 @@ function updateStatusCopy(status: AppUpdateStatus): string {
 const SettingsModalBody: React.FC<SettingsModalProps> = ({
   isOpen,
   keychainEnabled,
+  keychainAvailable,
   appVersion,
   updateStatus,
   motionPreference,
@@ -80,6 +82,8 @@ const SettingsModalBody: React.FC<SettingsModalProps> = ({
   const platform = currentPlatform();
   const secretStore = secretStoreName(platform);
   const storeLabel = secretStore.charAt(0).toUpperCase() + secretStore.slice(1);
+  // An enabled toggle stays usable so the user can turn it off when the keyring disappears.
+  const toggleDisabled = !keychainAvailable && !keychainEnabled;
 
   const checking = updateStatus.phase === "checking";
   const busy =
@@ -119,6 +123,7 @@ const SettingsModalBody: React.FC<SettingsModalProps> = ({
               <Switch
                 id="settings-keychain"
                 checked={keychainEnabled}
+                disabled={toggleDisabled}
                 onCheckedChange={(enabled) => {
                   void onToggleKeychain(enabled);
                 }}
@@ -136,6 +141,12 @@ const SettingsModalBody: React.FC<SettingsModalProps> = ({
               {secretStoreLongName(platform)}. When off, they are stored locally in
               an owner-only file.
             </p>
+            {toggleDisabled && (
+              <p className="text-[10px] text-muted-foreground">
+                No {secretStoreLongName(platform)} was found. Passwords are
+                stored in a local file only you can read.
+              </p>
+            )}
           </div>
 
           {!keychainEnabled && (
