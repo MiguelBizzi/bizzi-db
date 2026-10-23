@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { currentPlatform } from "../lib/commands/shortcutLabel";
-import { resizeEdges } from "../lib/windowChrome";
+import { resizeEdges, resizeHandlesEnabled } from "../lib/windowChrome";
 
-const IS_TAURI =
-  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-const IS_LINUX = currentPlatform() === "linux";
+const ENABLED = resizeHandlesEnabled(
+  currentPlatform(),
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window,
+);
 
 export function ResizeHandles() {
   const [state, setState] = useState({ maximized: false, fullscreen: false });
 
   useEffect(() => {
-    if (!IS_TAURI || !IS_LINUX) return;
+    if (!ENABLED) return;
     const win = getCurrentWindow();
     const sync = () => {
       void Promise.all([win.isMaximized(), win.isFullscreen()])
@@ -25,7 +26,7 @@ export function ResizeHandles() {
     };
   }, []);
 
-  if (!IS_LINUX) return null;
+  if (!ENABLED) return null;
 
   return (
     <>
