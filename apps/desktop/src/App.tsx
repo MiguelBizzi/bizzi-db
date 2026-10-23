@@ -172,9 +172,10 @@ import {
   IDLE_UPDATE_STATUS,
   UPDATE_CHECK_INTERVAL_MS,
   canAutoCheck,
-canRestartToUpdate,
-checkOptions,
-manualCheckBlocked,
+  canRestartToUpdate,
+  checkOptions,
+  manualCheckBlocked,
+  resolveUpdateChannel,
   manualCheckFeedback,
   canStartUpdateCheck,
   shouldShowUpdateBanner,
@@ -490,9 +491,7 @@ export default function App() {
   }, []);
 
   const getUpdateChannel = useCallback((): Promise<UpdateChannel> => {
-    updateChannelRef.current ??= appUpdateChannel().catch(
-      (): UpdateChannel => ({ selfUpdate: true, target: null }),
-    );
+    updateChannelRef.current ??= resolveUpdateChannel(appUpdateChannel);
     return updateChannelRef.current;
   }, []);
 
