@@ -35,6 +35,7 @@ import {
   WorkspaceState,
   AppSettings,
 } from './types';
+import { ResizeHandles } from './components/ResizeHandles';
 import { DEFAULT_APP_SETTINGS, DEFAULT_PREVIEW_LIMIT } from '@db/shared';
 import {
   connectionsConnect,
@@ -2028,6 +2029,7 @@ export default function App() {
 
   return (
     <MotionConfig reducedMotion={reducedMotion ? 'always' : 'never'}>
+    <ResizeHandles />
     <div className="flex flex-col h-screen w-screen bg-background text-foreground font-sans select-none overflow-hidden">
       <Navbar
         variant={showPicker ? 'picker' : 'workspace'}

@@ -25,6 +25,7 @@ import {
 import { useHoverMenu } from "../lib/hoverMenu";
 import { WindowControls } from "./WindowControls";
 import { WindowsCaptionButtons } from "./WindowsCaptionButtons";
+import { LinuxCaptionButtons } from "./LinuxCaptionButtons";
 import { navbarEndGroupClass, navbarPadding } from "../lib/windowChrome";
 import { currentPlatform, shortcutLabel } from "../lib/commands/shortcutLabel";
 
@@ -397,7 +398,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       {END_GROUP_CLASS ? (
         <div className={END_GROUP_CLASS}>
           {toolbar}
-          <WindowsCaptionButtons />
+          {PLATFORM === "linux" ? <LinuxCaptionButtons /> : <WindowsCaptionButtons />}
         </div>
       ) : (
         toolbar
