@@ -1,3 +1,4 @@
+mod platform;
 mod ssh_tunnel;
 
 use std::collections::HashMap;
@@ -621,6 +622,7 @@ pub fn run() {
         }));
     #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     let builder = tauri::Builder::default();
+    let builder = builder.plugin(platform::init());
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder
