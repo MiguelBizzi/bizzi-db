@@ -42,5 +42,11 @@ Set the repository variable `LINUX_RELEASE_ENABLED` to `true` to publish Linux. 
 One-time setup, before the first Linux release:
 
 1. Generate a release GPG key: `gpg --quick-gen-key "Bizzi DB Releases <…>" ed25519 sign 3y`. Add the secrets `LINUX_GPG_PRIVATE_KEY` (the armored private key, `gpg --armor --export-secret-keys <fingerprint>`) and `LINUX_GPG_PASSPHRASE`. Publish the public key as `docs/release-signing-key.asc` and its fingerprint in [`SECURITY.md`](SECURITY.md). Without the secrets, `SHA256SUMS` ships unsigned and the run shows a warning.
-2. Set `LINUX_RELEASE_ENABLED=true` once a prerelease passes the Linux checklist.
-3. The existing `TAURI_SIGNING_PRIVATE_KEY` and password are reused for the Linux updater signatures.
+2. The existing `TAURI_SIGNING_PRIVATE_KEY` and password are reused for the Linux updater signatures.
+
+Turning Linux on. Releases take plain `vX.Y.Z` tags only, every release is published as the latest one, and installed apps update from `releases/latest/download/latest.json`, so there is no prerelease to try Linux on first. Follow [`docs/linux-verification.md`](docs/linux-verification.md):
+
+1. Before any tag, run the `linux-bundle` workflow (Actions → linux-bundle → Run workflow) on the release branch. It builds the `.deb` and AppImage without signing or publishing anything, runs the same package checks and Xvfb launch as `publish-linux`, and uploads both packages as an artifact. Do the hands-on checklist with them. GitHub only offers **Run workflow** once the workflow file is on `main`; after that it runs on any branch.
+2. When the checklist passes, set `LINUX_RELEASE_ENABLED=true` just before tagging a normal `vX.Y.Z` release.
+3. In-app updates are tested on the next plain release: install the first Linux release's `.deb` and AppImage, accept the update when the next release ships, and record the result in the checklist then.
+4. If `publish-linux` fails on that first run, its withdraw step removes the Linux packages, their checksums and the `linux-*` keys from `latest.json`; macOS and Windows stay published. Set `LINUX_RELEASE_ENABLED` back to `false` until the fix is merged, and ship Linux with a later release. Never retag.
