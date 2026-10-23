@@ -256,7 +256,8 @@ jobs:
   publish-linux:
     needs: [publish, publish-windows]
     # Off until the repository variable is set (RELEASING.md).
-    if: always() && needs.publish.result == 'success' && vars.LINUX_RELEASE_ENABLED == 'true'
+    # !cancelled() rather than always(): it runs after a failed or skipped Windows job, never in a cancelled run.
+    if: ${{ !cancelled() && needs.publish.result == 'success' && vars.LINUX_RELEASE_ENABLED == 'true' }}
     # The oldest supported runner: packages built against its glibc 2.35 and WebKitGTK 4.1 run on newer distros too.
     runs-on: ubuntu-22.04
     timeout-minutes: 60
@@ -380,10 +381,12 @@ jobs:
           if [ -n "$LINUX_GPG_PRIVATE_KEY" ]; then
             GNUPGHOME="$(mktemp -d)"
             export GNUPGHOME
+            trap 'gpgconf --homedir "$GNUPGHOME" --kill all >/dev/null 2>&1 || true; rm -rf "$GNUPGHOME"' EXIT
             printf '%s\n' "$LINUX_GPG_PRIVATE_KEY" | gpg --batch --import
-            gpg --batch --pinentry-mode loopback --passphrase "$LINUX_GPG_PASSPHRASE" --armor --detach-sign SHA256SUMS
+            # The passphrase goes through a file descriptor, never argv, so other processes cannot read it.
+            gpg --batch --pinentry-mode loopback --passphrase-fd 3 --armor --detach-sign SHA256SUMS \
+              3< <(printf '%s' "$LINUX_GPG_PASSPHRASE")
             gpg --batch --verify SHA256SUMS.asc SHA256SUMS
-            rm -rf "$GNUPGHOME"
           else
             echo "::warning title=Linux checksums not signed::LINUX_GPG_PRIVATE_KEY is not set, so SHA256SUMS is published without SHA256SUMS.asc. Updates are still verified with the updater key."
           fi
@@ -398,22 +401,31 @@ jobs:
           if [ -f SHA256SUMS.asc ]; then files+=(SHA256SUMS.asc); fi
           gh release upload "${{ github.ref_name }}" "${files[@]}" --clobber
 
-      # Runs after any failed step: withdraws the Linux packages, their checksums and their updater entries,
-      # so installed apps never update to a package that failed a check. Assets that were never uploaded are not an error.
+      # Runs after any failed step, a timeout or a cancel: withdraws the Linux packages, their checksums and their
+      # updater entries, so installed apps never update to a package that failed a check. Assets that were never
+      # uploaded are not an error. An asset that could not be listed or deleted fails the step, but only after
+      # latest.json has been cleaned, so installed apps are protected even then.
       - name: Withdraw the Linux assets after a failure
-        if: failure()
+        if: failure() || cancelled()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          assets=$(gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name' 2>/dev/null || true)
+          incomplete=()
+          if ! assets=$(gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name'); then
+            incomplete+=("could not list the release assets, so no Linux package was deleted")
+            assets=""
+          fi
           while IFS= read -r name; do
             case "$name" in
               *.deb | *.deb.sig | *.AppImage | *.AppImage.sig | SHA256SUMS*)
-                gh release delete-asset "$TAG" "$name" --repo "$REPO" -y
-                echo "Deleted $name"
+                if gh release delete-asset "$TAG" "$name" --repo "$REPO" -y; then
+                  echo "Deleted $name"
+                else
+                  incomplete+=("could not delete $name")
+                fi
                 ;;
             esac
           done <<< "$assets"
@@ -426,4 +438,10 @@ jobs:
             echo "Removed the linux-* keys from latest.json"
           else
             echo "No latest.json on $TAG; nothing to edit"
+          fi
+          if [ "${#incomplete[@]}" -gt 0 ]; then
+            for problem in "${incomplete[@]}"; do
+              echo "::error title=Linux withdraw incomplete::$problem; delete the Linux assets of $TAG by hand"
+            done
+            exit 1
           fi
