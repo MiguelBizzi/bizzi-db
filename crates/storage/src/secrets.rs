@@ -22,6 +22,7 @@ pub trait SecretStore: Send + Sync {
     fn delete_password(&self, connection_id: &str) -> Result<(), StorageError>;
 }
 
+#[derive(Clone)]
 pub struct KeychainSecrets {
     service: String,
 }
@@ -36,15 +37,32 @@ impl KeychainSecrets {
 
 const PROBE_KEY: &str = "__bizzi_probe__";
 
-pub const KEYCHAIN_UNAVAILABLE: &str = "The system keychain is not available. Unlock or start your keyring (GNOME Keyring or KWallet), or turn off the system keychain in Settings.";
+const KEYCHAIN_UNAVAILABLE_LINUX: &str = "The system keychain is not available. Unlock or start your keyring (GNOME Keyring or KWallet), or turn off the system keychain in Settings.";
 
-// keyring surfaces raw D-Bus strings on Linux when no Secret Service is running; users get one readable message instead.
-pub fn keychain_error_message(_e: &keyring::Error) -> String {
-    KEYCHAIN_UNAVAILABLE.to_string()
+pub fn keychain_unavailable_message() -> &'static str {
+    if cfg!(target_os = "linux") {
+        KEYCHAIN_UNAVAILABLE_LINUX
+    } else {
+        "The system keychain is not available."
+    }
+}
+
+// keyring surfaces raw D-Bus strings on Linux when no Secret Service is running. `None` keeps the error's own text.
+pub fn keychain_error_message(e: &keyring::Error) -> Option<String> {
+    if cfg!(target_os = "linux")
+        && matches!(
+            e,
+            keyring::Error::NoStorageAccess(_) | keyring::Error::PlatformFailure(_)
+        )
+    {
+        Some(KEYCHAIN_UNAVAILABLE_LINUX.to_string())
+    } else {
+        None
+    }
 }
 
 fn keychain_err(e: keyring::Error) -> StorageError {
-    StorageError::msg(keychain_error_message(&e))
+    StorageError::msg(keychain_error_message(&e).unwrap_or_else(|| e.to_string()))
 }
 
 impl KeychainSecrets {
@@ -391,19 +409,39 @@ mod tests {
         assert!(err.to_string().contains("locked"));
     }
 
+    #[cfg(target_os = "linux")]
     #[test]
     fn keyring_errors_read_as_one_message() {
         let expected = "The system keychain is not available. Unlock or start your keyring (GNOME Keyring or KWallet), or turn off the system keychain in Settings.";
         let no_storage = keyring::Error::NoStorageAccess(Box::new(std::io::Error::other(
             "org.freedesktop.DBus.Error.ServiceUnknown",
         )));
-        let msg = keychain_error_message(&no_storage);
+        let msg = keychain_error_message(&no_storage).unwrap();
         assert_eq!(msg, expected);
         assert!(!msg.contains("DBus"));
         let platform = keyring::Error::PlatformFailure(Box::new(std::io::Error::other(
             "org.freedesktop.DBus.Error.NoReply",
         )));
-        assert_eq!(keychain_error_message(&platform), expected);
+        assert_eq!(keychain_error_message(&platform).as_deref(), Some(expected));
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    #[test]
+    fn keyring_errors_keep_their_text_off_linux() {
+        let e = keyring::Error::PlatformFailure(Box::new(std::io::Error::other("boom")));
+        assert_eq!(keychain_error_message(&e), None);
+    }
+
+    #[test]
+    fn unrelated_keyring_errors_keep_their_text() {
+        assert_eq!(
+            keychain_error_message(&keyring::Error::TooLong("user".into(), 10)),
+            None
+        );
+        assert_eq!(
+            keychain_error_message(&keyring::Error::Invalid("a".into(), "b".into())),
+            None
+        );
     }
 
     struct ReadOnlySecrets;

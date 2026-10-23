@@ -17,7 +17,8 @@ use db_core::{
 };
 use db_postgres::PostgresAdapter;
 use db_storage::{
-    DualSecretStore, FileSecrets, KeychainSecrets, Storage, StorageError, KEYCHAIN_UNAVAILABLE,
+    keychain_unavailable_message, DualSecretStore, FileSecrets, KeychainSecrets, Storage,
+    StorageError,
 };
 use ssh_tunnel::SshTunnel;
 use tauri::{AppHandle, Manager, State};
@@ -558,14 +559,19 @@ fn ensure_keychain_toggle(
     probe: impl FnOnce() -> Result<(), StorageError>,
 ) -> Result<(), String> {
     if !previous && next {
-        probe().map_err(|_| KEYCHAIN_UNAVAILABLE.to_string())?;
+        probe().map_err(|_| keychain_unavailable_message().to_string())?;
     }
     Ok(())
 }
 
 #[tauri::command]
-fn keychain_available(state: State<'_, AppState>) -> bool {
-    state.secrets.keychain.probe().is_ok()
+async fn keychain_available(state: State<'_, AppState>) -> Result<bool, String> {
+    let keychain = state.secrets.keychain.clone();
+    Ok(
+        tokio::task::spawn_blocking(move || keychain.probe().is_ok())
+            .await
+            .unwrap_or(false),
+    )
 }
 
 #[tauri::command]
