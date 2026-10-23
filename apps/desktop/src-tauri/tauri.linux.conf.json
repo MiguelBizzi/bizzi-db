@@ -11,7 +11,7 @@
         "decorations": false
       }
     ]
-   },
+  },
   "bundle": {
     "targets": ["deb", "appimage"],
     "category": "DeveloperTool",
