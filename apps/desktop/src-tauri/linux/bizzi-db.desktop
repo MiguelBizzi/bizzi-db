@@ -1,0 +1,10 @@
+[Desktop Entry]
+Categories={{categories}}
+Comment={{comment}}
+Exec={{exec}}
+Icon={{icon}}
+Name={{name}}
+StartupWMClass=com.bizzidb.app
+Terminal=false
+Type=Application
+Keywords=database;postgres;postgresql;sql;

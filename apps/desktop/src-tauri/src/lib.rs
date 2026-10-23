@@ -611,6 +611,8 @@ fn secrets_path(db_path: &std::path::Path) -> PathBuf {
 mod macos;
 
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    platform::prepare_linux();
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     let builder =
         tauri::Builder::default().plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {

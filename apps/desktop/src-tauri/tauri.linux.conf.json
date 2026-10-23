@@ -11,5 +11,15 @@
         "decorations": false
       }
     ]
+   },
+  "bundle": {
+    "targets": ["deb", "appimage"],
+    "category": "DeveloperTool",
+    "shortDescription": "Desktop client for PostgreSQL",
+    "linux": {
+      "deb": {
+        "desktopTemplate": "linux/bizzi-db.desktop"
+      }
+    }
   }
 }
