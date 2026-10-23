@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   SELF_UPDATE_UNSUPPORTED_MESSAGE,
   UPDATE_CHECK_INTERVAL_MS,
+  resolveUpdateChannel,
   canAutoCheck,
   checkOptions,
   manualCheckBlocked,
@@ -304,5 +305,17 @@ describe('update channel', () => {
       'This copy of Bizzi DB was not installed from the AppImage or the .deb package, so it cannot update itself. Download the latest version from the releases page.',
     );
     expect(manualCheckBlocked(deb)).toBeNull();
+  });
+});
+
+describe('resolveUpdateChannel', () => {
+  test('a failed channel call keeps macOS and Windows behaviour', async () => {
+    const channel = await resolveUpdateChannel(() => Promise.reject(new Error('nope')));
+    expect(channel).toEqual({ selfUpdate: true, target: null });
+  });
+
+  test('a resolved channel passes through', async () => {
+    const deb = { selfUpdate: true, target: 'linux-x86_64-deb' };
+    expect(await resolveUpdateChannel(() => Promise.resolve(deb))).toEqual(deb);
   });
 });

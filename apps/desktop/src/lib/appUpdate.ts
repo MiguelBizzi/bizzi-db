@@ -177,3 +177,16 @@ export function manualCheckBlocked(
   if (channel.selfUpdate) return null;
   return { message: SELF_UPDATE_UNSUPPORTED_MESSAGE, kind: 'error' };
 }
+
+/** Native installs (macOS, Windows) must keep updating as before if the command fails. */
+export const DEFAULT_UPDATE_CHANNEL: UpdateChannel = { selfUpdate: true, target: null };
+
+export async function resolveUpdateChannel(
+  load: () => Promise<UpdateChannel>,
+): Promise<UpdateChannel> {
+  try {
+    return await load();
+  } catch {
+    return DEFAULT_UPDATE_CHANNEL;
+  }
+}
