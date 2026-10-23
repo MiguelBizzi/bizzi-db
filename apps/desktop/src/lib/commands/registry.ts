@@ -8,6 +8,8 @@ export interface Command {
   accelerator?: string;
   /** Replaces `accelerator` on Windows and Linux; macOS always uses `accelerator`. */
   nonMacAccelerator?: string;
+  /** Replaces `nonMacAccelerator` and `accelerator` on Linux only. */
+  linuxAccelerator?: string;
   enabled(ctx: CommandContext): boolean;
   allowInModal?: boolean;
   typingConflict?: boolean;
@@ -37,6 +39,8 @@ const goToTabCommands: Command[] = Array.from({ length: 9 }, (_, i) => {
 export const COMMANDS: readonly Command[] = [
   { id: 'app.settings', label: 'Settings…', accelerator: 'CmdOrCtrl+,', enabled: () => true, allowInModal: true },
   { id: 'app.checkUpdates', label: 'Check for Updates…', enabled: () => true },
+  // Linux only: macOS has the native Quit and Windows has Alt+F4, so neither carries an accelerator.
+  { id: 'app.quit', label: 'Quit', linuxAccelerator: 'CmdOrCtrl+Q', enabled: () => true, allowInModal: true },
   { id: 'file.newQuery', label: 'New Query Tab', accelerator: 'CmdOrCtrl+T', enabled: connectionOpen },
   { id: 'file.newConnection', label: 'New Connection…', accelerator: 'CmdOrCtrl+N', enabled: () => true },
   { id: 'file.newTable', label: 'New Table…', accelerator: 'CmdOrCtrl+Shift+N', enabled: connectionOpen },
@@ -108,7 +112,14 @@ export const COMMANDS: readonly Command[] = [
   { id: 'conn.edit', label: 'Edit Connection…', enabled: connectionOpen },
   { id: 'conn.reconnect', label: 'Reconnect', enabled: connectionOpen },
   { id: 'conn.disconnect', label: 'Disconnect', enabled: connectionOpen },
-  { id: 'conn.refreshSchema', label: 'Refresh Schema', accelerator: 'CmdOrCtrl+Shift+R', nonMacAccelerator: 'CmdOrCtrl+F5', enabled: connectionOpen },
+  {
+    id: 'conn.refreshSchema',
+    label: 'Refresh Schema',
+    accelerator: 'CmdOrCtrl+Shift+R',
+    nonMacAccelerator: 'CmdOrCtrl+F5',
+    linuxAccelerator: 'CmdOrCtrl+Shift+R',
+    enabled: connectionOpen,
+  },
   {
     id: 'conn.refreshTable',
     label: 'Refresh Table',
@@ -148,7 +159,9 @@ export function commandById(id: string): Command {
 
 /** The accelerator `cmd` carries on `platform`, if any. */
 export function acceleratorFor(cmd: Command, platform: Platform): string | undefined {
-  return platform === 'macos' ? cmd.accelerator : (cmd.nonMacAccelerator ?? cmd.accelerator);
+  if (platform === 'macos') return cmd.accelerator;
+  if (platform === 'linux') return cmd.linuxAccelerator ?? cmd.nonMacAccelerator ?? cmd.accelerator;
+  return cmd.nonMacAccelerator ?? cmd.accelerator;
 }
 
 export function isCommandEnabled(cmd: Command, ctx: CommandContext): boolean {

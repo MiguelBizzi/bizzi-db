@@ -356,6 +356,17 @@ describe('installMenu', () => {
     expect(built.items.get('query.run')?.calls).toContain('text:Run Selection\tCtrl+Enter');
   });
 
+  test('linux builds Quit as a command item with Ctrl+Q as text only', async () => {
+    const quitModel: MenuNode[] = [
+      { kind: 'submenu', id: 'file', label: 'File', items: [{ kind: 'item', commandId: 'app.quit' }] },
+    ];
+    const built = makeFakeApi();
+    await installMenu({ model: quitModel, platform: 'linux', onRun: () => {}, api: built.api, isTauri: alwaysTauri });
+    const quit = built.items.get('app.quit');
+    expect(quit?.opts.text).toBe('Quit\tCtrl+Q');
+    expect(quit?.opts).not.toHaveProperty('accelerator');
+  });
+
   test('macOS keeps the native accelerator and the bare label', async () => {
     const built = makeFakeApi();
     await installMenu({

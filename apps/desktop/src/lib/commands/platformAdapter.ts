@@ -35,7 +35,10 @@ export function adaptMenuModel(model: MenuNode[], platform: Platform): MenuNode[
     if (isSubmenu(node, 'edit')) {
       asSubmenu(node).items.push(separator(), { kind: 'item', commandId: 'app.settings' });
     } else if (isSubmenu(node, 'file')) {
-      asSubmenu(node).items.push(separator(), { kind: 'predefined', item: 'quit' });
+      // The GTK predefined Quit cannot carry an accelerator, so Linux uses the app.quit command.
+      const quit: MenuNode =
+        platform === 'linux' ? { kind: 'item', commandId: 'app.quit' } : { kind: 'predefined', item: 'quit' };
+      asSubmenu(node).items.push(separator(), quit);
     } else if (isSubmenu(node, 'view')) {
       const view = asSubmenu(node);
       view.items = view.items.map((item) =>

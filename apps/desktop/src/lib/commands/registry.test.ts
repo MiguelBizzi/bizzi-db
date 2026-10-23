@@ -63,6 +63,49 @@ describe('COMMANDS registry invariants', () => {
     }
   });
 
+  test('linux shortcut map matches the spec', () => {
+    const expected: Array<[string, string]> = [
+      ['conn.refreshSchema', 'Ctrl+Shift+R'],
+      ['app.quit', 'Ctrl+Q'],
+      ['conn.refreshTable', 'F5'],
+      ['edit.deleteRows', 'Delete'],
+      ['view.nextTab', 'Ctrl+Tab'],
+      ['view.toggleFullscreen', 'F11'],
+      ['file.newView', 'Ctrl+Alt+V'],
+    ];
+    for (const [id, shortcut] of expected) {
+      const acc = acceleratorFor(commandById(id), 'linux');
+      expect(formatAccelerator(acc as string, 'linux')).toBe(shortcut);
+    }
+  });
+
+  test('windows and macOS are unchanged by the linux overrides', () => {
+    expect(acceleratorFor(commandById('conn.refreshSchema'), 'windows')).toBe('CmdOrCtrl+F5');
+    expect(acceleratorFor(commandById('conn.refreshSchema'), 'macos')).toBe('CmdOrCtrl+Shift+R');
+    expect(acceleratorFor(commandById('app.quit'), 'windows')).toBeUndefined();
+    expect(acceleratorFor(commandById('app.quit'), 'macos')).toBeUndefined();
+  });
+
+  test('app.quit stays available with a modal open', () => {
+    const cmd = commandById('app.quit');
+    expect(cmd.label).toBe('Quit');
+    expect(isCommandEnabled(cmd, ctx({ modalOpen: true }))).toBe(true);
+  });
+
+  test('every linux override parses', () => {
+    for (const c of COMMANDS.filter((c) => c.linuxAccelerator !== undefined)) {
+      expect(() => parseAccelerator(c.linuxAccelerator as string)).not.toThrow();
+    }
+  });
+
+  test('linux reserved list', () => {
+    const reserved = reservedAccelerators('linux').map(normalizeAccelerator);
+    for (const acc of ['CmdOrCtrl+F5', 'CmdOrCtrl+Alt+ArrowLeft', 'CmdOrCtrl+Alt+T', 'CmdOrCtrl+Shift+Z', 'Alt+F4']) {
+      expect(reserved).toContain(normalizeAccelerator(acc));
+    }
+    expect(reserved).not.toContain(normalizeAccelerator('CmdOrCtrl+Q'));
+  });
+
   test('macOS accelerators are unchanged', () => {
     expect(acceleratorFor(commandById('edit.deleteRows'), 'macos')).toBe('CmdOrCtrl+Backspace');
     expect(acceleratorFor(commandById('view.toggleFullscreen'), 'macos')).toBeUndefined();
@@ -86,6 +129,7 @@ describe('COMMANDS registry invariants', () => {
       [
         'app.settings',
         'app.checkUpdates',
+        'app.quit',
         'file.newQuery',
         'file.saveQuery',
         'file.export',
@@ -505,6 +549,7 @@ describe('menuState for realistic app contexts', () => {
       [
         'app.settings',
         'app.checkUpdates',
+        'app.quit',
         'file.newQuery',
         'file.newConnection',
         'file.newTable',
@@ -563,7 +608,7 @@ describe('menuState for realistic app contexts', () => {
 
   test('an open modal leaves only the allowInModal commands enabled', () => {
     expect(enabledIds({ ...sqlTabOpen, activeTabType: 'table_data', modalOpen: true })).toEqual(
-      ['app.settings', 'file.closeWindow', 'view.palette'].sort(),
+      ['app.quit', 'app.settings', 'file.closeWindow', 'view.palette'].sort(),
     );
   });
 
@@ -572,6 +617,7 @@ describe('menuState for realistic app contexts', () => {
       [
         'app.settings',
         'app.checkUpdates',
+        'app.quit',
         'file.closeWindow',
         'view.palette',
         'view.toggleFullscreen',
@@ -651,7 +697,7 @@ describe('shortcutLabel', () => {
     expect(shortcutLabel('file.newTable', 'macos')).toBe('⇧⌘N');
     expect(shortcutLabel('conn.refreshSchema', 'macos')).toBe('⇧⌘R');
     expect(shortcutLabel('file.newConnection', 'windows')).toBe('Ctrl+N');
-    expect(shortcutLabel('conn.refreshSchema', 'linux')).toBe('Ctrl+F5');
+    expect(shortcutLabel('conn.refreshSchema', 'linux')).toBe('Ctrl+Shift+R');
     for (const id of ['conn.switch', 'conn.back', 'conn.edit', 'conn.reconnect', 'conn.disconnect']) {
       expect(shortcutLabel(id, 'macos')).toBe('');
     }
