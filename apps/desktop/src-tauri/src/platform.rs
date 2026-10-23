@@ -6,6 +6,7 @@ pub fn platform_init_script(os: &str) -> Option<String> {
 }
 
 /// Only sets the variable when the user has not: an explicit value, even `0`, wins.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub fn webkit_env_default(
     nvidia: bool,
     current: Option<&std::ffi::OsStr>,
