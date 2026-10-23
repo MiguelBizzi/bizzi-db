@@ -1,0 +1,93 @@
+name: linux-bundle
+
+# Builds and checks the .deb and AppImage from any branch without a tag or a release, so the hands-on checklist
+# in docs/linux-verification.md can run before the first Linux release. Nothing is signed or published.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    # Same runner as publish-linux: packages built against its glibc 2.35 and WebKitGTK 4.1 run on newer distros too.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.11
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+
+      - name: Install Linux build libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev \
+            librsvg2-dev libayatana-appindicator3-dev patchelf xvfb
+
+      - run: bun install --frozen-lockfile
+
+      # Updater artifacts need the signing key, which this workflow never gets.
+      - name: Build the .deb and AppImage
+        working-directory: apps/desktop
+        run: bun run tauri build --bundles deb,appimage --config '{"bundle":{"createUpdaterArtifacts":false}}'
+
+      - name: Collect the packages
+        id: packages
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          debs=(target/release/bundle/deb/*.deb)
+          appimages=(target/release/bundle/appimage/*.AppImage)
+          if [ "${#debs[@]}" -ne 1 ]; then echo "::error::expected one .deb, found ${#debs[@]}"; exit 1; fi
+          if [ "${#appimages[@]}" -ne 1 ]; then echo "::error::expected one .AppImage, found ${#appimages[@]}"; exit 1; fi
+          dir="$RUNNER_TEMP/bundle"
+          mkdir -p "$dir"
+          cp -- "${debs[0]}" "${appimages[0]}" "$dir/"
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the packages
+        run: |
+          set -euo pipefail
+          dir="${{ steps.packages.outputs.dir }}"
+          bun apps/desktop/scripts/verify-linux-bundle.ts "$dir"/*.deb "$dir"/*.AppImage apps/desktop/src-tauri/tauri.conf.json
+
+      # Same check as publish-linux. Exit 124 means timeout had to kill the app, so it was still running after 20 s;
+      # any other status means it exited or failed to start.
+      - name: Smoke-launch the packages
+        working-directory: ${{ steps.packages.outputs.dir }}
+        run: |
+          set -euo pipefail
+          smoke() {
+            local label="$1" status=0
+            shift
+            "$@" || status=$?
+            if [ "$status" -ne 124 ]; then
+              echo "::error::$label exited with status $status instead of running until the 20 s timeout"
+              return 1
+            fi
+            echo "$label was still running after 20 s"
+          }
+          sudo apt-get install -y ./*.deb
+          desktop="/usr/share/applications/Bizzi DB.desktop"
+          # Field codes such as %U only mean something to a launcher.
+          exec_line="$(sed -n 's/^Exec=//p' "$desktop" | head -n 1 | sed 's/ *%[A-Za-z]//g')"
+          read -r -a cmd <<< "$exec_line"
+          if [ "${#cmd[@]}" -eq 0 ]; then echo "::error::$desktop has no Exec= line"; exit 1; fi
+          smoke ".deb ($exec_line)" xvfb-run -a timeout 20 "${cmd[@]}"
+          chmod +x ./*.AppImage
+          # The runner has no FUSE, so the AppImage runtime extracts itself instead of mounting.
+          smoke "AppImage" env APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a timeout 20 ./*.AppImage
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bizzi-db-linux-${{ github.sha }}
+          path: |
+            ${{ steps.packages.outputs.dir }}/*.deb
+            ${{ steps.packages.outputs.dir }}/*.AppImage
+          if-no-files-found: error
