@@ -19,7 +19,12 @@ pub struct UpdateChannel {
 }
 
 /// `dpkg_list_exists` is what separates a real package install from a copy merely placed under `/usr/`.
-pub fn install_kind(os: &str, appimage_env: bool, exe: &Path, dpkg_list_exists: bool) -> InstallKind {
+pub fn install_kind(
+    os: &str,
+    appimage_env: bool,
+    exe: &Path,
+    dpkg_list_exists: bool,
+) -> InstallKind {
     if os != "linux" {
         return InstallKind::Native;
     }
