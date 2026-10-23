@@ -1,14 +1,22 @@
 # Linux verification
 
-Manual checklist for a Linux prerelease (`v<next>-rc.1`, then `rc.2` for the update checks). Fill the Result column with pass, fail plus a note, or n/a. Any failure becomes a fix with a reproducing test before the release is enabled (`LINUX_RELEASE_ENABLED`).
+Manual checklist for the first Linux release. Fill the Result column with pass, fail plus a note, or n/a. Any failure becomes a fix with a reproducing test before `LINUX_RELEASE_ENABLED` is set.
 
-Tester: ____  Prerelease tag: ____  Date: ____
+The release workflow only takes plain `vX.Y.Z` tags, publishes every release as the latest one (tauri-action runs with `prerelease: false`), and installed apps update from `releases/latest/download/latest.json`. There is no prerelease to test on, so the procedure is:
 
-## 1. Prerelease and CI
+1. **Before any tag.** Run the `linux-bundle` workflow (Actions → linux-bundle → Run workflow) on the branch to release. It builds the `.deb` and AppImage, runs the same package checks and Xvfb launch as `publish-linux`, and uploads both as the `bizzi-db-linux-<sha>` artifact. Do sections 2 to 4 with those packages, except the update rows.
+2. **First Linux release.** With the checklist passing, set the repository variable `LINUX_RELEASE_ENABLED=true` just before tagging a normal `vX.Y.Z` release (RELEASING.md). Fill section 1 from that run.
+3. **Update rows.** Install that release's `.deb` and AppImage in the matrix environments. When the next plain release ships, accept the in-app update and record the update rows then.
+4. **If the first Linux run fails.** The withdraw step removes the Linux packages, their checksums and the `linux-*` keys from `latest.json`, and macOS and Windows stay published. Set `LINUX_RELEASE_ENABLED` back to `false` until the fix lands, and ship Linux with a later release. Never retag.
+
+Tester: ____  linux-bundle run (commit): ____  First Linux release tag: ____  Date: ____
+
+## 1. Release run and CI
 
 | Check | Result |
 |---|---|
-| `publish`, `publish-windows` and `publish-linux` are green | |
+| `linux-bundle` is green on the release branch | |
+| `publish`, `publish-windows` and `publish-linux` are green on the first Linux release | |
 | `latest.json` has `linux-x86_64` and `linux-x86_64-deb` | |
 | `smoke-linux-distros`: debian:12 | |
 | `smoke-linux-distros`: ubuntu:24.04 | |
@@ -18,7 +26,7 @@ Tester: ____  Prerelease tag: ____  Date: ____
 
 ## 2. Manual matrix
 
-Install the package named for each environment (`.deb`: `sudo apt install ./Bizzi.DB_<v>_amd64.deb`; AppImage: `chmod +x`, run). The Ctrl+Alt+V check applies to KDE only.
+Install the package named for each environment from the `linux-bundle` artifact (`.deb`: `sudo apt install ./Bizzi.DB_<v>_amd64.deb`; AppImage: `chmod +x`, run). For the update rows, install the same format from the first Linux release instead (procedure step 3). The Ctrl+Alt+V check applies to KDE only.
 
 ### 2.1 Ubuntu 22.04, GNOME, X11
 
@@ -43,7 +51,7 @@ Package: .deb
 | Postgres TLS `verify-full` to a host with a public CA | |
 | SSH tunnel with an Ed25519 key chosen in the file dialog | |
 | Copy a cell, paste in another app | |
-| Update from rc.1 to rc.2 (`.deb`: pkexec prompt; AppImage: file replaced) | |
+| Update to the next release: `.deb` (pkexec prompt, package upgraded) | |
 | Screenshot saved for the side-by-side with macOS | |
 
 ### 2.2 Ubuntu 24.04, GNOME, Wayland
@@ -69,7 +77,8 @@ Package: .deb, and AppImage with `libfuse2t64` installed
 | Postgres TLS `verify-full` to a host with a public CA | |
 | SSH tunnel with an Ed25519 key chosen in the file dialog | |
 | Copy a cell, paste in another app | |
-| Update from rc.1 to rc.2 (`.deb`: pkexec prompt; AppImage: file replaced) | |
+| Update to the next release: `.deb` (pkexec prompt, package upgraded) | |
+| Update to the next release: AppImage (file replaced in place) | |
 | Screenshot saved for the side-by-side with macOS | |
 
 ### 2.3 Fedora 41, GNOME, Wayland
@@ -95,7 +104,7 @@ Package: AppImage
 | Postgres TLS `verify-full` to a host with a public CA | |
 | SSH tunnel with an Ed25519 key chosen in the file dialog | |
 | Copy a cell, paste in another app | |
-| Update from rc.1 to rc.2 (`.deb`: pkexec prompt; AppImage: file replaced) | |
+| Update to the next release: AppImage (file replaced in place) | |
 | Screenshot saved for the side-by-side with macOS | |
 
 ### 2.4 KDE Plasma 6, Wayland
@@ -121,7 +130,7 @@ Package: AppImage
 | Postgres TLS `verify-full` to a host with a public CA | |
 | SSH tunnel with an Ed25519 key chosen in the file dialog | |
 | Copy a cell, paste in another app | |
-| Update from rc.1 to rc.2 (`.deb`: pkexec prompt; AppImage: file replaced) | |
+| Update to the next release: AppImage (file replaced in place) | |
 | Screenshot saved for the side-by-side with macOS | |
 | Ctrl+Alt+V opens New View | |
 
@@ -149,7 +158,7 @@ Package: .deb
 | Postgres TLS `verify-full` to a host with a public CA | |
 | SSH tunnel with an Ed25519 key chosen in the file dialog | |
 | Copy a cell, paste in another app | |
-| Update from rc.1 to rc.2 (`.deb`: pkexec prompt; AppImage: file replaced) | |
+| Update to the next release: `.deb` (pkexec prompt, package upgraded) | |
 | Screenshot saved for the side-by-side with macOS | |
 
 ### 2.6 Machine with the NVIDIA proprietary driver
@@ -175,7 +184,7 @@ Package: any package
 | Postgres TLS `verify-full` to a host with a public CA | |
 | SSH tunnel with an Ed25519 key chosen in the file dialog | |
 | Copy a cell, paste in another app | |
-| Update from rc.1 to rc.2 (`.deb`: pkexec prompt; AppImage: file replaced) | |
+| Update to the next release with the package installed here (`.deb`: pkexec prompt; AppImage: file replaced) | |
 | Screenshot saved for the side-by-side with macOS | |
 
 ## 3. Linux shortcut map
@@ -193,7 +202,7 @@ Everything else (Settings Ctrl+,, New Query Tab Ctrl+T, Run Ctrl+Enter, Command 
 
 ## 4. macOS and Windows regression pass
 
-Same prerelease.
+On the first Linux release, after it is published.
 
 | Check | Result |
 |---|---|

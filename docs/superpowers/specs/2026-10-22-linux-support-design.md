@@ -97,7 +97,7 @@ Reserved on Linux (no command may claim them): Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y, Ctr
 ## Build and release setup (maintainer, once)
 
 1. Generate a release GPG key (`gpg --quick-gen-key "Bizzi DB Releases <…>" ed25519 sign 3y`). Add secrets `LINUX_GPG_PRIVATE_KEY` (armored) and `LINUX_GPG_PASSPHRASE`. Publish the public key as `docs/release-signing-key.asc` and its fingerprint in `SECURITY.md`.
-2. Set repository variable `LINUX_RELEASE_ENABLED=true` once a prerelease passes the checklist.
+2. Run the `linux-bundle` workflow (`workflow_dispatch`, read-only, builds and checks the `.deb` and AppImage without publishing) on the release branch and pass the checklist with its artifacts. Then set repository variable `LINUX_RELEASE_ENABLED=true` just before tagging a normal `vX.Y.Z` release: tags are plain, tauri-action publishes with `prerelease: false`, and the updater reads `releases/latest/download/latest.json`, so there is no prerelease channel. In-app updates are checked when the next plain release ships. If the first Linux run fails, the withdraw step removes the Linux assets; turn the variable off until fixed, never retag.
 3. `TAURI_SIGNING_PRIVATE_KEY` / password are reused for the Linux updater signatures.
 
 Local Linux development: `rustup`, Bun, and `libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev librsvg2-dev libayatana-appindicator3-dev build-essential file` (Debian/Ubuntu names). Perl is needed for vendored OpenSSL and is present on every distro.
@@ -110,7 +110,7 @@ Local Linux development: `rustup`, Bun, and `libwebkit2gtk-4.1-dev libsoup-3.0-d
 | AppImage bundles WebKitGTK from Ubuntu 22.04; newer Mesa/EGL on Arch/Fedora can give a blank window | Medium | Container smoke job, NVIDIA env default, `.deb` as the primary format for Debian-family users. |
 | Wayland differences (focus stealing, no global window position, fractional scaling blur) | Medium | QA on GNOME and KDE Wayland; focus behaviour documented. |
 | No Secret Service on minimal WMs or headless | Medium | Probe gating plus the existing local file store. |
-| tauri-action's manifest has no `linux-x86_64-deb` key, or Tauri writes no `.deb.sig` | Low–medium | The release gate requires both keys, so the first prerelease shows it at once, before any user is affected. |
+| tauri-action's manifest has no `linux-x86_64-deb` key, or Tauri writes no `.deb.sig` | Low–medium | The release gate requires both keys, so the first Linux release fails at once and the withdraw step removes the Linux assets before any user updates. |
 | `linuxdeploy` is fetched at build time (not reproducible) | Low | `ubuntu-22.04` runner pinned; the AppImage is smoke-tested before it stays published. |
 | `pkexec` missing (very minimal installs) | Low | Plugin falls back to zenity/kdialog + sudo; failure shows the existing update error banner. |
 | Desktop-owned shortcuts not in the reserved list (custom user bindings, KDE Klipper) | Low | Reserved-list tests; KDE QA row for `Ctrl+Alt+V`. |
@@ -130,5 +130,5 @@ Phase 2 items in the table above, tray icon, reading GNOME `button-layout`, clie
 | Credential storage solved | Probe, gated setting and error mapping tests; QA with and without a keyring |
 | Build pipeline ready | `unit-linux` and `publish-linux` jobs |
 | Packaging delivered | `.deb` + AppImage on the release, `SHA256SUMS(.asc)` |
-| Auto-updates work | `latest.json` has `linux-x86_64` and `linux-x86_64-deb`; QA updates both formats from the previous prerelease |
+| Auto-updates work | `latest.json` has `linux-x86_64` and `linux-x86_64-deb`; QA updates both formats from the first Linux release to the next one |
 | No regression | macOS and Windows jobs untouched; their registry/menu tests unchanged; manual macOS and Windows pass |
