@@ -455,6 +455,8 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     timeout-minutes: 30
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -462,7 +464,6 @@ jobs:
     container:
       image: ${{ matrix.container }}
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAG: ${{ github.ref_name }}
       REPO: ${{ github.repository }}
     steps:
@@ -491,6 +492,8 @@ jobs:
       # The containers have no gh, so the assets come from the REST API with the job token.
       - name: Download the published packages
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p "$HOME/published"

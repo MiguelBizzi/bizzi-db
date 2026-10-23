@@ -34,7 +34,8 @@ Package: .deb
 | Shortcut map (table below), focus in the data grid | |
 | Shortcut map, focus in the SQL editor | |
 | Shortcut map, focus in a text input | |
-| Ctrl+F5 and Ctrl+Alt+→ reach the desktop, not the app | |
+| Ctrl+Alt+→ reaches the desktop, not the app | |
+| Ctrl+Shift+R refreshes the schema | |
 | Alt tap opens the menu popup | |
 | Second launch focuses the running window | |
 | Keyring toggle on with GNOME Keyring (item visible in Seahorse) | |
@@ -59,7 +60,8 @@ Package: .deb, and AppImage with `libfuse2t64` installed
 | Shortcut map (table below), focus in the data grid | |
 | Shortcut map, focus in the SQL editor | |
 | Shortcut map, focus in a text input | |
-| Ctrl+F5 and Ctrl+Alt+→ reach the desktop, not the app | |
+| Ctrl+Alt+→ reaches the desktop, not the app | |
+| Ctrl+Shift+R refreshes the schema | |
 | Alt tap opens the menu popup | |
 | Second launch focuses the running window | |
 | Keyring toggle on with GNOME Keyring (item visible in Seahorse) | |
@@ -84,7 +86,8 @@ Package: AppImage
 | Shortcut map (table below), focus in the data grid | |
 | Shortcut map, focus in the SQL editor | |
 | Shortcut map, focus in a text input | |
-| Ctrl+F5 and Ctrl+Alt+→ reach the desktop, not the app | |
+| Ctrl+Alt+→ reaches the desktop, not the app | |
+| Ctrl+Shift+R refreshes the schema | |
 | Alt tap opens the menu popup | |
 | Second launch focuses the running window | |
 | Keyring toggle on with GNOME Keyring (item visible in Seahorse) | |
@@ -109,10 +112,11 @@ Package: AppImage
 | Shortcut map (table below), focus in the data grid | |
 | Shortcut map, focus in the SQL editor | |
 | Shortcut map, focus in a text input | |
-| Ctrl+F5 and Ctrl+Alt+→ reach the desktop, not the app | |
+| Ctrl+Alt+→ reaches the desktop, not the app | |
+| Ctrl+Shift+R refreshes the schema | |
 | Alt tap opens the menu popup | |
 | Second launch focuses the running window | |
-| Keyring toggle on with GNOME Keyring (item visible in Seahorse) | |
+| Keyring toggle on with KWallet (item visible in KWalletManager) | |
 | Keyring toggle disabled with an explanation on a session without a keyring | |
 | Postgres TLS `verify-full` to a host with a public CA | |
 | SSH tunnel with an Ed25519 key chosen in the file dialog | |
@@ -135,7 +139,9 @@ Package: .deb
 | Shortcut map (table below), focus in the data grid | |
 | Shortcut map, focus in the SQL editor | |
 | Shortcut map, focus in a text input | |
-| Ctrl+F5 and Ctrl+Alt+→ reach the desktop, not the app | |
+| Ctrl+Alt+→ reaches the desktop, not the app | |
+| Ctrl+F5 switches workspace and does not refresh the schema | |
+| Ctrl+Shift+R refreshes the schema | |
 | Alt tap opens the menu popup | |
 | Second launch focuses the running window | |
 | Keyring toggle on with GNOME Keyring (item visible in Seahorse) | |
@@ -160,7 +166,8 @@ Package: any package
 | Shortcut map (table below), focus in the data grid | |
 | Shortcut map, focus in the SQL editor | |
 | Shortcut map, focus in a text input | |
-| Ctrl+F5 and Ctrl+Alt+→ reach the desktop, not the app | |
+| Ctrl+Alt+→ reaches the desktop, not the app | |
+| Ctrl+Shift+R refreshes the schema | |
 | Alt tap opens the menu popup | |
 | Second launch focuses the running window | |
 | Keyring toggle on with GNOME Keyring (item visible in Seahorse) | |
