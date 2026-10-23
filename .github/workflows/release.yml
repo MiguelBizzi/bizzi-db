@@ -251,3 +251,179 @@ jobs:
           else
             echo "No latest.json on $TAG; nothing to edit"
           fi
+
+  # Runs last so no two jobs write latest.json at once. It runs whatever the Windows result was, skipped included.
+  publish-linux:
+    needs: [publish, publish-windows]
+    # Off until the repository variable is set (RELEASING.md).
+    if: always() && needs.publish.result == 'success' && vars.LINUX_RELEASE_ENABLED == 'true'
+    # The oldest supported runner: packages built against its glibc 2.35 and WebKitGTK 4.1 run on newer distros too.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.11
+
+      - name: Extract release notes
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          notes="$(bun apps/web/scripts/release-notes.ts "${GITHUB_REF_NAME#v}")"
+          {
+            echo "body<<RELEASE_NOTES_EOF"
+            echo "$notes"
+            echo "RELEASE_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+
+      - name: Install Linux build libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev \
+            librsvg2-dev libayatana-appindicator3-dev xvfb
+
+      - run: bun install --frozen-lockfile
+
+      # Bundles the targets in tauri.linux.conf.json (.deb and AppImage) and merges the linux-* keys into latest.json.
+      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: apps/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: Bizzi DB ${{ github.ref_name }}
+          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+
+      # windows-x86_64 is only required when this run published it; a skipped or withdrawn Windows job removed it.
+      - name: Decide the required updater platforms
+        id: platforms
+        env:
+          WINDOWS_RESULT: ${{ needs.publish-windows.result }}
+        run: |
+          set -euo pipefail
+          list="darwin-aarch64,darwin-x86_64,linux-x86_64,linux-x86_64-deb"
+          if [ "$WINDOWS_RESULT" = "success" ]; then list="$list,windows-x86_64"; fi
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+          echo "Required in latest.json: $list"
+
+      # Hard gate: a release without every published platform strands the installed apps on that platform.
+      - name: Verify updater manifest
+        run: bun apps/desktop/scripts/verify-updater-manifest.ts "${{ github.ref_name }}" "${{ github.repository }}" "${{ steps.platforms.outputs.list }}"
+
+      # Download what users will actually get and check it again.
+      - name: Verify the published packages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          dir="$RUNNER_TEMP/published"
+          mkdir -p "$dir"
+          gh release download "${{ github.ref_name }}" --pattern "*.deb" --pattern "*.AppImage" --dir "$dir" --clobber
+          debs=("$dir"/*.deb)
+          appimages=("$dir"/*.AppImage)
+          if [ "${#debs[@]}" -ne 1 ]; then echo "::error::expected one .deb among the release assets, found ${#debs[@]}"; exit 1; fi
+          if [ "${#appimages[@]}" -ne 1 ]; then echo "::error::expected one .AppImage among the release assets, found ${#appimages[@]}"; exit 1; fi
+          bun apps/desktop/scripts/verify-linux-bundle.ts "${debs[0]}" "${appimages[0]}" apps/desktop/src-tauri/tauri.conf.json
+
+      # A package that crashes on start must never stay published. Exit 124 means timeout had to kill the app,
+      # so it was still running after 20 s; any other status means it exited or failed to start.
+      - name: Smoke-launch the published packages
+        working-directory: ${{ runner.temp }}/published
+        run: |
+          set -euo pipefail
+          smoke() {
+            local label="$1" status=0
+            shift
+            "$@" || status=$?
+            if [ "$status" -ne 124 ]; then
+              echo "::error::$label exited with status $status instead of running until the 20 s timeout"
+              return 1
+            fi
+            echo "$label was still running after 20 s"
+          }
+          sudo apt-get install -y ./*.deb
+          desktop="/usr/share/applications/Bizzi DB.desktop"
+          # Field codes such as %U only mean something to a launcher.
+          exec_line="$(sed -n 's/^Exec=//p' "$desktop" | head -n 1 | sed 's/ *%[A-Za-z]//g')"
+          read -r -a cmd <<< "$exec_line"
+          if [ "${#cmd[@]}" -eq 0 ]; then echo "::error::$desktop has no Exec= line"; exit 1; fi
+          smoke ".deb ($exec_line)" xvfb-run -a timeout 20 "${cmd[@]}"
+          chmod +x ./*.AppImage
+          # The runner has no FUSE, so the AppImage runtime extracts itself instead of mounting.
+          smoke "AppImage" env APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a timeout 20 ./*.AppImage
+
+      # Signed with the project GPG key when its secrets are set (SECURITY.md); unsigned checksums ship with a warning.
+      # The key lives in a throwaway GNUPGHOME and is never written to the log.
+      - name: Write and sign the checksums
+        working-directory: ${{ runner.temp }}/published
+        env:
+          LINUX_GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
+          LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          rm -f SHA256SUMS SHA256SUMS.asc
+          sha256sum -- *.deb *.AppImage > SHA256SUMS
+          cat SHA256SUMS
+          if [ -n "$LINUX_GPG_PRIVATE_KEY" ]; then
+            GNUPGHOME="$(mktemp -d)"
+            export GNUPGHOME
+            printf '%s\n' "$LINUX_GPG_PRIVATE_KEY" | gpg --batch --import
+            gpg --batch --pinentry-mode loopback --passphrase "$LINUX_GPG_PASSPHRASE" --armor --detach-sign SHA256SUMS
+            gpg --batch --verify SHA256SUMS.asc SHA256SUMS
+            rm -rf "$GNUPGHOME"
+          else
+            echo "::warning title=Linux checksums not signed::LINUX_GPG_PRIVATE_KEY is not set, so SHA256SUMS is published without SHA256SUMS.asc. Updates are still verified with the updater key."
+          fi
+
+      - name: Upload the checksums
+        working-directory: ${{ runner.temp }}/published
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          files=(SHA256SUMS)
+          if [ -f SHA256SUMS.asc ]; then files+=(SHA256SUMS.asc); fi
+          gh release upload "${{ github.ref_name }}" "${files[@]}" --clobber
+
+      # Runs after any failed step: withdraws the Linux packages, their checksums and their updater entries,
+      # so installed apps never update to a package that failed a check. Assets that were never uploaded are not an error.
+      - name: Withdraw the Linux assets after a failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          assets=$(gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name' 2>/dev/null || true)
+          while IFS= read -r name; do
+            case "$name" in
+              *.deb | *.deb.sig | *.AppImage | *.AppImage.sig | SHA256SUMS*)
+                gh release delete-asset "$TAG" "$name" --repo "$REPO" -y
+                echo "Deleted $name"
+                ;;
+            esac
+          done <<< "$assets"
+          dir="$RUNNER_TEMP/latest-json"
+          mkdir -p "$dir"
+          if gh release download "$TAG" --repo "$REPO" --pattern latest.json --dir "$dir" --clobber; then
+            jq '.platforms |= with_entries(select(.key | startswith("linux-") | not))' "$dir/latest.json" > "$dir/latest.edited.json"
+            mv "$dir/latest.edited.json" "$dir/latest.json"
+            gh release upload "$TAG" "$dir/latest.json" --repo "$REPO" --clobber
+            echo "Removed the linux-* keys from latest.json"
+          else
+            echo "No latest.json on $TAG; nothing to edit"
+          fi

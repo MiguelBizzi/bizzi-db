@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   DARWIN_PLATFORMS,
+  LINUX_PLATFORMS,
   WINDOWS_PLATFORMS,
   validateUpdaterManifest,
 } from './updaterManifest';
@@ -89,6 +90,46 @@ describe('validateUpdaterManifest', () => {
     };
     expect(
       validateUpdaterManifest(full, 'v0.1.8', [...DARWIN_PLATFORMS, ...WINDOWS_PLATFORMS]),
+    ).toEqual([]);
+  });
+});
+
+describe('validateUpdaterManifest on Linux', () => {
+  const withWindows = {
+    ...good,
+    platforms: {
+      ...good.platforms,
+      'windows-x86_64': { signature: 'abc', url: 'https://example.com/a-setup.exe' },
+    },
+  };
+
+  test('requires both Linux keys when the list includes them', () => {
+    const problems = validateUpdaterManifest(withWindows, 'v0.1.8', [
+      ...DARWIN_PLATFORMS,
+      ...LINUX_PLATFORMS,
+    ]);
+    expect(problems).toContain('platform linux-x86_64-deb is missing');
+    expect(problems).toEqual([
+      'platform linux-x86_64 is missing',
+      'platform linux-x86_64-deb is missing',
+    ]);
+  });
+
+  test('accepts the AppImage and .deb entries', () => {
+    const full = {
+      ...withWindows,
+      platforms: {
+        ...withWindows.platforms,
+        'linux-x86_64': { signature: 'abc', url: 'https://example.com/a.AppImage' },
+        'linux-x86_64-deb': { signature: 'abc', url: 'https://example.com/a.deb' },
+      },
+    };
+    expect(
+      validateUpdaterManifest(full, 'v0.1.8', [
+        ...DARWIN_PLATFORMS,
+        ...WINDOWS_PLATFORMS,
+        ...LINUX_PLATFORMS,
+      ]),
     ).toEqual([]);
   });
 });

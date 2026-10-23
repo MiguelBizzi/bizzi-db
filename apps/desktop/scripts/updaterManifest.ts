@@ -1,5 +1,6 @@
 export const DARWIN_PLATFORMS = ['darwin-aarch64', 'darwin-x86_64'] as const;
 export const WINDOWS_PLATFORMS = ['windows-x86_64'] as const;
+export const LINUX_PLATFORMS = ['linux-x86_64', 'linux-x86_64-deb'] as const;
 
 type Platform = { signature?: unknown; url?: unknown };
 
