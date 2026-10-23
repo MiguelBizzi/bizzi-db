@@ -546,9 +546,11 @@ fn workspace_save(app_state: State<'_, AppState>, state: WorkspaceState) -> Resu
 #[tauri::command]
 fn app_update_channel() -> update_channel::UpdateChannel {
     let exe = std::env::current_exe().unwrap_or_default();
+    let appdir = std::env::var_os("APPDIR").map(PathBuf::from);
     let kind = update_channel::install_kind(
         std::env::consts::OS,
         std::env::var_os("APPIMAGE").is_some(),
+        appdir.as_deref(),
         &exe,
         Path::new("/var/lib/dpkg/info/bizzi-db.list").exists(),
     );
