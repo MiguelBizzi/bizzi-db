@@ -239,7 +239,7 @@ export default function App() {
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
   const [switcherRequest, setSwitcherRequest] = useState(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isKeychainAvailable, setIsKeychainAvailable] = useState(true);
+  const [isKeychainAvailable, setIsKeychainAvailable] = useState<boolean | null>(null);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const closeShortcuts = useCallback(() => setIsShortcutsOpen(false), []);
   const shortcutGroups = useMemo(() => {
@@ -1530,6 +1530,7 @@ export default function App() {
 
   useEffect(() => {
     if (!isSettingsOpen) return;
+    setIsKeychainAvailable(null);
     let cancelled = false;
     keychainAvailable()
       .then((ok) => {
@@ -1544,8 +1545,13 @@ export default function App() {
   }, [isSettingsOpen]);
 
   const handleToggleKeychain = async (enabled: boolean) => {
-    const saved = await settingsSave({ keychainEnabled: enabled });
-    setAppSettings(saved);
+    try {
+      const saved = await settingsSave({ keychainEnabled: enabled });
+      setAppSettings(saved);
+    } catch (err) {
+      toast.error(invokeErrorMessage(err, 'Could not change the keychain setting'));
+      setIsKeychainAvailable(await keychainAvailable().catch(() => false));
+    }
   };
 
   const handleSaveConnection = async (input: SaveConnectionInput) => {
