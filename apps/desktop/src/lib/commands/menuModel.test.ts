@@ -59,6 +59,7 @@ describe('buildMenuModel', () => {
     const known = new Set(COMMANDS.map((c) => c.id));
     for (const id of ids) expect(known.has(id)).toBe(true);
     // macOS keeps the predefined full screen item; Windows and Linux get the command from the adapter.
+    // app.quit is likewise added by the Linux adapter only.
     const inModel = COMMANDS.filter((c) => c.id !== 'view.toggleFullscreen' && c.id !== 'app.quit');
     for (const cmd of inModel) {
       expect(ids.filter((id) => id === cmd.id).length).toBe(1);
