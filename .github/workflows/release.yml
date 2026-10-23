@@ -445,3 +445,98 @@ jobs:
             done
             exit 1
           fi
+
+  # Runs the published packages on other distros than the build image. Informational: a red row is read by hand and
+  # never withdraws the release.
+  smoke-linux-distros:
+    needs: publish-linux
+    # publish-linux is skipped when the repository variable is off; the matrix must not run (or fail) then.
+    if: ${{ !cancelled() && needs.publish-linux.result == 'success' }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        container: ["debian:12", "ubuntu:24.04", "fedora:41", "archlinux:latest"]
+    container:
+      image: ${{ matrix.container }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ github.ref_name }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Install xvfb, curl and jq
+        shell: sh
+        run: |
+          set -eu
+          . /etc/os-release
+          case "$ID" in
+            debian | ubuntu)
+              apt-get update
+              apt-get install -y xvfb curl jq ca-certificates
+              ;;
+            fedora)
+              dnf install -y xorg-x11-server-Xvfb curl jq
+              ;;
+            arch)
+              pacman -Syu --noconfirm xorg-server-xvfb curl jq
+              ;;
+            *)
+              echo "::error::unsupported image $ID"
+              exit 1
+              ;;
+          esac
+
+      # The containers have no gh, so the assets come from the REST API with the job token.
+      - name: Download the published packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/published"
+          cd "$HOME/published"
+          release="$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/releases/tags/$TAG")"
+          fetch() {
+            local suffix="$1" id name
+            id="$(jq -r --arg s "$suffix" '[.assets[] | select(.name | endswith($s))] | if length == 1 then .[0].id else empty end' <<< "$release")"
+            name="$(jq -r --arg s "$suffix" '[.assets[] | select(.name | endswith($s))] | if length == 1 then .[0].name else empty end' <<< "$release")"
+            if [ -z "$id" ]; then echo "::error::expected exactly one $suffix among the release assets"; return 1; fi
+            curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" \
+              -o "$name" "https://api.github.com/repos/$REPO/releases/assets/$id"
+          }
+          fetch .AppImage
+          if [ "${{ startsWith(matrix.container, 'debian') || startsWith(matrix.container, 'ubuntu') }}" = "true" ]; then
+            fetch .deb
+          fi
+          ls -l
+
+      # Exit 124 means timeout had to kill the app, so it was still running after 20 s.
+      - name: Smoke-launch the packages
+        shell: bash
+        working-directory: /root/published
+        env:
+          # Containers have no user namespaces for WebKit's bubblewrap sandbox.
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: "1"
+        run: |
+          set -euo pipefail
+          smoke() {
+            local label="$1" status=0
+            shift
+            "$@" || status=$?
+            if [ "$status" -ne 124 ]; then
+              echo "::error::$label exited with status $status instead of running until the 20 s timeout"
+              return 1
+            fi
+            echo "$label was still running after 20 s"
+          }
+          if compgen -G "*.deb" > /dev/null; then
+            apt-get install -y ./*.deb
+            desktop="/usr/share/applications/Bizzi DB.desktop"
+            exec_line="$(sed -n 's/^Exec=//p' "$desktop" | head -n 1 | sed 's/ *%[A-Za-z]//g')"
+            read -r -a cmd <<< "$exec_line"
+            if [ "${#cmd[@]}" -eq 0 ]; then echo "::error::$desktop has no Exec= line"; exit 1; fi
+            smoke ".deb ($exec_line)" xvfb-run -a timeout 20 "${cmd[@]}"
+          fi
+          chmod +x ./*.AppImage
+          smoke "AppImage" env APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a timeout 20 ./*.AppImage
