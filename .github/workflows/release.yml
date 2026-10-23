@@ -498,17 +498,19 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/published"
-          cd "$HOME/published"
-          release="$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$REPO/releases/tags/$TAG")"
+          mkdir -p /tmp/published
+          cd /tmp/published
+          # The token header goes through stdin (-H @-), never argv, so other processes cannot read it.
+          auth="Authorization: Bearer $GH_TOKEN"
+          release="$(curl -fsSL -H @- -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/releases/tags/$TAG" <<< "$auth")"
           fetch() {
             local suffix="$1" id name
             id="$(jq -r --arg s "$suffix" '[.assets[] | select(.name | endswith($s))] | if length == 1 then .[0].id else empty end' <<< "$release")"
             name="$(jq -r --arg s "$suffix" '[.assets[] | select(.name | endswith($s))] | if length == 1 then .[0].name else empty end' <<< "$release")"
             if [ -z "$id" ]; then echo "::error::expected exactly one $suffix among the release assets"; return 1; fi
-            curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" \
-              -o "$name" "https://api.github.com/repos/$REPO/releases/assets/$id"
+            curl -fsSL -H @- -H "Accept: application/octet-stream" \
+              -o "$name" "https://api.github.com/repos/$REPO/releases/assets/$id" <<< "$auth"
           }
           fetch .AppImage
           if [ "${{ startsWith(matrix.container, 'debian') || startsWith(matrix.container, 'ubuntu') }}" = "true" ]; then
@@ -519,7 +521,7 @@ jobs:
       # Exit 124 means timeout had to kill the app, so it was still running after 20 s.
       - name: Smoke-launch the packages
         shell: bash
-        working-directory: /root/published
+        working-directory: /tmp/published
         env:
           # Containers have no user namespaces for WebKit's bubblewrap sandbox.
           WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: "1"
