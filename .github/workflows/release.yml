@@ -436,6 +436,8 @@ jobs:
             mv "$dir/latest.edited.json" "$dir/latest.json"
             gh release upload "$TAG" "$dir/latest.json" --repo "$REPO" --clobber
             echo "Removed the linux-* keys from latest.json"
+          elif grep -qx 'latest.json' <<< "$assets"; then
+            incomplete+=("could not download latest.json, so its linux-* keys may still point at deleted assets")
           else
             echo "No latest.json on $TAG; nothing to edit"
           fi
