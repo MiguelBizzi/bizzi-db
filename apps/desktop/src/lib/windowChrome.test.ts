@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { captionButtons, navbarEndGroupClass, navbarPadding, resizeEdges } from './windowChrome';
+import { captionButtons, navbarEndGroupClass, navbarPadding, resizeEdges, resizeHandlesEnabled } from './windowChrome';
 
 describe('captionButtons', () => {
   test('offers maximize while the window is restored', () => {
@@ -42,13 +42,22 @@ describe('resizeEdges', () => {
 
 describe('navbarPadding', () => {
   test('linux navbar padding', () => {
-    expect(navbarPadding('linux')).toBe('pl-4 pr-2');
+    expect(navbarPadding('linux')).toBe('pl-4 pr-0');
     expect(navbarPadding('macos')).toBe('pl-24 pr-4');
   });
 
   test('leaves room for traffic lights on macOS and none for caption buttons on Windows', () => {
     expect(navbarPadding('macos')).toBe('pl-24 pr-4');
     expect(navbarPadding('windows')).toBe('pl-4 pr-0');
+  });
+});
+
+describe('resizeHandlesEnabled', () => {
+  test('only inside Tauri on Linux', () => {
+    expect(resizeHandlesEnabled('linux', true)).toBe(true);
+    expect(resizeHandlesEnabled('linux', false)).toBe(false);
+    expect(resizeHandlesEnabled('macos', true)).toBe(false);
+    expect(resizeHandlesEnabled('windows', true)).toBe(false);
   });
 });
 

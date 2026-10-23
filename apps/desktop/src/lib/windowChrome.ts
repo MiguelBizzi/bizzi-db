@@ -15,7 +15,12 @@ export function captionButtons(maximized: boolean, platform?: Platform): { actio
 /** macOS reserves the left edge for traffic lights; Windows caption buttons sit flush against the right edge. */
 export function navbarPadding(platform: Platform): string {
   if (platform === 'windows') return 'pl-4 pr-0';
-  return platform === 'linux' ? 'pl-4 pr-2' : 'pl-24 pr-4';
+  return platform === 'linux' ? 'pl-4 pr-0' : 'pl-24 pr-4';
+}
+
+// `getCurrentWindow()` throws outside Tauri, e.g. in the browser preview.
+export function resizeHandlesEnabled(platform: Platform, inTauri: boolean): boolean {
+  return inTauri && platform === 'linux';
 }
 
 /**
