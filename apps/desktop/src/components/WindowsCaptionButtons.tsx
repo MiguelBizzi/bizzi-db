@@ -1,28 +1,10 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { captionButtons, type CaptionAction } from "../lib/windowChrome";
+import { captionButtons } from "../lib/windowChrome";
+import { CAPTION_GLYPHS, runCaptionAction } from "./captionGlyphs";
 
 const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-
-const GLYPHS: Record<CaptionAction, ReactNode> = {
-  minimize: <path d="M0 5h10" />,
-  maximize: <rect x="0.5" y="0.5" width="9" height="9" />,
-  restore: (
-    <>
-      <rect x="0.5" y="2.5" width="7" height="7" />
-      <path d="M2.5 2.5v-2h7v7h-2" />
-    </>
-  ),
-  close: <path d="M0 0l10 10M10 0L0 10" />,
-};
-
-function runAction(action: CaptionAction) {
-  const win = getCurrentWindow();
-  if (action === "minimize") return win.minimize();
-  if (action === "close") return win.close();
-  return win.toggleMaximize();
-}
 
 export function WindowsCaptionButtons() {
   const [maximized, setMaximized] = useState(false);
@@ -52,7 +34,7 @@ export function WindowsCaptionButtons() {
           aria-label={label}
           title={label}
           onClick={() => {
-            void runAction(action).catch((error) => {
+            void runCaptionAction(action, getCurrentWindow()).catch((error) => {
               console.error(`Window control "${action}" failed`, error);
             });
           }}
@@ -70,7 +52,7 @@ export function WindowsCaptionButtons() {
             stroke="currentColor"
             strokeWidth={1}
           >
-            {GLYPHS[action]}
+            {CAPTION_GLYPHS[action]}
           </svg>
         </button>
       ))}
