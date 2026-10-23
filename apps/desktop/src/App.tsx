@@ -61,6 +61,8 @@ import {
   tablePreview,
   workspaceLoad,
   workspaceSave,
+  appUpdateChannel,
+  type UpdateChannel,
 } from '@db/core';
 import {
   savedQueriesDelete,
@@ -169,7 +171,10 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   IDLE_UPDATE_STATUS,
   UPDATE_CHECK_INTERVAL_MS,
-  canRestartToUpdate,
+  canAutoCheck,
+canRestartToUpdate,
+checkOptions,
+manualCheckBlocked,
   manualCheckFeedback,
   canStartUpdateCheck,
   shouldShowUpdateBanner,
@@ -263,6 +268,7 @@ export default function App() {
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
   const updateStatusRef = useRef<AppUpdateStatus>(IDLE_UPDATE_STATUS);
   const pendingUpdateRef = useRef<Update | null>(null);
+  const updateChannelRef = useRef<Promise<UpdateChannel> | null>(null);
   const [editingProfile, setEditingProfile] = useState<ConnectionProfile | null>(
     null
   );
@@ -483,12 +489,21 @@ export default function App() {
     }
   }, []);
 
+  const getUpdateChannel = useCallback((): Promise<UpdateChannel> => {
+    updateChannelRef.current ??= appUpdateChannel().catch(
+      (): UpdateChannel => ({ selfUpdate: true, target: null }),
+    );
+    return updateChannelRef.current;
+  }, []);
+
   const checkForAppUpdate = useCallback(
     async (): Promise<AppUpdateStatus | null> => {
+      const channel = await getUpdateChannel();
+      if (!canAutoCheck(channel)) return null;
       if (!canStartUpdateCheck(updateStatusRef.current)) return null;
       setUpdateStatus({ phase: 'checking' });
       try {
-        const update = await check();
+        const update = await check(checkOptions(channel));
         if (!update) {
           pendingUpdateRef.current = null;
           const next = statusAfterCheck(null);
@@ -506,14 +521,19 @@ export default function App() {
         return next;
       }
     },
-    [downloadAppUpdate],
+    [downloadAppUpdate, getUpdateChannel],
   );
 
   const checkForAppUpdateManually = useCallback(async () => {
+    const blocked = manualCheckBlocked(await getUpdateChannel());
+    if (blocked) {
+      toast(blocked.message, blocked.kind);
+      return;
+    }
     const result = await checkForAppUpdate();
     const feedback = result ? manualCheckFeedback(result, appVersion) : null;
     if (feedback) toast(feedback.message, feedback.kind);
-  }, [appVersion, checkForAppUpdate]);
+  }, [appVersion, checkForAppUpdate, getUpdateChannel]);
 
   const restartToUpdate = useCallback(async () => {
     const update = pendingUpdateRef.current;

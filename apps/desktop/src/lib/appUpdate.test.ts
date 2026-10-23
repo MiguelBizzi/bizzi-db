@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  SELF_UPDATE_UNSUPPORTED_MESSAGE,
   UPDATE_CHECK_INTERVAL_MS,
+  canAutoCheck,
+  checkOptions,
+  manualCheckBlocked,
   canRestartToUpdate,
   manualCheckFeedback,
   downloadPercent,
@@ -272,5 +276,33 @@ describe('manualCheckFeedback', () => {
     expect(
       manualCheckFeedback({ phase: 'ready', version: '0.2.0', notes: '' }, '0.1.8'),
     ).toBeNull();
+  });
+});
+
+describe('update channel', () => {
+  const deb = { selfUpdate: true, target: 'linux-x86_64-deb' };
+  const other = { selfUpdate: false, target: null };
+  const native = { selfUpdate: true, target: null };
+
+  test('a named target is passed to the updater, none keeps its default', () => {
+    expect(checkOptions(deb)).toEqual({ target: 'linux-x86_64-deb' });
+    expect(checkOptions(native)).toBeUndefined();
+  });
+
+  test('background checks never run for an install that cannot update itself', () => {
+    expect(canAutoCheck(other)).toBe(false);
+    expect(canAutoCheck(deb)).toBe(true);
+    expect(canAutoCheck(native)).toBe(true);
+  });
+
+  test('manual check without self-update explains why', () => {
+    expect(manualCheckBlocked(other)).toEqual({
+      message: SELF_UPDATE_UNSUPPORTED_MESSAGE,
+      kind: 'error',
+    });
+    expect(SELF_UPDATE_UNSUPPORTED_MESSAGE).toBe(
+      'This copy of Bizzi DB was not installed from the AppImage or the .deb package, so it cannot update itself. Download the latest version from the releases page.',
+    );
+    expect(manualCheckBlocked(deb)).toBeNull();
   });
 });

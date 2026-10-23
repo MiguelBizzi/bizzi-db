@@ -1,8 +1,9 @@
 mod platform;
 mod ssh_tunnel;
+mod update_channel;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use db_core::{
@@ -543,6 +544,18 @@ fn workspace_save(app_state: State<'_, AppState>, state: WorkspaceState) -> Resu
 }
 
 #[tauri::command]
+fn app_update_channel() -> update_channel::UpdateChannel {
+    let exe = std::env::current_exe().unwrap_or_default();
+    let kind = update_channel::install_kind(
+        std::env::consts::OS,
+        std::env::var_os("APPIMAGE").is_some(),
+        &exe,
+        Path::new("/var/lib/dpkg/info/bizzi-db.list").exists(),
+    );
+    update_channel::update_channel(kind, std::env::consts::ARCH)
+}
+
+#[tauri::command]
 fn settings_get(state: State<'_, AppState>) -> Result<AppSettings, String> {
     state
         .storage
@@ -708,7 +721,8 @@ pub fn run() {
             settings_get,
             settings_save,
             keychain_available,
-            ssh_pick_private_key
+            ssh_pick_private_key,
+            app_update_channel
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

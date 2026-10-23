@@ -1,3 +1,4 @@
+export * from './app';
 export * from './connections';
 export * from './settings';
 export * from './query';

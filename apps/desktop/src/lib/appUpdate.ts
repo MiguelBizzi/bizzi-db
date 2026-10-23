@@ -1,3 +1,4 @@
+import type { UpdateChannel } from '@db/core';
 import { invokeErrorMessage } from './invokeError';
 
 export type UpdateErrorStage = 'check' | 'download' | 'install';
@@ -157,4 +158,22 @@ export function manualCheckFeedback(
     };
   }
   return null;
+}
+
+export const SELF_UPDATE_UNSUPPORTED_MESSAGE =
+  'This copy of Bizzi DB was not installed from the AppImage or the .deb package, so it cannot update itself. Download the latest version from the releases page.';
+
+export function checkOptions(channel: UpdateChannel): { target: string } | undefined {
+  return channel.target ? { target: channel.target } : undefined;
+}
+
+export function canAutoCheck(channel: UpdateChannel): boolean {
+  return channel.selfUpdate;
+}
+
+export function manualCheckBlocked(
+  channel: UpdateChannel,
+): { message: string; kind: 'error' } | null {
+  if (channel.selfUpdate) return null;
+  return { message: SELF_UPDATE_UNSUPPORTED_MESSAGE, kind: 'error' };
 }
