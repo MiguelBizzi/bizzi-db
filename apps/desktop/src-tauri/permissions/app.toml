@@ -28,5 +28,6 @@ commands.allow = [
   "workspace_save",
   "settings_get",
   "settings_save",
+  "keychain_available",
   "ssh_pick_private_key"
 ]
