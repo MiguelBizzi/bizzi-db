@@ -589,7 +589,7 @@ async fn keychain_available(state: State<'_, AppState>) -> Result<bool, String> 
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn settings_save(state: State<'_, AppState>, settings: AppSettings) -> Result<AppSettings, String> {
     let previous = state
         .storage
@@ -749,6 +749,12 @@ mod tests {
         let err = ensure_keychain_toggle(false, true, failing_probe).unwrap_err();
         assert!(err.contains("not available"));
         assert!(ensure_keychain_toggle(false, true, || Ok(())).is_ok());
+    }
+
+    // A sync command runs on the main thread, and the keyring probe can wait on D-Bus activation.
+    #[test]
+    fn settings_save_runs_off_the_main_thread() {
+        assert!(include_str!("lib.rs").contains("#[tauri::command(async)]\nfn settings_save("));
     }
 
     #[test]
