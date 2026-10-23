@@ -80,6 +80,13 @@ describe('cheatSheetRows', () => {
     expect(rowsOf('View')).toContainEqual({ label: 'Full Screen', shortcut: 'F11' });
   });
 
+  test('Linux lists Quit under File and its own Refresh Schema shortcut', () => {
+    const groups = rowsFor('linux');
+    const rowsOf = (name: string) => groups.find((g) => g.group === name)?.rows ?? [];
+    expect(rowsOf('File')).toContainEqual({ label: 'Quit', shortcut: 'Ctrl+Q' });
+    expect(rowsOf('Connection')).toContainEqual({ label: 'Refresh Schema', shortcut: 'Ctrl+Shift+R' });
+  });
+
   test('macOS groups are exactly the menus with accelerated commands, in menu order', () => {
     expect(rowsFor('macos').map((g) => g.group)).toEqual(['Bizzi DB', 'File', 'Edit', 'Query', 'Connection', 'View']);
   });

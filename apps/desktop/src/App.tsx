@@ -1983,6 +1983,7 @@ export default function App() {
         handleNewIndex(table);
       },
       'file.closeWindow': () => getCurrentWindow().close(),
+      'app.quit': () => getCurrentWindow().close(),
       'file.closeTab': () => handleCloseTab(activePaneId, activeTabId),
       'file.closeOthers': () => handleCloseTabs(activePaneId, activeTabId, 'others'),
       'file.closeRight': () => handleCloseTabs(activePaneId, activeTabId, 'right'),

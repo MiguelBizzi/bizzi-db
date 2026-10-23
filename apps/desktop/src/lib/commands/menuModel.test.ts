@@ -59,7 +59,7 @@ describe('buildMenuModel', () => {
     const known = new Set(COMMANDS.map((c) => c.id));
     for (const id of ids) expect(known.has(id)).toBe(true);
     // macOS keeps the predefined full screen item; Windows and Linux get the command from the adapter.
-    const inModel = COMMANDS.filter((c) => c.id !== 'view.toggleFullscreen');
+    const inModel = COMMANDS.filter((c) => c.id !== 'view.toggleFullscreen' && c.id !== 'app.quit');
     for (const cmd of inModel) {
       expect(ids.filter((id) => id === cmd.id).length).toBe(1);
     }
@@ -232,9 +232,12 @@ describe('adaptMenuModel', () => {
         expect(items.slice(-2)).toEqual([{ kind: 'separator' }, { kind: 'item', commandId: 'app.settings' }]);
       });
 
-      test('file ends with predefined quit after a separator', () => {
+      test('file ends with the quit entry after a separator', () => {
         const items = submenu(adaptMenuModel(buildMenuModel(), platform), 'file').items;
-        expect(items.slice(-2)).toEqual([{ kind: 'separator' }, { kind: 'predefined', item: 'quit' }]);
+        const quit: MenuNode =
+          platform === 'linux' ? { kind: 'item', commandId: 'app.quit' } : { kind: 'predefined', item: 'quit' };
+        expect(items.slice(-2)).toEqual([{ kind: 'separator' }, quit]);
+        if (platform === 'linux') expect(items).not.toContainEqual({ kind: 'predefined', item: 'quit' });
       });
 
       test('help submenu holds about and check for updates, a separator, then the help items', () => {
@@ -270,7 +273,10 @@ describe('adaptMenuModel', () => {
 
       test('keeps every command exactly once', () => {
         const ids = itemIds(adaptMenuModel(buildMenuModel(), platform));
-        for (const cmd of COMMANDS) expect(ids.filter((id) => id === cmd.id).length).toBe(1);
+        for (const cmd of COMMANDS) {
+          const expected = cmd.id === 'app.quit' && platform !== 'linux' ? 0 : 1;
+          expect(ids.filter((id) => id === cmd.id).length).toBe(expected);
+        }
       });
 
       test('keeps the nested Go to Tab submenu inside View', () => {
