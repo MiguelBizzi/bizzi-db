@@ -51,6 +51,13 @@ Windows signing (Azure Trusted Signing), optional, used by the `publish-windows`
 
 With none of the `AZURE_SIGNING_*` variables set, the Windows installer is published unsigned. Updates stay protected either way: the updater only installs packages signed with the minisign key above. With the variables set, the endpoint must match `https://<region>.codesigning.azure.net`, so a wrong variable cannot send the credentials to another host; a signing failure aborts the build, and the job fails unless the published installer's Authenticode status is `Valid`. Setting only some of the variables or secrets fails the job instead of shipping unsigned. On any failure a cleanup step deletes the `*-setup.exe` assets and removes `windows-x86_64` from `latest.json`.
 
+Linux packages, used by the `publish-linux` job (repository variable `LINUX_RELEASE_ENABLED`; `true` turns the job on):
+
+- Secrets, optional: `LINUX_GPG_PRIVATE_KEY` (armored private key of the release GPG key) and `LINUX_GPG_PASSPHRASE`
+- Release key fingerprint: `<fingerprint — added by the maintainer>`; the public key is `docs/release-signing-key.asc`
+
+Each release carries `SHA256SUMS` for the `.deb` and the AppImage. With the GPG secrets set, `SHA256SUMS.asc` is a detached signature with the release key; without them the checksums ship unsigned and the run shows a warning. The key is imported into a throwaway keyring on the runner and never printed. To verify a download, import the public key, check that its fingerprint matches the one above, then run `gpg --verify SHA256SUMS.asc SHA256SUMS && sha256sum -c --ignore-missing SHA256SUMS` in the download folder. The `.deb` itself is not signed: `dpkg` does not verify package signatures. In-app updates on Linux use the same minisign key as macOS and Windows, so an update is never installed without a valid signature, whatever the GPG setup. Before the packages stay published, the job checks their control file and desktop entries and launches both under Xvfb; on any failure a cleanup step deletes the `.deb`, AppImage, their `.sig` files and `SHA256SUMS*`, and removes the `linux-*` keys from `latest.json`.
+
 Bundle id `com.bizzidb.app` is locked after the first public install (app-data path, keychain service, updater identity).
 
 ### Future monetization
