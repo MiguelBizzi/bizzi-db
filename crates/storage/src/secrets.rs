@@ -37,7 +37,7 @@ impl KeychainSecrets {
 
 const PROBE_KEY: &str = "__bizzi_probe__";
 
-const KEYCHAIN_UNAVAILABLE_LINUX: &str = "The system keychain is not available. Unlock or start your keyring (GNOME Keyring or KWallet), or turn off the system keychain in Settings.";
+const KEYCHAIN_UNAVAILABLE_LINUX: &str = "The system keyring is not available. Unlock or start your keyring (GNOME Keyring or KWallet) and try again.";
 
 pub fn keychain_unavailable_message() -> &'static str {
     if cfg!(target_os = "linux") {
@@ -412,7 +412,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn keyring_errors_read_as_one_message() {
-        let expected = "The system keychain is not available. Unlock or start your keyring (GNOME Keyring or KWallet), or turn off the system keychain in Settings.";
+        let expected = "The system keyring is not available. Unlock or start your keyring (GNOME Keyring or KWallet) and try again.";
         let no_storage = keyring::Error::NoStorageAccess(Box::new(std::io::Error::other(
             "org.freedesktop.DBus.Error.ServiceUnknown",
         )));
