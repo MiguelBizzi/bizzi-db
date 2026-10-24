@@ -27,14 +27,16 @@ export function filterNeedsValue(operator: FilterClause['operator']): boolean {
   return operator !== 'IS NULL' && operator !== 'IS NOT NULL';
 }
 
+export function isFilterIncomplete(filter: FilterClause): boolean {
+  return filterNeedsValue(filter.operator) && !filter.value;
+}
+
 /**
  * The rules the database should apply: enabled ones that have what they need.
  * Filtering runs in the query (like the SQL editor), not on the loaded page.
  */
 export function activeFilters(filters: FilterClause[]): FilterClause[] {
-  return filters.filter(
-    (filter) => filter.enabled && (!filterNeedsValue(filter.operator) || Boolean(filter.value))
-  );
+  return filters.filter((filter) => filter.enabled && !isFilterIncomplete(filter));
 }
 
 /** Identifies the conditions a set of rules applies, ignoring rule ids. */

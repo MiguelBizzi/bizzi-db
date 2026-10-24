@@ -9,6 +9,7 @@ import {
   filtersKey,
   DEFAULT_FILTER_OPERATOR,
   filterRuleFieldsClass,
+  isFilterIncomplete,
   setFilterEnabled,
 } from './tableFilters';
 import { SEARCH_DEBOUNCE_MS } from './useDebouncedValue';
@@ -146,5 +147,22 @@ describe('applySort / applyTableView', () => {
         sort: { column: 'name', direction: 'DESC' },
       }).map((r) => r.name)
     ).toEqual(['Grace', 'Alan', 'Ada']);
+  });
+});
+
+describe('isFilterIncomplete', () => {
+  test('flags a rule that needs a value but has none', () => {
+    expect(isFilterIncomplete(filter({ column: 'role', operator: '=' }))).toBe(true);
+    expect(isFilterIncomplete(filter({ column: 'role', operator: 'IN', value: '' }))).toBe(true);
+  });
+
+  test('accepts rules with a value and value-less operators', () => {
+    expect(isFilterIncomplete(filter({ column: 'role', operator: '=', value: 'admin' }))).toBe(false);
+    expect(isFilterIncomplete(filter({ column: 'role', operator: 'IS NULL' }))).toBe(false);
+    expect(isFilterIncomplete(filter({ column: 'role', operator: 'IS NOT NULL' }))).toBe(false);
+  });
+
+  test('judges a disabled rule by its content, not its switch', () => {
+    expect(isFilterIncomplete(filter({ column: 'role', operator: '=', enabled: false }))).toBe(true);
   });
 });

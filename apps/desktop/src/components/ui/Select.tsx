@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Popover } from './Popover';
 import { createPortal } from 'react-dom';
@@ -48,7 +48,9 @@ export function Select<T extends string>({
   } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
+  // The menu mounts a render after `open` flips (it waits for `menuBox`), so focusing from the
+  // open effect would find no input yet.
+  const focusOnMount = useCallback((node: HTMLInputElement | null) => node?.focus(), []);
   const listId = useId();
   const selected = options.find((option) => option.value === value);
   const compact = size === 'sm';
@@ -94,16 +96,13 @@ export function Select<T extends string>({
     document.addEventListener('keydown', onKey);
     window.addEventListener('resize', updateBox);
     document.addEventListener('scroll', updateBox, true);
-    if (searchable) {
-      requestAnimationFrame(() => searchRef.current?.focus());
-    }
     return () => {
       document.removeEventListener('mousedown', onPointer);
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', updateBox);
       document.removeEventListener('scroll', updateBox, true);
     };
-  }, [open, searchable]);
+  }, [open]);
 
   return (
     <div ref={rootRef} className={`relative ${className ?? ''}`}>
@@ -162,7 +161,7 @@ export function Select<T extends string>({
             <div className="relative px-2 pt-2 pb-1">
               <Search className="w-3.5 h-3.5 absolute left-4 top-4 text-muted-foreground" />
               <input
-                ref={searchRef}
+                ref={focusOnMount}
                 type="search"
                 value={query}
                 placeholder="Search…"

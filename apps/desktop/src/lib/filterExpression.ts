@@ -107,12 +107,28 @@ type ExpectKind =
   | 'and';
 
 export function parseFilterExpression(text: string, columns: string[]): FilterParseResult {
-  const tokens = tokenize(text);
-  if (!tokens) return { status: 'error', message: 'Invalid expression' };
-  if (tokens.length === 0) return { status: 'incomplete' };
+  if (!text.trim()) return { status: 'incomplete' };
 
-  const parser = new Parser(tokens, columns, text);
-  return parser.parse();
+  const clauses: ParsedFilterClause[] = [];
+  let pos = 0;
+  while (true) {
+    const result = parseClause(text, pos, columns);
+    if (result.status !== 'ok') return result;
+    clauses.push(result.clause);
+
+    const next = skipSpaces(text, result.end);
+    if (next >= text.length) return { status: 'ok', clauses };
+    const word = wordAt(text, next).toUpperCase();
+    if (word === 'AND') {
+      pos = next + 3;
+      if (!text.slice(pos).trim()) return { status: 'incomplete' };
+      continue;
+    }
+    if (word === 'OR') {
+      return { status: 'error', message: 'OR is not supported; combine conditions with AND' };
+    }
+    return { status: 'error', message: `Unexpected token '${tokenAt(text, next)}'` };
+  }
 }
 
 export function serializeFilterExpression(filters: FilterClause[]): string {
@@ -361,197 +377,272 @@ function tokenize(text: string): Token[] | null {
       }
       continue;
     }
-    return null;
+    // Symbols the grammar doesn't know (@, %, .) belong to unquoted values.
+    const start = i;
+    i += 1;
+    while (i < text.length && !/[\s(),=<>'"]/.test(text[i]!)) i += 1;
+    tokens.push({ kind: 'ident', value: text.slice(start, i), start, end: i });
   }
   return tokens;
 }
 
-class Parser {
-  private index = 0;
+type ClauseResult =
+  | { status: 'ok'; clause: ParsedFilterClause; end: number }
+  | { status: 'incomplete' }
+  | { status: 'error'; message: string };
 
-  constructor(
-    private readonly tokens: Token[],
-    private readonly columns: string[],
-    private readonly source: string
-  ) {}
+const SYMBOL_OPERATORS = ['>=', '<=', '<>', '!=', '=', '>', '<'];
+const NOT_SUPPORTED: ClauseResult = { status: 'error', message: 'NOT is not supported' };
+const BETWEEN_NOT_SUPPORTED: ClauseResult = {
+  status: 'error',
+  message: 'BETWEEN is not supported',
+};
 
-  parse(): FilterParseResult {
-    const first = this.peek();
-    if (first?.kind === 'keyword' && first.value === 'NOT') {
-      return { status: 'error', message: 'NOT is not supported' };
-    }
-    if (first?.kind === 'lparen') {
-      return { status: 'error', message: 'Parentheses are not supported' };
-    }
+// Values are the rest of the clause up to the next AND, so quotes are optional.
+function parseClause(s: string, start: number, columns: string[]): ClauseResult {
+  const i = skipSpaces(s, start);
+  if (i >= s.length) return { status: 'incomplete' };
+  if (s[i] === '(') return { status: 'error', message: 'Parentheses are not supported' };
 
-    const clauses: ParsedFilterClause[] = [];
-    const firstClause = this.parseClause();
-    if (firstClause.status !== 'ok') return firstClause;
-    clauses.push(firstClause.clause);
-
-    while (this.peek()) {
-      const token = this.peek()!;
-      if (token.kind === 'keyword' && token.value === 'AND') {
-        this.index += 1;
-        if (!this.peek()) return { status: 'incomplete' };
-        const next = this.parseClause();
-        if (next.status !== 'ok') return next;
-        clauses.push(next.clause);
-        continue;
-      }
-      if (token.kind === 'keyword' && token.value === 'OR') {
-        return { status: 'error', message: 'OR is not supported; combine conditions with AND' };
-      }
-      return { status: 'error', message: `Unexpected token '${this.tokenText(token)}'` };
-    }
-
-    return { status: 'ok', clauses };
-  }
-
-  private parseClause():
-    | { status: 'ok'; clause: ParsedFilterClause }
-    | { status: 'incomplete' }
-    | { status: 'error'; message: string } {
-    const columnTok = this.peek();
-    if (!columnTok) return { status: 'incomplete' };
-    if (columnTok.kind !== 'ident') {
-      if (columnTok.kind === 'keyword' && columnTok.value === 'NOT') {
-        return { status: 'error', message: 'NOT is not supported' };
-      }
-      if (columnTok.kind === 'keyword' && columnTok.value === 'BETWEEN') {
-        return { status: 'error', message: 'BETWEEN is not supported' };
-      }
-      return { status: 'error', message: `Unexpected token '${this.tokenText(columnTok)}'` };
-    }
-
-    const resolved = resolveColumn(columnTok.value, this.columns);
-    const restAfterColumn = this.tokens[this.index + 1];
-    if (!resolved) {
-      if (!restAfterColumn && couldBeColumnPrefix(columnTok.value, this.columns)) {
-        return { status: 'incomplete' };
-      }
-      return {
-        status: 'error',
-        message: `Invalid expression: '${columnTok.value}' is not a valid column`,
-      };
-    }
-    this.index += 1;
-
-    const opTok = this.peek();
-    if (!opTok) return { status: 'incomplete' };
-
-    if (opTok.kind === 'keyword' && opTok.value === 'BETWEEN') {
-      return { status: 'error', message: 'BETWEEN is not supported' };
-    }
-
-    if (opTok.kind === 'keyword' && opTok.value === 'IS') {
-      this.index += 1;
-      const afterIs = this.peek();
-      if (!afterIs) return { status: 'incomplete' };
-      if (afterIs.kind === 'keyword' && afterIs.value === 'NULL') {
-        this.index += 1;
-        return { status: 'ok', clause: { column: resolved, operator: 'IS NULL', value: '' } };
-      }
-      if (afterIs.kind === 'keyword' && afterIs.value === 'NOT') {
-        this.index += 1;
-        const afterNot = this.peek();
-        if (!afterNot) return { status: 'incomplete' };
-        if (afterNot.kind === 'keyword' && afterNot.value === 'NULL') {
-          this.index += 1;
-          return {
-            status: 'ok',
-            clause: { column: resolved, operator: 'IS NOT NULL', value: '' },
-          };
-        }
-        return { status: 'error', message: 'NOT is not supported' };
-      }
+  const col = readColumn(s, i, columns);
+  if ('unknown' in col) {
+    const lead = wordAt(s, i).toUpperCase();
+    if (lead === 'NOT') return NOT_SUPPORTED;
+    if (lead === 'BETWEEN') return BETWEEN_NOT_SUPPORTED;
+    if (skipSpaces(s, col.end) >= s.length && couldBeColumnPrefix(col.unknown, columns)) {
       return { status: 'incomplete' };
     }
-
-    if (opTok.kind === 'keyword' && opTok.value === 'IN') {
-      this.index += 1;
-      return this.parseInList(resolved);
-    }
-
-    if (opTok.kind === 'keyword' && (opTok.value === 'LIKE' || opTok.value === 'ILIKE')) {
-      this.index += 1;
-      const value = this.parseValue();
-      if (value.status !== 'ok') return value;
-      return {
-        status: 'ok',
-        clause: { column: resolved, operator: opTok.value, value: value.value },
-      };
-    }
-
-    if (opTok.kind === 'op' && COMPARE_OPS.has(opTok.value)) {
-      this.index += 1;
-      const value = this.parseValue();
-      if (value.status !== 'ok') return value;
-      const operator: FilterClause['operator'] = opTok.value === '<>' ? '!=' : opTok.value as FilterClause['operator'];
-      return { status: 'ok', clause: { column: resolved, operator, value: value.value } };
-    }
-
-    if (opTok.kind === 'keyword' && opTok.value === 'AND') return { status: 'incomplete' };
-    return { status: 'error', message: `Unexpected token '${this.tokenText(opTok)}'` };
+    return {
+      status: 'error',
+      message: `Invalid expression: '${col.unknown}' is not a valid column`,
+    };
   }
 
-  private parseInList(
-    column: string
-  ):
-    | { status: 'ok'; clause: ParsedFilterClause }
-    | { status: 'incomplete' }
-    | { status: 'error'; message: string } {
-    const open = this.peek();
-    if (!open) return { status: 'incomplete' };
-    if (open.kind !== 'lparen') {
-      return { status: 'error', message: `Unexpected token '${this.tokenText(open)}'` };
+  const j = skipSpaces(s, col.end);
+  if (j >= s.length) return { status: 'incomplete' };
+
+  const symbol = SYMBOL_OPERATORS.find((op) => s.startsWith(op, j));
+  if (symbol) {
+    const operator = (symbol === '<>' ? '!=' : symbol) as FilterClause['operator'];
+    return parseValueClause(s, j + symbol.length, col.column, operator, columns);
+  }
+
+  const word = wordAt(s, j).toUpperCase();
+  const afterWord = j + word.length;
+  switch (word) {
+    case 'LIKE':
+    case 'ILIKE':
+      return parseValueClause(s, afterWord, col.column, word, columns);
+    case 'IN':
+      return parseInClause(s, afterWord, col.column, columns);
+    case 'IS':
+      return parseIsClause(s, afterWord, col.column);
+    case 'BETWEEN':
+      return BETWEEN_NOT_SUPPORTED;
+    case 'NOT':
+      return NOT_SUPPORTED;
+    case 'AND':
+      return { status: 'incomplete' };
+    default:
+      return { status: 'error', message: `Unexpected token '${tokenAt(s, j)}'` };
+  }
+}
+
+function parseIsClause(s: string, from: number, column: string): ClauseResult {
+  const k = skipSpaces(s, from);
+  if (k >= s.length) return { status: 'incomplete' };
+  const first = wordAt(s, k).toUpperCase();
+  if (first === 'NULL') {
+    return { status: 'ok', clause: { column, operator: 'IS NULL', value: '' }, end: k + 4 };
+  }
+  if (first !== 'NOT') return { status: 'incomplete' };
+
+  const m = skipSpaces(s, k + 3);
+  if (m >= s.length) return { status: 'incomplete' };
+  const second = wordAt(s, m).toUpperCase();
+  if (second === 'NULL') {
+    return { status: 'ok', clause: { column, operator: 'IS NOT NULL', value: '' }, end: m + 4 };
+  }
+  if ('NULL'.startsWith(second)) return { status: 'incomplete' };
+  return NOT_SUPPORTED;
+}
+
+function parseValueClause(
+  s: string,
+  from: number,
+  column: string,
+  operator: FilterClause['operator'],
+  columns: string[]
+): ClauseResult {
+  const span = readValueSpan(s, from, columns);
+  if (!span.raw) return { status: 'incomplete' };
+  return {
+    status: 'ok',
+    clause: { column, operator, value: unwrapValue(span.raw) },
+    end: span.end,
+  };
+}
+
+function parseInClause(s: string, from: number, column: string, columns: string[]): ClauseResult {
+  const i = skipSpaces(s, from);
+  if (i >= s.length) return { status: 'incomplete' };
+
+  let items: string[];
+  let end: number;
+  if (s[i] === '(') {
+    const list = readItemList(s, i + 1);
+    if (!list) return { status: 'incomplete' };
+    ({ items, end } = list);
+  } else {
+    const span = readValueSpan(s, from, columns);
+    const list = readItemList(`${span.raw})`, 0);
+    if (!list) return { status: 'incomplete' };
+    ({ items } = list);
+    end = span.end;
+  }
+  if (items.length === 0) return { status: 'incomplete' };
+  return { status: 'ok', clause: { column, operator: 'IN', value: items.join(', ') }, end };
+}
+
+function readItemList(s: string, from: number): { items: string[]; end: number } | null {
+  const items: string[] = [];
+  let i = from;
+  while (true) {
+    i = skipSpaces(s, i);
+    if (i >= s.length) return null;
+
+    let item: string | null = null;
+    let next = i;
+    if (isQuote(s[i])) {
+      const quoted = readQuoted(s, i);
+      if (!quoted) return null;
+      const after = skipSpaces(s, quoted.end);
+      if (s[after] === ',' || s[after] === ')') {
+        item = quoted.value;
+        next = after;
+      }
     }
-    this.index += 1;
-    const values: string[] = [];
-    if (this.peek()?.kind === 'rparen') return { status: 'incomplete' };
-    while (true) {
-      const value = this.parseValue();
-      if (value.status !== 'ok') return value;
-      values.push(value.value);
-      const sep = this.peek();
-      if (!sep) return { status: 'incomplete' };
-      if (sep.kind === 'comma') {
-        this.index += 1;
-        if (!this.peek()) return { status: 'incomplete' };
+    if (item === null) {
+      next = i;
+      while (next < s.length && s[next] !== ',' && s[next] !== ')') next += 1;
+      if (next >= s.length) return null;
+      item = s.slice(i, next).trim();
+    }
+    if (item !== '') items.push(item);
+
+    if (s[next] === ')') return { items, end: next + 1 };
+    i = next + 1;
+  }
+}
+
+function readColumn(
+  s: string,
+  i: number,
+  columns: string[]
+): { column: string; end: number } | { unknown: string; end: number } {
+  if (s[i] === '"') {
+    const quoted = readQuoted(s, i);
+    const name = quoted ? quoted.value : s.slice(i + 1);
+    const end = quoted ? quoted.end : s.length;
+    const column = resolveColumn(name, columns);
+    return column ? { column, end } : { unknown: name, end };
+  }
+  const matched = matchBareColumn(s, i, columns);
+  if (matched) return matched;
+  const word = /^[^\s=<>!(),]+/.exec(s.slice(i))?.[0] ?? s[i]!;
+  return { unknown: word, end: i + word.length };
+}
+
+// Longest column name that starts at `i`, so "first name" beats "first".
+function matchBareColumn(
+  s: string,
+  i: number,
+  columns: string[]
+): { column: string; end: number } | null {
+  let best: string[] = [];
+  for (const column of columns) {
+    if (!column) continue;
+    const candidate = s.slice(i, i + column.length);
+    if (candidate.toLowerCase() !== column.toLowerCase()) continue;
+    const boundary = s[i + column.length];
+    if (boundary !== undefined && !/[\s=<>!(),]/.test(boundary)) continue;
+    if (best.length === 0 || column.length > best[0]!.length) best = [column];
+    else if (column.length === best[0]!.length) best.push(column);
+  }
+  const column = best.find((name) => s.startsWith(name, i)) ?? (best.length === 1 ? best[0] : undefined);
+  return column ? { column, end: i + column.length } : null;
+}
+
+// AND/OR only split a value when a condition follows them; otherwise they are part of the text.
+function readValueSpan(s: string, from: number, columns: string[]): { raw: string; end: number } {
+  const valueStart = skipSpaces(s, from);
+  let scanFrom = from;
+  if (isQuote(s[valueStart])) {
+    const quoted = readQuoted(s, valueStart);
+    if (quoted) scanFrom = quoted.end;
+  }
+  const connector = /\s+(?:AND|OR)(?=\s|$)/gi;
+  connector.lastIndex = scanFrom;
+  for (let m = connector.exec(s); m; m = connector.exec(s)) {
+    if (startsCondition(s.slice(m.index + m[0].length), columns)) {
+      return { raw: s.slice(valueStart, Math.max(m.index, valueStart)).trim(), end: m.index };
+    }
+  }
+  return { raw: s.slice(valueStart).trim(), end: s.length };
+}
+
+function startsCondition(rest: string, columns: string[]): boolean {
+  const text = rest.trimStart();
+  if (!text || text[0] === '"' || /^NOT\s/i.test(text)) return true;
+  if (matchBareColumn(text, 0, columns)) return true;
+  const lower = text.toLowerCase();
+  return columns.some((column) => column.toLowerCase().startsWith(lower));
+}
+
+function unwrapValue(raw: string): string {
+  if (isQuote(raw[0])) {
+    const quoted = readQuoted(raw, 0);
+    if (!quoted) return raw.slice(1);
+    return quoted.end === raw.length ? quoted.value : raw;
+  }
+  return /^(true|false|null)$/i.test(raw) ? raw.toLowerCase() : raw;
+}
+
+function readQuoted(s: string, i: number): { value: string; end: number } | null {
+  const quote = s[i]!;
+  let value = '';
+  let j = i + 1;
+  while (j < s.length) {
+    if (s[j] === quote) {
+      if (s[j + 1] === quote) {
+        value += quote;
+        j += 2;
         continue;
       }
-      if (sep.kind === 'rparen') {
-        this.index += 1;
-        return { status: 'ok', clause: { column, operator: 'IN', value: values.join(', ') } };
-      }
-      return { status: 'error', message: `Unexpected token '${this.tokenText(sep)}'` };
+      return { value, end: j + 1 };
     }
+    value += s[j];
+    j += 1;
   }
+  return null;
+}
 
-  private parseValue():
-    | { status: 'ok'; value: string }
-    | { status: 'incomplete' }
-    | { status: 'error'; message: string } {
-    const token = this.peek();
-    if (!token) return { status: 'incomplete' };
-    if (token.kind === 'string' || token.kind === 'number' || token.kind === 'ident') {
-      this.index += 1;
-      return { status: 'ok', value: token.value };
-    }
-    if (token.kind === 'keyword' && (token.value === 'TRUE' || token.value === 'FALSE' || token.value === 'NULL')) {
-      this.index += 1;
-      return { status: 'ok', value: token.value.toLowerCase() };
-    }
-    return { status: 'error', message: `Unexpected token '${this.tokenText(token)}'` };
-  }
+function isQuote(c: string | undefined): boolean {
+  return c === "'" || c === '"';
+}
 
-  private peek(): Token | undefined {
-    return this.tokens[this.index];
-  }
+function skipSpaces(s: string, i: number): number {
+  let j = i;
+  while (j < s.length && /\s/.test(s[j]!)) j += 1;
+  return j;
+}
 
-  private tokenText(token: Token): string {
-    return this.source.slice(token.start, token.end) || token.value;
-  }
+function wordAt(s: string, i: number): string {
+  return /^[A-Za-z]+/.exec(s.slice(i))?.[0] ?? '';
+}
+
+function tokenAt(s: string, i: number): string {
+  return /^\S+/.exec(s.slice(i))?.[0] ?? '';
 }
 
 function resolveColumn(name: string, columns: string[]): string | null {
@@ -696,10 +787,9 @@ function walkExpect(
       if (token.kind === 'keyword' && token.value === 'AND') {
         expect = 'column';
         column = undefined;
-        i += 1;
-        continue;
       }
-      break;
+      i += 1;
+      continue;
     }
     break;
   }

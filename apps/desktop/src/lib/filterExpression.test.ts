@@ -102,6 +102,93 @@ describe('parseFilterExpression', () => {
   });
 });
 
+describe('parseFilterExpression without quotes', () => {
+  const one = (text: string, cols = columns) => {
+    const result = parseFilterExpression(text, cols);
+    if (result.status !== 'ok') throw new Error(`expected ok, got ${JSON.stringify(result)}`);
+    return result.clauses;
+  };
+
+  test('treats quoted and unquoted values the same', () => {
+    const expected = [{ column: 'name', operator: '=', value: 'john' }];
+    expect(one("name = 'john'")).toEqual(expected);
+    expect(one('name = "john"')).toEqual(expected);
+    expect(one('name = john')).toEqual(expected);
+  });
+
+  test('takes spaces and symbols in an unquoted value literally', () => {
+    expect(one('name = john smith')[0]!.value).toBe('john smith');
+    expect(one('name = a@b.com')[0]!.value).toBe('a@b.com');
+    expect(one('name = 2024-01-01')[0]!.value).toBe('2024-01-01');
+    expect(one('name LIKE %foo%')[0]).toEqual({ column: 'name', operator: 'LIKE', value: '%foo%' });
+  });
+
+  test('splits on AND but keeps an AND inside quotes', () => {
+    expect(one('name = john smith and revenue > 5')).toEqual([
+      { column: 'name', operator: '=', value: 'john smith' },
+      { column: 'revenue', operator: '>', value: '5' },
+    ]);
+    expect(one("name = 'salt AND pepper'")[0]!.value).toBe('salt AND pepper');
+  });
+
+  test('keeps a quoted value that contains quote characters or an operator', () => {
+    expect(one('name = "a = b"')[0]!.value).toBe('a = b');
+    expect(one("name = it's")[0]!.value).toBe("it's");
+  });
+
+  test('keeps unquoted keyword-like words as text', () => {
+    expect(one('name = in')[0]!.value).toBe('in');
+    expect(one('name = null')[0]!.value).toBe('null');
+  });
+
+  test('accepts IN lists with or without parentheses and quotes', () => {
+    const expected = [{ column: 'name', operator: 'IN', value: 'Ada, Grace Hopper' }];
+    expect(one("name IN ('Ada', 'Grace Hopper')")).toEqual(expected);
+    expect(one('name IN (Ada, Grace Hopper)')).toEqual(expected);
+    expect(one('name IN Ada, Grace Hopper')).toEqual(expected);
+  });
+
+  test('matches columns with spaces, with or without quotes', () => {
+    const cols = ['first name', 'id'];
+    const expected = [{ column: 'first name', operator: '=', value: 'Ada' }];
+    expect(one('"first name" = Ada', cols)).toEqual(expected);
+    expect(one('first name = Ada', cols)).toEqual(expected);
+    expect(one('FIRST NAME = Ada', cols)).toEqual(expected);
+  });
+
+  test('prefers the longest matching column name', () => {
+    const cols = ['first', 'first name'];
+    expect(one('first name = Ada', cols)[0]!.column).toBe('first name');
+    expect(one('first = Ada', cols)[0]!.column).toBe('first');
+  });
+
+  test('still reports incomplete drafts as incomplete', () => {
+    expect(parseFilterExpression('name = ', columns)).toEqual({ status: 'incomplete' });
+    expect(parseFilterExpression('name = john and', columns)).toEqual({ status: 'incomplete' });
+    expect(parseFilterExpression('name IN (', columns)).toEqual({ status: 'incomplete' });
+    expect(parseFilterExpression('na', columns)).toEqual({ status: 'incomplete' });
+  });
+
+  test('points a bare word without a column at the missing column', () => {
+    const result = parseFilterExpression('john', columns);
+    expect(result.status).toBe('error');
+    if (result.status === 'error') expect(result.message).toContain("'john'");
+  });
+
+  test('serialized filters parse back to the same clauses', () => {
+    const filters = [
+      clause({ id: 'a', column: 'name', operator: '=', value: "O'Hara and co" }),
+      clause({ id: 'b', column: 'name', operator: 'IN', value: 'Ada, Grace Hopper' }),
+      clause({ id: 'c', column: 'role', operator: 'IS NOT NULL' }),
+    ];
+    const parsed = parseFilterExpression(serializeFilterExpression(filters), columns);
+    expect(parsed).toEqual({
+      status: 'ok',
+      clauses: filters.map(({ column, operator, value }) => ({ column, operator, value })),
+    });
+  });
+});
+
 describe('serializeFilterExpression', () => {
   test('joins enabled complete clauses and skips disabled or empty ones', () => {
     expect(
@@ -226,6 +313,13 @@ describe('filterExpressionCompletions', () => {
     expect(values.map((item) => item.label)).toEqual(['active', 'paused']);
     const text = "status = 'active'";
     expect(filterExpressionCompletions(text, text.length, defs)).toEqual([]);
+  });
+
+  test('keeps suggesting after a value with symbols the tokenizer does not know', () => {
+    const text = 'name = a@b.com AND ';
+    expect(
+      filterExpressionCompletions(text, text.length, defs).map((item) => item.label)
+    ).toEqual(['status', 'revenue', 'name']);
   });
 
   test('filters suggestions by the token under the cursor', () => {
