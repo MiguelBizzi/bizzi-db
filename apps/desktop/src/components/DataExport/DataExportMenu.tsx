@@ -15,10 +15,11 @@ import {
   DATA_EXPORT_FORMATS,
   DataExportFormat,
   DataExportInput,
-  downloadExport,
+  saveExport,
   formatExport,
   writeClipboard,
 } from '../../lib/dataExport';
+import { exportReveal } from '@db/core';
 import { invokeErrorMessage } from '../../lib/invokeError';
 import { dismissToast, toast } from '../../lib/toast';
 
@@ -117,7 +118,25 @@ export function DataExportMenu({
       if (kind === 'copy') {
         await writeClipboard(data.then((input) => formatExport(input, format)));
       } else {
-        downloadExport(await data, format);
+        const rowsToSave = await data;
+        const saving = toast.loading('Choose where to save…');
+        let savedPath: string | null;
+        try {
+          savedPath = await saveExport(rowsToSave, format);
+        } finally {
+          dismissToast(saving);
+        }
+        if (savedPath) {
+          const count = rowsToSave.rows.length;
+          toast.success(`Saved ${count} ${count === 1 ? 'row' : 'rows'} to ${savedPath}`, 8000, {
+            label: 'Show in folder',
+            run: () => {
+              exportReveal(savedPath).catch((error: unknown) =>
+                toast.error(`Could not open the folder: ${invokeErrorMessage(error, 'unknown error')}`)
+              );
+            },
+          });
+        }
       }
       return true;
     } catch (error) {

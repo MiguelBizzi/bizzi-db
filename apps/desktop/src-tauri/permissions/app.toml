@@ -30,5 +30,8 @@ commands.allow = [
   "settings_save",
   "keychain_available",
   "ssh_pick_private_key",
-  "app_update_channel"
+  "app_update_channel",
+  "export_save_file",
+  "export_save_bytes",
+  "export_reveal"
 ]

@@ -4,6 +4,12 @@ export interface Toast {
   id: string;
   message: string;
   kind: ToastKind;
+  action?: ToastAction;
+}
+
+export interface ToastAction {
+  label: string;
+  run: () => void;
 }
 
 export type ToastListener = (toasts: Toast[]) => void;
@@ -42,10 +48,11 @@ export function clearToasts(): void {
 export function toast(
   message: string,
   kind: ToastKind = 'success',
-  durationMs = kind === 'error' ? ERROR_DURATION_MS : 2400
+  durationMs = kind === 'error' ? ERROR_DURATION_MS : 2400,
+  action?: ToastAction
 ): string {
   const id = `toast_${++seq}`;
-  toasts = [...toasts, { id, message, kind }];
+  toasts = [...toasts, { id, message, kind, action }];
   emit();
   if (durationMs > 0 && typeof window !== 'undefined') {
     window.setTimeout(() => dismissToast(id), durationMs);
@@ -53,7 +60,8 @@ export function toast(
   return id;
 }
 
-toast.success = (message: string, durationMs?: number) => toast(message, 'success', durationMs);
+toast.success = (message: string, durationMs?: number, action?: ToastAction) =>
+  toast(message, 'success', durationMs, action);
 toast.error = (message: string, durationMs?: number) => toast(message, 'error', durationMs);
 /** Stays up until dismissed with `dismissToast`, for work that is still running. */
 toast.loading = (message: string) => toast(message, 'loading', 0);

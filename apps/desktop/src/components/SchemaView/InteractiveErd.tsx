@@ -15,8 +15,11 @@ import {
 import { DatabaseSchema, TableSchema } from '../../types';
 import { shortColumnType } from '../../lib/columnTypeDisplay';
 import { knownRowCount } from '../../lib/format';
+import { exportReveal } from '@db/core';
+import { invokeErrorMessage } from '../../lib/invokeError';
+import { toast } from '../../lib/toast';
 import { buildErdEdges, type ErdEdge } from '../../lib/erdEdges';
-import { downloadDataUrl, erdExportFileName, snapshotErdPng } from '../../lib/erdExport';
+import { erdExportFileName, saveErdPng, snapshotErdPng } from '../../lib/erdExport';
 import {
   ERD_HEADER_HEIGHT,
   ERD_ROW_HEIGHT,
@@ -273,7 +276,19 @@ export const InteractiveErd: React.FC<InteractiveErdProps> = ({
     setExporting(true);
     try {
       const dataUrl = await snapshotErdPng(worldRef.current);
-      downloadDataUrl(dataUrl, erdExportFileName(database.name));
+      const savedPath = await saveErdPng(dataUrl, erdExportFileName(database.name));
+      if (savedPath) {
+        toast.success(`Saved diagram to ${savedPath}`, 8000, {
+          label: 'Show in folder',
+          run: () => {
+            exportReveal(savedPath).catch((error: unknown) =>
+              toast.error(`Could not open the folder: ${invokeErrorMessage(error, 'unknown error')}`)
+            );
+          },
+        });
+      }
+    } catch (error) {
+      toast.error(`Could not export the diagram: ${invokeErrorMessage(error, 'unknown error')}`);
     } finally {
       setExporting(false);
     }

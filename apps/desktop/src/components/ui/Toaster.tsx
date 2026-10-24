@@ -22,16 +22,16 @@ export function Toaster() {
     <div className="fixed bottom-4 right-4 z-[300] flex flex-col-reverse gap-2 w-[min(20rem,calc(100vw-2rem))] pointer-events-none">
       <AnimatePresence>
         {toasts.map((item) => (
-          <motion.button
+          <motion.div
             key={item.id}
-            type="button"
+            role="status"
             layout={!reduceMotion}
             initial={reduceMotion ? false : { opacity: 0, y: 14, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.96 }}
             transition={transition}
             onClick={() => dismissToast(item.id)}
-            className="pointer-events-auto flex items-start gap-2 rounded-xl border border-border bg-popover px-3 py-2.5 text-left text-xs text-popover-foreground shadow-2xl"
+            className="pointer-events-auto flex items-start gap-2 cursor-pointer rounded-xl border border-border bg-popover px-3 py-2.5 text-left text-xs text-popover-foreground shadow-2xl"
           >
             {item.kind === 'loading' ? (
               <Loader2 className="w-3.5 h-3.5 mt-px text-muted-foreground shrink-0 animate-spin" />
@@ -41,7 +41,20 @@ export function Toaster() {
               <Check className="w-3.5 h-3.5 mt-px text-emerald-400 shrink-0" />
             )}
             <span className="min-w-0 break-words line-clamp-4">{item.message}</span>
-          </motion.button>
+            {item.action && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  item.action?.run();
+                  dismissToast(item.id);
+                }}
+                className="ml-auto shrink-0 font-medium text-primary hover:underline"
+              >
+                {item.action.label}
+              </button>
+            )}
+          </motion.div>
         ))}
       </AnimatePresence>
     </div>,
