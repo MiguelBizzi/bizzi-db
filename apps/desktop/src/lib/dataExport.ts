@@ -1,3 +1,4 @@
+import { exportSaveFile, type ExportFile } from '@db/core';
 import { DIALECTS } from '@db/database';
 import { formatAccelerator, type Platform } from './commands/accelerator';
 import { currentPlatform } from './commands/shortcutLabel';
@@ -85,16 +86,20 @@ export async function copyExport(
   await writeClipboard(formatExport(input, format));
 }
 
-export function downloadExport(input: DataExportInput, format: DataExportFormat): void {
+export function buildExportFile(input: DataExportInput, format: DataExportFormat): ExportFile {
+  const meta = DATA_EXPORT_FORMATS.find((item) => item.id === format);
   const body = formatExport(input, format);
-  const content = format === 'csv' ? `\uFEFF${body}` : body;
-  const blob = new Blob([content], { type: mimeType(format) });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = exportFileName(input, format);
-  link.click();
-  URL.revokeObjectURL(url);
+  return {
+    fileName: exportFileName(input, format),
+    filterLabel: meta?.label ?? format,
+    extension: meta?.extension ?? format,
+    // The BOM makes Excel read the CSV as UTF-8.
+    content: format === 'csv' ? `\uFEFF${body}` : body,
+  };
+}
+
+export function saveExport(input: DataExportInput, format: DataExportFormat): Promise<string | null> {
+  return exportSaveFile(buildExportFile(input, format));
 }
 
 function formatCsv({ columns, rows }: DataExportInput): string {
@@ -175,17 +180,4 @@ function qualifyTable(schema: string, name: string): string {
 function sanitizeFileName(name: string): string {
   const cleaned = name.replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '');
   return cleaned || 'export';
-}
-
-function mimeType(format: DataExportFormat): string {
-  switch (format) {
-    case 'csv':
-      return 'text/csv;charset=utf-8';
-    case 'json':
-      return 'application/json;charset=utf-8';
-    case 'markdown':
-      return 'text/markdown;charset=utf-8';
-    case 'sql':
-      return 'application/sql;charset=utf-8';
-  }
 }

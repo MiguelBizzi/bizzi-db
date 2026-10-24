@@ -1,3 +1,4 @@
+import { exportSaveBytes } from '@db/core';
 import { toPng } from 'html-to-image';
 
 export function erdExportFileName(databaseName: string): string {
@@ -5,11 +6,18 @@ export function erdExportFileName(databaseName: string): string {
   return `${cleaned || 'schema'}_erd.png`;
 }
 
-export function downloadDataUrl(dataUrl: string, fileName: string): void {
-  const link = document.createElement('a');
-  link.href = dataUrl;
-  link.download = fileName;
-  link.click();
+export function dataUrlToBytes(dataUrl: string): Uint8Array {
+  const match = dataUrl.match(/^data:[^;,]*;base64,(.*)$/s);
+  if (!match) throw new Error('Expected a base64 data URL');
+  const binary = atob(match[1]);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+export function saveErdPng(dataUrl: string, fileName: string): Promise<string | null> {
+  return exportSaveBytes(
+    { fileName, filterLabel: 'PNG image', extension: 'png' },
+    dataUrlToBytes(dataUrl)
+  );
 }
 
 export async function snapshotErdPng(element: HTMLElement): Promise<string> {

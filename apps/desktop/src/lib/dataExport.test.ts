@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  buildExportFile,
   copyCsvShortcut,
   exportFileName,
   formatExport,
@@ -108,5 +109,23 @@ describe('copyCsvShortcut', () => {
   test('follows the platform modifier', () => {
     expect(copyCsvShortcut('windows')).toBe('Ctrl+C');
     expect(copyCsvShortcut('macos')).toBe('⌘C');
+  });
+});
+
+describe('buildExportFile', () => {
+  test('csv gets a BOM so spreadsheets read UTF-8', () => {
+    const file = buildExportFile(sample, 'csv');
+    expect(file.content.startsWith('\uFEFFid,name')).toBe(true);
+    expect(file).toMatchObject({
+      fileName: 'users_export.csv',
+      extension: 'csv',
+      filterLabel: 'CSV',
+    });
+  });
+
+  test('other formats are written as formatted', () => {
+    const file = buildExportFile(sample, 'json');
+    expect(file.content).toBe(formatExport(sample, 'json'));
+    expect(file.extension).toBe('json');
   });
 });

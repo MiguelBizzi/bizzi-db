@@ -637,6 +637,52 @@ async fn ssh_pick_private_key() -> Result<Option<String>, String> {
     Ok(file.map(|handle| handle.path().to_string_lossy().into_owned()))
 }
 
+#[tauri::command]
+async fn export_save_file(
+    file_name: String,
+    filter_label: String,
+    extension: String,
+    content: String,
+) -> Result<Option<String>, String> {
+    export::save_with_dialog(&file_name, &filter_label, &extension, content.as_bytes()).await
+}
+
+/// Raw-body variant for binary exports. The request body is the file; the
+/// destination hints travel percent-encoded in headers.
+#[tauri::command]
+async fn export_save_bytes(request: tauri::ipc::Request<'_>) -> Result<Option<String>, String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("Export payload must be raw bytes".into());
+    };
+    let header = |name: &str| -> Result<String, String> {
+        let value = request
+            .headers()
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| format!("Missing {name} header"))?;
+        urlencoding_decode(value)
+    };
+    export::save_with_dialog(
+        &header("x-file-name")?,
+        &header("x-filter-label")?,
+        &header("x-extension")?,
+        bytes,
+    )
+    .await
+}
+
+fn urlencoding_decode(value: &str) -> Result<String, String> {
+    url::form_urlencoded::parse(format!("v={value}").as_bytes())
+        .next()
+        .map(|(_, v)| v.into_owned())
+        .ok_or_else(|| "Invalid header encoding".to_string())
+}
+
+#[tauri::command]
+fn export_reveal(path: String) -> Result<(), String> {
+    tauri_plugin_opener::reveal_item_in_dir(path).map_err(map_err)
+}
+
 fn db_path(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&dir).map_err(map_err)?;
@@ -649,6 +695,8 @@ fn secrets_path(db_path: &std::path::Path) -> PathBuf {
         .map(|dir| dir.join("secrets.json"))
         .unwrap_or_else(|| PathBuf::from("secrets.json"))
 }
+
+mod export;
 
 #[cfg(target_os = "macos")]
 mod macos;
@@ -724,7 +772,10 @@ pub fn run() {
             settings_save,
             keychain_available,
             ssh_pick_private_key,
-            app_update_channel
+            app_update_channel,
+            export_save_file,
+            export_save_bytes,
+            export_reveal
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
