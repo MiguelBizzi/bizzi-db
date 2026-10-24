@@ -35,6 +35,7 @@ export function Cta() {
         <div className="pt-4 flex flex-wrap items-center justify-center gap-6 text-xs text-muted-foreground font-mono">
           <span>macOS 12+ (Apple Silicon & Intel)</span>
           <span>Windows 10+ (x64)</span>
+          <span>Linux x86_64 (.deb, AppImage)</span>
         </div>
       </div>
     </section>

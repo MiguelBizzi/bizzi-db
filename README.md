@@ -52,7 +52,7 @@ Bizzi DB is a PostgreSQL client written with [Tauri](https://tauri.app), React, 
 |---|---|
 | **macOS** | [Download the universal DMG](https://github.com/MiguelBizzi/bizzi-db/releases/latest) for Apple silicon or Intel. Drag Bizzi DB into Applications and open it. |
 | **Windows** | [Download the x64 installer](https://github.com/MiguelBizzi/bizzi-db/releases/latest) (`Bizzi DB_<version>_x64-setup.exe`) and run it. It installs for your user only, so no administrator rights are needed. The installer is not code-signed yet: the first time, SmartScreen shows "Windows protected your PC". Choose **More info → Run anyway**. |
-| **Linux** | Not available yet. |
+| **Linux** | [Download the `.deb` or the AppImage](https://github.com/MiguelBizzi/bizzi-db/releases/latest) for x86_64. On Debian or Ubuntu, run `sudo apt install ./Bizzi.DB_<version>_amd64.deb`. Otherwise make the AppImage executable (`chmod +x`) and run it. |
 | **From source** | See [Development](#development). |
 
 The first install is always manual. After that, Bizzi DB updates itself from the same GitHub Release.

@@ -4,6 +4,22 @@ All notable changes to Bizzi DB are recorded here. The format follows [Keep a Ch
 
 New entries go under `## [Unreleased]`; the release process moves them under a version heading. Write for people who use the app, not for people who read commits. See [RELEASING.md](RELEASING.md).
 
+## [0.1.21] - 2026-10-23 - Bizzi DB for Linux
+
+Bizzi DB now runs on Linux, exports save through your system's save dialog, and table filters are easier to write.
+
+### New
+- Linux x86_64 packages are published with each release: a `.deb` for Debian and Ubuntu, and an AppImage for other distributions. They update themselves from inside the app like the macOS and Windows versions.
+- On Linux, shortcuts use Ctrl and Alt like on Windows, with Ctrl+Shift+R to refresh the schema, Ctrl+Shift+W to close the window and Ctrl+Q to quit. Combinations your desktop reserves are left to it.
+- Passwords on Linux are kept in the Secret Service keyring (GNOME Keyring or KWallet) when the system keychain is turned on in Settings. Bizzi DB checks that one is running before it lets you enable it.
+- Table filters no longer need quotes: `name = john smith`, `email = a@b.com` and `name = 'john smith'` all work, and so do column names with spaces. AND and OR only split a filter when another condition follows.
+- The filter panel opens ready to type, and applied filters show as chips that expand into column, operator and value controls. Add condition adds a blank row.
+
+### Fixed
+- Exporting table data and saving the ERD as an image now open the system save dialog. Before, nothing was saved and no error was shown. A toast shows the saved path with a Show in folder action.
+- Opening the filter column dropdown puts the cursor in its search box.
+- Saving settings no longer blocks the window.
+
 ## [0.1.20] - 2026-10-22 - Bizzi DB for Windows
 
 Bizzi DB now runs on Windows, with the same look as on macOS and the keyboard shortcuts Windows users expect.

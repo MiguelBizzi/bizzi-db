@@ -5,6 +5,47 @@ export const UPCOMING: UpcomingEntry | null = null;
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.21",
+    "date": "2026-10-23",
+    "releases": 1,
+    "title": "Bizzi DB for Linux",
+    "summary": "Bizzi DB now runs on Linux, exports save through your system's save dialog, and table filters are easier to write.",
+    "changes": [
+      {
+        "kind": "new",
+        "text": "Linux x86_64 packages are published with each release: a `.deb` for Debian and Ubuntu, and an AppImage for other distributions. They update themselves from inside the app like the macOS and Windows versions."
+      },
+      {
+        "kind": "new",
+        "text": "On Linux, shortcuts use Ctrl and Alt like on Windows, with Ctrl+Shift+R to refresh the schema, Ctrl+Shift+W to close the window and Ctrl+Q to quit. Combinations your desktop reserves are left to it."
+      },
+      {
+        "kind": "new",
+        "text": "Passwords on Linux are kept in the Secret Service keyring (GNOME Keyring or KWallet) when the system keychain is turned on in Settings. Bizzi DB checks that one is running before it lets you enable it."
+      },
+      {
+        "kind": "new",
+        "text": "Table filters no longer need quotes: `name = john smith`, `email = a@b.com` and `name = 'john smith'` all work, and so do column names with spaces. AND and OR only split a filter when another condition follows."
+      },
+      {
+        "kind": "new",
+        "text": "The filter panel opens ready to type, and applied filters show as chips that expand into column, operator and value controls. Add condition adds a blank row."
+      },
+      {
+        "kind": "fixed",
+        "text": "Exporting table data and saving the ERD as an image now open the system save dialog. Before, nothing was saved and no error was shown. A toast shows the saved path with a Show in folder action."
+      },
+      {
+        "kind": "fixed",
+        "text": "Opening the filter column dropdown puts the cursor in its search box."
+      },
+      {
+        "kind": "fixed",
+        "text": "Saving settings no longer blocks the window."
+      }
+    ]
+  },
+  {
     "version": "0.1.20",
     "date": "2026-10-22",
     "releases": 1,
