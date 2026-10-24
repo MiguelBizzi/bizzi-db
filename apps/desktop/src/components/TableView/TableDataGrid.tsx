@@ -46,7 +46,6 @@ import {
 import {
   activeFilters,
   applyTableView,
-  createDefaultFilter,
   filtersKey,
 } from "../../lib/tableFilters";
 import { shortColumnType } from "../../lib/columnTypeDisplay";
@@ -749,12 +748,6 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
         searchTerm={searchInput}
         onSearchChange={setSearchInput}
         filters={filters}
-        onAddFilter={() =>
-          setFilters([
-            ...filters,
-            createDefaultFilter(table.columns[0]?.name || "id"),
-          ])
-        }
         onRemoveFilter={(id) => setFilters(filters.filter((f) => f.id !== id))}
         onUpdateFilter={(id, field, val) =>
           setFilters(

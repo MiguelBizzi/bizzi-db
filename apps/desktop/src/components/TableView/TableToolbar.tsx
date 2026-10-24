@@ -1,12 +1,17 @@
 import React, { useMemo, useState, type Ref, type RefObject } from 'react';
-import { Filter, Plus, Trash2, Search, RefreshCw } from 'lucide-react';
+import { Check, Filter, Plus, Trash2, Search, RefreshCw, X } from 'lucide-react';
 import { TableSchema, FilterClause } from '../../types';
 import { Select, SelectOption } from '../ui/Select';
 import { Checkbox } from '../ui/Checkbox';
 import { DataExportMenu } from '../DataExport/DataExportMenu';
 import { ColumnVisibilityMenu } from './ColumnVisibilityMenu';
 import { FilterExpressionInput, type FilterExpressionInputHandle } from './FilterExpressionInput';
-import { filterNeedsValue, filterRuleFieldsClass } from '../../lib/tableFilters';
+import {
+  createDefaultFilter,
+  filterNeedsValue,
+  filterRuleFieldsClass,
+  isFilterIncomplete,
+} from '../../lib/tableFilters';
 import { commitFilterExpression, valueHintsFromRows } from '../../lib/filterExpression';
 import { shortcutLabel } from '../../lib/commands/shortcutLabel';
 
@@ -17,7 +22,6 @@ interface TableToolbarProps {
   searchTerm: string;
   onSearchChange: (val: string) => void;
   filters: FilterClause[];
-  onAddFilter: () => void;
   onRemoveFilter: (id: string) => void;
   onUpdateFilter: (id: string, field: keyof FilterClause, val: any) => void;
   onSetFilters: (filters: FilterClause[]) => void;
@@ -50,7 +54,6 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
   searchTerm,
   onSearchChange,
   filters,
-  onAddFilter,
   onRemoveFilter,
   onUpdateFilter,
   onSetFilters,
@@ -107,9 +110,24 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
     return false;
   };
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  // Other ways of opening the panel (cell filter, command) keep focus where it was.
+  const [focusInputOnShow, setFocusInputOnShow] = useState(false);
+
   const openFilters = () => {
+    setFocusInputOnShow(true);
     onShowFiltersChange(true);
-    if (filters.length === 0) onAddFilter();
+  };
+
+  const addCondition = () => {
+    const condition = createDefaultFilter(table.columns[0]?.name ?? 'id');
+    onSetFilters([...filters, condition]);
+    setEditingId(condition.id);
+  };
+
+  const removeCondition = (id: string) => {
+    onRemoveFilter(id);
+    if (editingId === id) setEditingId(null);
   };
 
   const operatorOptions: SelectOption<FilterClause['operator']>[] = [
@@ -227,89 +245,140 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
         </div>
       </div>
 
-      {/* Filter Clauses Builder */}
       {!isQuery && showFilters && (
         <div className="p-2.5 bg-background border border-border rounded-xl space-y-2 field-message">
-          <div className="flex items-center justify-between text-xs font-mono text-muted-foreground font-semibold">
-            <span>Data Filter Rules</span>
+          <div className="flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <FilterExpressionInput
+                ref={filterInputRef}
+                value={draft}
+                onChange={(text) => {
+                  setDraft(text);
+                  setExpressionError(null);
+                }}
+                onSubmit={submitExpression}
+                columns={table.columns}
+                valueHints={valueHints}
+                error={expressionError}
+                placeholder={`Type a condition, e.g. ${columnNames[0] ?? 'id'} = value, then press Enter`}
+                autoFocus={focusInputOnShow}
+              />
+            </div>
             <button
               type="button"
-              onClick={onAddFilter}
-              className="flex items-center gap-1 text-[11px] text-primary hover:underline"
+              onClick={addCondition}
+              className="pressable shrink-0 flex items-center gap-1 h-[30px] px-2.5 rounded-lg border border-border bg-card text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
             >
               <Plus className="w-3 h-3" />
-              <span>Add Filter</span>
+              <span>Add condition</span>
             </button>
           </div>
 
-          <FilterExpressionInput
-            ref={filterInputRef}
-            value={draft}
-            onChange={(text) => {
-              setDraft(text);
-              setExpressionError(null);
-            }}
-            onSubmit={submitExpression}
-            columns={table.columns}
-            valueHints={valueHints}
-            error={expressionError}
-          />
-
           {filters.length === 0 && (
-            <div className="text-muted-foreground text-xs italic py-1">
-              No filter conditions active. Click "Add Filter" to filter rows.
-            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Quotes are optional. Combine conditions with AND, e.g.{' '}
+              <span className="font-mono">
+                {columnNames[0] ?? 'id'} = value AND {columnNames[1] ?? 'name'} LIKE %text%
+              </span>
+            </p>
           )}
 
-          {filters.map((f) => (
-            <div key={f.id} className="flex items-center gap-2 font-mono text-xs">
-              <Checkbox
-                checked={f.enabled}
-                onCheckedChange={(checked) => onUpdateFilter(f.id, 'enabled', checked)}
-                aria-label={f.enabled ? 'Disable filter' : 'Enable filter'}
-              />
-
-              <div className={filterRuleFieldsClass(f.enabled)}>
-                <Select
-                  size="sm"
-                  className="w-40"
-                  searchable
-                  value={f.column}
-                  options={table.columns.map((c) => ({ value: c.name, label: c.name }))}
-                  onChange={(value) => onUpdateFilter(f.id, 'column', value)}
-                  aria-label="Filter column"
-                />
-
-                <Select
-                  size="sm"
-                  className="w-[8.5rem]"
-                  value={f.operator}
-                  options={operatorOptions}
-                  onChange={(value) => onUpdateFilter(f.id, 'operator', value)}
-                  aria-label="Filter operator"
-                />
-
-                {filterNeedsValue(f.operator) && (
-                  <input
-                    type="text"
-                    value={f.value}
-                    onChange={(e) => onUpdateFilter(f.id, 'value', e.target.value)}
-                    placeholder="Filter value..."
-                    className="bg-card border border-border rounded px-2 py-1 text-foreground focus:outline-none focus:border-primary w-40"
-                  />
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => onRemoveFilter(f.id)}
-                className="p-1 text-muted-foreground hover:text-destructive transition-colors"
-                aria-label="Remove filter"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ))}
+          {filters.length > 0 && (
+            <ul className="flex flex-wrap gap-1.5">
+              {filters.map((f) =>
+                f.id === editingId ? (
+                  <li
+                    key={f.id}
+                    className="flex items-center gap-2 w-full font-mono text-xs p-1.5 rounded-lg border border-primary/40 bg-card"
+                  >
+                    <div className={filterRuleFieldsClass(f.enabled)}>
+                      <Select
+                        size="sm"
+                        className="w-40"
+                        searchable
+                        value={f.column}
+                        options={table.columns.map((c) => ({ value: c.name, label: c.name }))}
+                        onChange={(value) => onUpdateFilter(f.id, 'column', value)}
+                        aria-label="Filter column"
+                      />
+                      <Select
+                        size="sm"
+                        className="w-[8.5rem]"
+                        value={f.operator}
+                        options={operatorOptions}
+                        onChange={(value) => onUpdateFilter(f.id, 'operator', value)}
+                        aria-label="Filter operator"
+                      />
+                      {filterNeedsValue(f.operator) && (
+                        <input
+                          type="text"
+                          value={f.value}
+                          onChange={(e) => onUpdateFilter(f.id, 'value', e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') setEditingId(null);
+                          }}
+                          placeholder="Value"
+                          aria-label="Filter value"
+                          className="bg-background border border-border rounded-lg h-7 px-2 text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary w-44"
+                        />
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditingId(null)}
+                      className="ml-auto p-1 text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label="Done editing filter"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeCondition(f.id)}
+                      className="p-1 text-muted-foreground hover:text-destructive transition-colors"
+                      aria-label="Remove filter"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </li>
+                ) : (
+                  <li
+                    key={f.id}
+                    className="flex items-center gap-1.5 h-7 pl-2 pr-1 max-w-full rounded-lg border border-border bg-card font-mono text-xs"
+                  >
+                    <Checkbox
+                      checked={f.enabled}
+                      onCheckedChange={(checked) => onUpdateFilter(f.id, 'enabled', checked)}
+                      aria-label={f.enabled ? 'Disable filter' : 'Enable filter'}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEditingId(f.id)}
+                      title={isFilterIncomplete(f) ? 'Incomplete: needs a value to apply' : 'Edit condition'}
+                      className={`${filterRuleFieldsClass(f.enabled)} hover:opacity-100 text-left`}
+                    >
+                      <span className="text-foreground truncate">{f.column}</span>
+                      <span className="text-muted-foreground shrink-0">{f.operator}</span>
+                      {filterNeedsValue(f.operator) && (
+                        <span
+                          className={`truncate ${f.value ? 'text-primary' : 'text-muted-foreground italic'}`}
+                        >
+                          {f.value || 'value'}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeCondition(f.id)}
+                      className="p-1 text-muted-foreground hover:text-destructive transition-colors"
+                      aria-label="Remove filter"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </li>
+                )
+              )}
+            </ul>
+          )}
         </div>
       )}
     </div>

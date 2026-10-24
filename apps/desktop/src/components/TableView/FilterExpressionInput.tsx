@@ -30,6 +30,8 @@ interface FilterExpressionInputProps {
   columns: ColumnDefinition[];
   valueHints: Record<string, string[]>;
   error: string | null;
+  placeholder?: string;
+  autoFocus?: boolean;
 }
 
 export function FilterExpressionInput({
@@ -40,9 +42,15 @@ export function FilterExpressionInput({
   columns,
   valueHints,
   error,
+  placeholder = 'Write a condition, then press Enter',
+  autoFocus = false,
 }: FilterExpressionInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   useImperativeHandle(ref, () => ({ focus: () => inputRef.current?.focus() }), []);
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const menuRef = useRef<HTMLDivElement>(null);
   const listId = useId();
   const [cursor, setCursor] = useState(0);
@@ -147,7 +155,7 @@ export function FilterExpressionInput({
         type="text"
         value={value}
         spellCheck={false}
-        placeholder="Write a condition, then press Enter"
+        placeholder={placeholder}
         aria-label="Filter expression"
         role="combobox"
         aria-autocomplete="list"
