@@ -4,6 +4,13 @@ All notable changes to Bizzi DB are recorded here. The format follows [Keep a Ch
 
 New entries go under `## [Unreleased]`; the release process moves them under a version heading. Write for people who use the app, not for people who read commits. See [RELEASING.md](RELEASING.md).
 
+## [0.1.22] - 2026-10-24 - Linux packages
+
+The Linux `.deb` and AppImage announced in 0.1.21 are now published with each release.
+
+### New
+- Download the Linux x86_64 `.deb` (Debian, Ubuntu) or AppImage (other distributions) from the release page. Both update themselves from inside the app.
+
 ## [0.1.21] - 2026-10-23 - Bizzi DB for Linux
 
 Bizzi DB now runs on Linux, exports save through your system's save dialog, and table filters are easier to write.
