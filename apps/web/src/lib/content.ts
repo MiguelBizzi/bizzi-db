@@ -65,7 +65,7 @@ export const ARCHITECTURE: Feature[] = [
   },
   {
     title: 'Secrets stay on the machine',
-    body: 'Enable the OS keychain (macOS Keychain, Windows Credential Manager, or libsecret) or keep a local secret file. Profile metadata is SQLite in the app-data directory.',
+    body: 'Enable the OS keychain (macOS Keychain, Windows Credential Manager, or the Linux Secret Service keyring) or keep a local secret file. Profile metadata is SQLite in the app-data directory.',
   },
 ];
 

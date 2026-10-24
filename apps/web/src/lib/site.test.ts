@@ -29,7 +29,6 @@ const BANNED = [
   'gemini',
   '1.4.2',
   'nsis',
-  'appimage',
 ];
 
 function publishedCopy(): string {
@@ -66,12 +65,13 @@ describe('site', () => {
     expect(RELEASES_URL).toBe(
       'https://github.com/MiguelBizzi/bizzi-db/releases/latest',
     );
-    expect(DOWNLOAD_PLATFORMS).toHaveLength(2);
+    expect(DOWNLOAD_PLATFORMS).toHaveLength(3);
     for (const platform of DOWNLOAD_PLATFORMS) {
       expect(platform.href).toBe(RELEASES_URL);
     }
-    expect(DOWNLOAD_PLATFORMS.map((p) => p.id)).toEqual(['macos', 'windows']);
+    expect(DOWNLOAD_PLATFORMS.map((p) => p.id)).toEqual(['macos', 'windows', 'linux']);
     expect(DOWNLOAD_PLATFORMS[0]?.detail).toContain('DMG');
+    expect(DOWNLOAD_PLATFORMS[2]).toMatchObject({ label: 'Linux', detail: '.deb · AppImage' });
     expect(DOWNLOAD_PLATFORMS[1]).toMatchObject({ label: 'Windows', detail: 'x64 installer' });
   });
 
@@ -91,8 +91,11 @@ describe('site', () => {
       detectPreferredPlatform('Mozilla/5.0 (Windows NT 10.0; Win64; x64)'),
     ).toBe('windows');
     expect(detectPreferredPlatform('Mozilla/5.0 (X11; Linux x86_64)')).toBe(
-      'macos',
+      'linux',
     );
+    expect(
+      detectPreferredPlatform('Mozilla/5.0 (Linux; Android 14; Pixel 8)'),
+    ).toBe('macos');
   });
 });
 

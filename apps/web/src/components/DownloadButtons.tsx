@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Apple, Download, Monitor } from 'lucide-react';
+import { Apple, Download, Monitor, Terminal } from 'lucide-react';
 import {
   DOWNLOAD_PLATFORMS,
   detectPreferredPlatform,
@@ -10,6 +10,7 @@ import { useLatestRelease } from '../lib/useLatestRelease';
 const ICONS: Record<DownloadPlatformId, typeof Apple> = {
   macos: Apple,
   windows: Monitor,
+  linux: Terminal,
 };
 
 export function DownloadButtons({
