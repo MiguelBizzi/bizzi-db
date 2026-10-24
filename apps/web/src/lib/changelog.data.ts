@@ -5,6 +5,19 @@ export const UPCOMING: UpcomingEntry | null = null;
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.22",
+    "date": "2026-10-24",
+    "releases": 1,
+    "title": "Linux packages",
+    "summary": "The Linux `.deb` and AppImage announced in 0.1.21 are now published with each release.",
+    "changes": [
+      {
+        "kind": "new",
+        "text": "Download the Linux x86_64 `.deb` (Debian, Ubuntu) or AppImage (other distributions) from the release page. Both update themselves from inside the app."
+      }
+    ]
+  },
+  {
     "version": "0.1.21",
     "date": "2026-10-23",
     "releases": 1,
