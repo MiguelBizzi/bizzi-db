@@ -4,12 +4,19 @@ All notable changes to Bizzi DB are recorded here. The format follows [Keep a Ch
 
 New entries go under `## [Unreleased]`; the release process moves them under a version heading. Write for people who use the app, not for people who read commits. See [RELEASING.md](RELEASING.md).
 
-## [0.1.22] - 2026-10-24 - Linux packages
+## [0.1.23] - 2026-10-24 - Linux packages
 
-The Linux `.deb` and AppImage announced in 0.1.21 are now published with each release.
+The Linux `.deb` and AppImage announced in 0.1.21 are now published with each release. 0.1.22 did not include them.
 
 ### New
 - Download the Linux x86_64 `.deb` (Debian, Ubuntu) or AppImage (other distributions) from the release page. Both update themselves from inside the app.
+
+## [0.1.22] - 2026-10-24 - Release pipeline fix
+
+The app itself is unchanged since 0.1.21.
+
+### Fixed
+- The Linux packages were meant to ship with this release but a release pipeline error kept them off. They follow in 0.1.23.
 
 ## [0.1.21] - 2026-10-23 - Bizzi DB for Linux
 
