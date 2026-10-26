@@ -1,4 +1,5 @@
 {
+  "mainBinaryName": "bizzi-db",
   "app": {
     "windows": [
       {
