@@ -4,6 +4,15 @@ All notable changes to Bizzi DB are recorded here. The format follows [Keep a Ch
 
 New entries go under `## [Unreleased]`; the release process moves them under a version heading. Write for people who use the app, not for people who read commits. See [RELEASING.md](RELEASING.md).
 
+## [0.1.24] - 2026-10-26 - Black screen fix
+
+Opening a query tab or connecting to a database no longer turns the window black.
+
+### Fixed
+- Since 0.1.20, opening a new query tab, or connecting to a database (which opens an Untitled query), could turn the whole window black with no message. The SQL editor loads correctly again on macOS, Windows and Linux.
+- If part of the app fails to display, you now see the error with Try again or Reload and a button to copy the details, instead of a blank window. The rest of the app keeps working.
+- Errors and crashes are recorded in `crash.log` in the app's log folder (`~/Library/Logs/com.bizzidb.app` on macOS), so a report can include what went wrong.
+
 ## [0.1.23] - 2026-10-24 - Linux packages
 
 The Linux `.deb` and AppImage announced in 0.1.21 are now published with each release. 0.1.22 did not include them.
