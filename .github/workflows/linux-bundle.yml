@@ -91,3 +91,58 @@ jobs:
             ${{ steps.packages.outputs.dir }}/*.deb
             ${{ steps.packages.outputs.dir }}/*.AppImage
           if-no-files-found: error
+
+  # Same containers and checks as smoke-linux-distros in release.yml, run on the packages above instead of a release's.
+  smoke-distros:
+    needs: bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        container: ["debian:12", "ubuntu:24.04", "fedora:41", "archlinux:latest"]
+    container:
+      image: ${{ matrix.container }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install xvfb, curl, jq and the host libraries the AppImage expects
+        shell: sh
+        run: apps/desktop/scripts/install-smoke-host.sh
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: bizzi-db-linux-${{ github.sha }}
+          path: /tmp/published
+
+      # Exit 124 means timeout had to kill the app, so it was still running after 20 s.
+      - name: Smoke-launch the packages
+        shell: bash
+        working-directory: /tmp/published
+        env:
+          # Containers have no user namespaces for WebKit's bubblewrap sandbox.
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: "1"
+        run: |
+          set -euo pipefail
+          smoke() {
+            local label="$1" status=0
+            shift
+            "$@" || status=$?
+            if [ "$status" -ne 124 ]; then
+              echo "::error::$label exited with status $status instead of running until the 20 s timeout"
+              return 1
+            fi
+            echo "$label was still running after 20 s"
+          }
+          if command -v apt-get > /dev/null; then
+            apt-get install -y ./*.deb
+            desktop="/usr/share/applications/Bizzi DB.desktop"
+            exec_line="$(sed -n 's/^Exec=//p' "$desktop" | head -n 1 | sed 's/ *%[A-Za-z]//g')"
+            read -r -a cmd <<< "$exec_line"
+            if [ "${#cmd[@]}" -eq 0 ]; then echo "::error::$desktop has no Exec= line"; exit 1; fi
+            smoke ".deb ($exec_line)" xvfb-run -a timeout 20 "${cmd[@]}"
+          fi
+          chmod +x ./*.AppImage
+          smoke "AppImage" env APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a timeout 20 ./*.AppImage
