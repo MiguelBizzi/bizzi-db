@@ -1,3 +1,4 @@
+mod crash_log;
 mod platform;
 mod ssh_tunnel;
 mod update_channel;
@@ -638,6 +639,11 @@ async fn ssh_pick_private_key() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
+fn log_client_error(source: String, details: String) -> Result<(), String> {
+    crash_log::record(&source, &details)
+}
+
+#[tauri::command]
 async fn export_save_file(
     file_name: String,
     filter_label: String,
@@ -725,6 +731,7 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            crash_log::install(app.handle());
             let path = db_path(app.handle())?;
             let storage = Storage::open(&path).map_err(|e| e.to_string())?;
             let secrets = DualSecretStore::new(
@@ -744,6 +751,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            log_client_error,
             connections_list,
             connections_save,
             connections_delete,

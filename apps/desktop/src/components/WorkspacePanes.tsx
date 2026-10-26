@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { viewEnter } from '../lib/motion';
 import type { WorkspaceTab } from '../types';
 import { TabsBar } from './TabsBar';
+import { ErrorBoundary, PaneCrashFallback } from './ErrorBoundary';
 import { WorkspaceEmptyState } from './WorkspaceEmptyState';
 import { SplitHandle } from './ui/SplitHandle';
 import type { CloseTabKind } from '../lib/tabPaneActions';
@@ -123,7 +124,9 @@ function LeafPane({
           className="w-full h-full"
         >
           {activeTab ? (
-            renderTabContent(activeTab)
+            <ErrorBoundary source={`tab:${activeTab.type}`} fallback={PaneCrashFallback}>
+              {renderTabContent(activeTab)}
+            </ErrorBoundary>
           ) : (
             <WorkspaceEmptyState onOpenNewQuery={() => onOpenNewQueryTab(pane.id)} />
           )}
