@@ -4,6 +4,14 @@ All notable changes to Bizzi DB are recorded here. The format follows [Keep a Ch
 
 New entries go under `## [Unreleased]`; the release process moves them under a version heading. Write for people who use the app, not for people who read commits. See [RELEASING.md](RELEASING.md).
 
+## [0.1.25] - 2026-10-26 - SQL colours are back
+
+SQL in the editor is colour-coded again, and the app shows up as Bizzi DB in your system's process list.
+
+### Fixed
+- In 0.1.24, SQL in the editor showed in a single colour. Keywords, strings, numbers and comments are coloured again. Autocomplete was not affected.
+- Activity Monitor, the Dock and Force Quit on macOS now list the app as Bizzi DB instead of db-desktop. On Linux the program is now called bizzi-db.
+
 ## [0.1.24] - 2026-10-26 - Black screen fix
 
 Opening a query tab or connecting to a database no longer turns the window black.
