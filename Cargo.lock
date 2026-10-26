@@ -934,7 +934,7 @@ dependencies = [
 
 [[package]]
 name = "db-core"
-version = "0.1.24"
+version = "0.1.25"
 dependencies = [
  "async-trait",
  "serde",
@@ -944,7 +944,7 @@ dependencies = [
 
 [[package]]
 name = "db-desktop"
-version = "0.1.24"
+version = "0.1.25"
 dependencies = [
  "chrono",
  "db-core",
@@ -974,7 +974,7 @@ dependencies = [
 
 [[package]]
 name = "db-postgres"
-version = "0.1.24"
+version = "0.1.25"
 dependencies = [
  "async-trait",
  "chrono",
@@ -991,7 +991,7 @@ dependencies = [
 
 [[package]]
 name = "db-storage"
-version = "0.1.24"
+version = "0.1.25"
 dependencies = [
  "db-core",
  "keyring",

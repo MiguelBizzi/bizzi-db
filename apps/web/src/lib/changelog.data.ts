@@ -5,6 +5,23 @@ export const UPCOMING: UpcomingEntry | null = null;
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.25",
+    "date": "2026-10-26",
+    "releases": 1,
+    "title": "SQL colours are back",
+    "summary": "SQL in the editor is colour-coded again, and the app shows up as Bizzi DB in your system's process list.",
+    "changes": [
+      {
+        "kind": "fixed",
+        "text": "In 0.1.24, SQL in the editor showed in a single colour. Keywords, strings, numbers and comments are coloured again. Autocomplete was not affected."
+      },
+      {
+        "kind": "fixed",
+        "text": "Activity Monitor, the Dock and Force Quit on macOS now list the app as Bizzi DB instead of db-desktop. On Linux the program is now called bizzi-db."
+      }
+    ]
+  },
+  {
     "version": "0.1.24",
     "date": "2026-10-26",
     "releases": 1,
