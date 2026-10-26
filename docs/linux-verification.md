@@ -4,7 +4,7 @@ Manual checklist for the first Linux release. Fill the Result column with pass, 
 
 The release workflow only takes plain `vX.Y.Z` tags, publishes every release as the latest one (tauri-action runs with `prerelease: false`), and installed apps update from `releases/latest/download/latest.json`. There is no prerelease to test on, so the procedure is:
 
-1. **Before any tag.** Run the `linux-bundle` workflow (Actions → linux-bundle → Run workflow) on the branch to release. It builds the `.deb` and AppImage, runs the same package checks and Xvfb launch as `publish-linux`, and uploads both as the `bizzi-db-linux-<sha>` artifact. Do sections 2 to 4 with those packages, except the update rows.
+1. **Before any tag.** Run the `linux-bundle` workflow (Actions → linux-bundle → Run workflow) on the branch to release. It builds the `.deb` and AppImage, runs the same package checks and Xvfb launch as `publish-linux`, smoke-launches them in the same debian:12, ubuntu:24.04, fedora:41 and archlinux:latest containers as `smoke-linux-distros`, and uploads both as the `bizzi-db-linux-<sha>` artifact. Do sections 2 to 4 with those packages, except the update rows.
 2. **First Linux release.** With the checklist passing, set the repository variable `LINUX_RELEASE_ENABLED=true` just before tagging a normal `vX.Y.Z` release (RELEASING.md). Fill section 1 from that run.
 3. **Update rows.** Install that release's `.deb` and AppImage in the matrix environments. When the next plain release ships, accept the in-app update and record the update rows then.
 4. **If the first Linux run fails.** The withdraw step removes the Linux packages, their checksums and the `linux-*` keys from `latest.json`, and macOS and Windows stay published. Set `LINUX_RELEASE_ENABLED` back to `false` until the fix lands, and ship Linux with a later release. Never retag.
@@ -23,6 +23,8 @@ Tester: ____  linux-bundle run (commit): ____  First Linux release tag: ____  Da
 | `smoke-linux-distros`: fedora:41 | |
 | `smoke-linux-distros`: archlinux:latest | |
 | Every red smoke row is understood (note the cause) | |
+
+The smoke containers are bare images, so `apps/desktop/scripts/install-smoke-host.sh` first installs the libraries a desktop always has and the AppImage deliberately does not bundle (linuxdeploy's excludelist: fontconfig, freetype, harfbuzz, wayland-client, X11, GL/EGL/gbm and a few more). An `error while loading shared libraries` there means that list is out of date, not that the AppImage is broken.
 
 ## 2. Manual matrix
 

@@ -470,27 +470,14 @@ jobs:
       TAG: ${{ github.ref_name }}
       REPO: ${{ github.repository }}
     steps:
-      - name: Install xvfb, curl and jq
+      # Only for the host setup script, so the token is not left in .git/config.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install xvfb, curl, jq and the host libraries the AppImage expects
         shell: sh
-        run: |
-          set -eu
-          . /etc/os-release
-          case "$ID" in
-            debian | ubuntu)
-              apt-get update
-              apt-get install -y xvfb curl jq ca-certificates
-              ;;
-            fedora)
-              dnf install -y xorg-x11-server-Xvfb curl jq
-              ;;
-            arch)
-              pacman -Syu --noconfirm xorg-server-xvfb curl jq
-              ;;
-            *)
-              echo "::error::unsupported image $ID"
-              exit 1
-              ;;
-          esac
+        run: apps/desktop/scripts/install-smoke-host.sh
 
       # The containers have no gh, so the assets come from the REST API with the job token.
       - name: Download the published packages
