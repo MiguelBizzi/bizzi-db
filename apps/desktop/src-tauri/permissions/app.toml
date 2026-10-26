@@ -33,5 +33,6 @@ commands.allow = [
   "app_update_channel",
   "export_save_file",
   "export_save_bytes",
-  "export_reveal"
+  "export_reveal",
+  "log_client_error"
 ]

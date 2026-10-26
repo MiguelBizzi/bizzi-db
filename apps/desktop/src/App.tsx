@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ErrorBoundary, PaneCrashFallback } from './components/ErrorBoundary';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { WorkspacePanes } from './components/WorkspacePanes';
@@ -2128,48 +2129,58 @@ export default function App() {
       ) : (
         <div className="flex-1 flex overflow-hidden relative">
           {currentDatabase ? (
-            <Sidebar
-              width={sidebarWidth}
-              collapsed={sidebarCollapsed}
-              resizing={sidebarResizing}
-              onToggleCollapsed={toggleSidebar}
-              currentDatabase={currentDatabase}
-              activeTableId={activeTab?.type === 'table_data' ? activeTab.tableId : undefined}
-              onSelectTableData={handleSelectTableData}
-              onOpenErd={openErd}
-              onOpenSchemaDesigner={handleEditTableOrView}
-              onNewIndex={handleNewIndex}
-              onOpenRoutine={handleOpenRoutine}
-              onNewRoutine={openNewRoutineDesigner}
-              onNewView={openNewViewDesigner}
-              routineHandlers={{
-                onOpen: handleOpenRoutine,
-                onEdit: (routine) => handleOpenRoutine(routine, { edit: true }),
-                onOpenSql: handleOpenRoutineSql,
-                onCopyName: handleCopyRoutineSignature,
-                onDrop: setRoutineToDrop,
-              }}
-              onOpenTableSql={handleOpenTableSql}
-              onCopyTableSchema={handleCopyTableSchema}
-              onEmptyTable={(table) => setTableActionConfirm({ table, action: 'truncate' })}
-              onDeleteTable={(table) => setTableActionConfirm({ table, action: 'drop' })}
-              onOpenNewTableModal={openNewTableDesigner}
-              onRefreshSchemas={refreshSchemas}
-              onAddTagToTable={(tableName, tag) => {
-                setDatabases((prev) =>
-                  prev.map((db) =>
-                    db.id === currentDatabase.id
-                      ? {
-                          ...db,
-                          tables: db.tables.map((t) =>
-                            t.name === tableName ? { ...t, tags: [...t.tags, tag] } : t
-                          ),
-                        }
-                      : db
-                  )
-                );
-              }}
-            />
+            <ErrorBoundary
+              key={currentDatabase.id}
+              source="sidebar"
+              fallback={(props) => (
+                <aside className="w-64 shrink-0 border-r border-border bg-card overflow-auto">
+                  <PaneCrashFallback {...props} />
+                </aside>
+              )}
+            >
+              <Sidebar
+                width={sidebarWidth}
+                collapsed={sidebarCollapsed}
+                resizing={sidebarResizing}
+                onToggleCollapsed={toggleSidebar}
+                currentDatabase={currentDatabase}
+                activeTableId={activeTab?.type === 'table_data' ? activeTab.tableId : undefined}
+                onSelectTableData={handleSelectTableData}
+                onOpenErd={openErd}
+                onOpenSchemaDesigner={handleEditTableOrView}
+                onNewIndex={handleNewIndex}
+                onOpenRoutine={handleOpenRoutine}
+                onNewRoutine={openNewRoutineDesigner}
+                onNewView={openNewViewDesigner}
+                routineHandlers={{
+                  onOpen: handleOpenRoutine,
+                  onEdit: (routine) => handleOpenRoutine(routine, { edit: true }),
+                  onOpenSql: handleOpenRoutineSql,
+                  onCopyName: handleCopyRoutineSignature,
+                  onDrop: setRoutineToDrop,
+                }}
+                onOpenTableSql={handleOpenTableSql}
+                onCopyTableSchema={handleCopyTableSchema}
+                onEmptyTable={(table) => setTableActionConfirm({ table, action: 'truncate' })}
+                onDeleteTable={(table) => setTableActionConfirm({ table, action: 'drop' })}
+                onOpenNewTableModal={openNewTableDesigner}
+                onRefreshSchemas={refreshSchemas}
+                onAddTagToTable={(tableName, tag) => {
+                  setDatabases((prev) =>
+                    prev.map((db) =>
+                      db.id === currentDatabase.id
+                        ? {
+                            ...db,
+                            tables: db.tables.map((t) =>
+                              t.name === tableName ? { ...t, tags: [...t.tags, tag] } : t
+                            ),
+                          }
+                        : db
+                    )
+                  );
+                }}
+              />
+            </ErrorBoundary>
           ) : (
             <aside className="w-64 border-r border-border bg-card" />
           )}
