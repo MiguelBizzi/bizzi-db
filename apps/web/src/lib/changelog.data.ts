@@ -5,6 +5,27 @@ export const UPCOMING: UpcomingEntry | null = null;
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.24",
+    "date": "2026-10-26",
+    "releases": 1,
+    "title": "Black screen fix",
+    "summary": "Opening a query tab or connecting to a database no longer turns the window black.",
+    "changes": [
+      {
+        "kind": "fixed",
+        "text": "Since 0.1.20, opening a new query tab, or connecting to a database (which opens an Untitled query), could turn the whole window black with no message. The SQL editor loads correctly again on macOS, Windows and Linux."
+      },
+      {
+        "kind": "fixed",
+        "text": "If part of the app fails to display, you now see the error with Try again or Reload and a button to copy the details, instead of a blank window. The rest of the app keeps working."
+      },
+      {
+        "kind": "fixed",
+        "text": "Errors and crashes are recorded in `crash.log` in the app's log folder (`~/Library/Logs/com.bizzidb.app` on macOS), so a report can include what went wrong."
+      }
+    ]
+  },
+  {
     "version": "0.1.23",
     "date": "2026-10-24",
     "releases": 1,
