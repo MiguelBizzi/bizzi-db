@@ -1,3 +1,4 @@
+import { Coffee } from 'lucide-react';
 import { DownloadButtons } from '../DownloadButtons';
 import { BrandMark } from '../BrandMark';
 import { CTA } from '../../lib/content';
@@ -23,14 +24,18 @@ export function Cta() {
 
         <DownloadButtons />
 
-        <a
-          href={SUPPORT_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          Enjoying Bizzi DB? Buy me a coffee ☕
-        </a>
+        <div className="flex flex-col items-center gap-3">
+          <p className="text-sm text-muted-foreground">Enjoying Bizzi DB?</p>
+          <a
+            href={SUPPORT_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-xl bg-[#FFDD00] px-5 py-2.5 text-sm font-semibold text-[#0D0C22] shadow-md shadow-black/10 transition-transform hover:-translate-y-0.5 hover:brightness-95"
+          >
+            <Coffee className="w-4 h-4" />
+            Buy me a coffee
+          </a>
+        </div>
 
         <div className="pt-4 flex flex-wrap items-center justify-center gap-6 text-xs text-muted-foreground font-mono">
           <span>macOS 12+ (Apple Silicon & Intel)</span>

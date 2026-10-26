@@ -6,7 +6,7 @@ This document is the threat model and security posture for **Bizzi DB**, a local
 
 1. The React webview collects connection fields (including the password) and invokes Tauri commands.
 2. Profile metadata (host, port, database, user, SSL, pool size, environment) is stored in `workspace.sqlite` under the OS app-data directory (`com.bizzidb.app`).
-3. Passwords are stored only in the OS keychain, keyed by connection id. They are never written to SQLite.
+3. Passwords are never written to SQLite. When the system keychain is turned on in Settings, they are stored in it, keyed by connection id: macOS Keychain, Windows Credential Manager, or the Linux Secret Service keyring. Otherwise they go to a local `secrets.json` in the app-data directory (`0600` on Unix).
 4. Live sessions keep a Postgres pool in process memory until disconnect.
 5. User SQL and constructed DML run on the connected database with the privileges of that role.
 6. Query history and saved SQL are persisted as plaintext in SQLite (full statement text).
@@ -19,7 +19,7 @@ The updater plugin is an approved exception to “no extra network plugins.” I
 
 ## Local files
 
-On Unix, `Storage::open` sets the app-data directory to `0700` and `workspace.sqlite` to `0600`. On Windows the app-data folder relies on the user-profile ACL instead, which already limits it to the user, SYSTEM and administrators. The database itself is not encrypted at rest (SQLCipher is a future option). Other local OS users must not be able to read the file; a process running as the same user still can.
+On Unix (macOS and Linux), `Storage::open` sets the app-data directory to `0700` and `workspace.sqlite` to `0600`. On Windows the app-data folder relies on the user-profile ACL instead, which already limits it to the user, SYSTEM and administrators. The database itself is not encrypted at rest (SQLCipher is a future option). Other local OS users must not be able to read the file; a process running as the same user still can.
 
 ## Transit
 
@@ -76,8 +76,8 @@ Use [Report a vulnerability](https://github.com/MiguelBizzi/bizzi-db/security/ad
 
 ## Distribution checklist (when shipping)
 
-- Signed and notarized macOS builds
-- Tauri updater with signed artifacts; public key in app config
-- Release CI (macOS universal); never expose `TAURI_SIGNING_*` to the Vite frontend (`envPrefix` is `VITE_` only)
+- Signed and notarized macOS builds (universal); Windows x64 installer, signed with Azure Trusted Signing when configured; Linux x86_64 `.deb` and AppImage with `SHA256SUMS`
+- Tauri updater with signed artifacts on every platform; public key in app config
+- Release CI for all three platforms; never expose `TAURI_SIGNING_*` to the Vite frontend (`envPrefix` is `VITE_` only)
 - MSRV is 1.88. Aligning the Rust `tauri` crate with `@tauri-apps/api` (~2.11) is still optional.
 - Optional later: SQLCipher for `workspace.sqlite`, custom CA / mTLS, hostname verification beyond `SslMode::Require`

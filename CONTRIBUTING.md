@@ -7,6 +7,7 @@ Thanks for helping. This guide takes you from a fresh clone to a pull request. B
 - [Bun](https://bun.sh) 1.3 or later
 - [Rust](https://rustup.rs) 1.88 or later
 - [Docker](https://www.docker.com), for the local test database
+- On Windows and Linux, extra system packages are needed to build. [Development in the README](README.md#development) lists them.
 
 ## Set up
 
