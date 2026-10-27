@@ -26,13 +26,8 @@
       "parameters": {
         "strict_required_status_checks_policy": false,
         "required_status_checks": [
-          { "context": "unit" },
-          { "context": "lint" },
-          { "context": "audit" },
-          { "context": "integration" },
-          { "context": "dco" },
-          { "context": "build (macos-latest)" },
-          { "context": "build (ubuntu-latest)" }
+          { "context": "ci-required" },
+          { "context": "dco" }
         ]
       }
     }
