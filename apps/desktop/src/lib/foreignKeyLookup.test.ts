@@ -4,7 +4,9 @@ import {
   buildLookupSql,
   columnsForForeignRow,
   floaterPosition,
+  foreignKeyGoToFilter,
   foreignKeyPreviewSql,
+  foreignRowClipboardText,
   lookupColumns,
   resolveReferencedTable,
   rowKeyValue,
@@ -191,5 +193,38 @@ describe('rowSecondaryLabel', () => {
     expect(
       rowSecondaryLabel({ id: 3, name: 'Ada', email: 'ada@ex.com' }, 'id')
     ).toBe('name: Ada · email: ada@ex.com');
+  });
+});
+
+describe('foreignRowClipboardText', () => {
+  test('copies every column as one JSON object in the given order', () => {
+    const text = foreignRowClipboardText(['id', 'name', 'meta'], {
+      meta: { a: 1 },
+      name: 'Ada',
+      id: 3,
+    });
+    expect(JSON.parse(text)).toEqual({ id: 3, name: 'Ada', meta: { a: 1 } });
+    expect(Object.keys(JSON.parse(text))).toEqual(['id', 'name', 'meta']);
+  });
+
+  test('writes NULL and missing columns as null', () => {
+    const text = foreignRowClipboardText(['id', 'note', 'gone'], { id: 1, note: null });
+    expect(JSON.parse(text)).toEqual({ id: 1, note: null, gone: null });
+  });
+});
+
+describe('foreignKeyGoToFilter', () => {
+  test('filters the target column for equality with the stringified value', () => {
+    expect(foreignKeyGoToFilter('id', 42, 'f_1')).toEqual({
+      id: 'f_1',
+      column: 'id',
+      operator: '=',
+      value: '42',
+      enabled: true,
+    });
+  });
+
+  test('keeps text values as they are', () => {
+    expect(foreignKeyGoToFilter('code', "O'Brien", 'f_2').value).toBe("O'Brien");
   });
 });

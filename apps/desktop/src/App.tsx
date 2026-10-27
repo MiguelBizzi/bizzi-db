@@ -683,7 +683,15 @@ export default function App() {
     openTabInPane(paneId, create());
   };
 
-  const handleSelectTableData = (table: TableSchema) => {
+  /** The filter a table tab was asked to show; its grid applies it once and clears it. */
+  const [tableFilterRequest, setTableFilterRequest] = useState<{
+    tableId: string;
+    filter: FilterClause;
+  } | null>(null);
+  const clearTableFilterRequest = useCallback(() => setTableFilterRequest(null), []);
+
+  const handleSelectTableData = (table: TableSchema, filter?: FilterClause) => {
+    if (filter) setTableFilterRequest({ tableId: table.id, filter });
     revealTabInPane(
       activePaneId,
       (tab) => tab.type === 'table_data' && tab.tableId === table.id,
@@ -1715,6 +1723,10 @@ export default function App() {
             pendingModifications={pending}
             tables={currentDatabase.tables}
             onOpenTable={handleSelectTableData}
+            filterRequest={
+              tableFilterRequest?.tableId === table.id ? tableFilterRequest.filter : undefined
+            }
+            onFilterRequestHandled={clearTableFilterRequest}
             onLookup={runLookup}
             onLoadRows={(limit, offset, filters) => loadTableRows(table, limit, offset, filters)}
             onFetchAllRows={async () => {
