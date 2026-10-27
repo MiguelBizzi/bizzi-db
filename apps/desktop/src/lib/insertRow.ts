@@ -30,6 +30,13 @@ export function enumValuesFor(column: ColumnDefinition): string[] {
     .filter(Boolean);
 }
 
+/** A row can hold a value the enum no longer lists; keep it selectable instead of dropping it. */
+export function enumEditOptions(column: ColumnDefinition, current: string): string[] {
+  const values = enumValuesFor(column);
+  if (values.length === 0 || current === '' || values.includes(current)) return values;
+  return [current, ...values];
+}
+
 export function isTimestampType(type: string): boolean {
   const t = type.trim().toLowerCase();
   if (t.includes('timestamp') || t.includes('datetime')) return true;

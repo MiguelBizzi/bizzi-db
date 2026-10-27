@@ -3,6 +3,7 @@ import type { ColumnDefinition, TableSchema } from '../types';
 import {
   assignmentFromField,
   buildInsertSql,
+  enumEditOptions,
   enumValuesFor,
   fieldError,
   hasDefault,
@@ -60,6 +61,23 @@ describe('enumValuesFor', () => {
     ]);
     expect(enumValuesFor(column('role', { type: "enum ('a', 'b')" }))).toEqual(['a', 'b']);
     expect(enumValuesFor(column('role'))).toEqual([]);
+  });
+});
+
+describe('enumEditOptions', () => {
+  const role = column('role', { enumValues: ['admin', 'staff'] });
+
+  test('lists the enum values', () => {
+    expect(enumEditOptions(role, 'admin')).toEqual(['admin', 'staff']);
+    expect(enumEditOptions(role, '')).toEqual(['admin', 'staff']);
+  });
+
+  test('keeps a current value that is no longer a member', () => {
+    expect(enumEditOptions(role, 'legacy')).toEqual(['legacy', 'admin', 'staff']);
+  });
+
+  test('is empty for non-enum columns', () => {
+    expect(enumEditOptions(column('name'), 'x')).toEqual([]);
   });
 });
 
