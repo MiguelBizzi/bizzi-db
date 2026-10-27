@@ -5,6 +5,7 @@
   "packageManager": "bun@1.3.11",
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
     "dev": "turbo run dev --filter=desktop",
     "dev:web": "turbo run dev --filter=web",
     "build": "turbo run build",

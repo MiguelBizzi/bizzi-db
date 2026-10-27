@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Adds the Signed-off-by trailer that .github/scripts/check-dco.sh requires, so a commit made without -s still passes.
+# Turned on by the "prepare" script in package.json (core.hooksPath), which `bun install` runs.
+set -euo pipefail
+
+msg="$1"
+source="${2:-}"
+
+# The DCO check skips merge commits, and a squash message is rewritten when the pull request merges.
+case "$source" in
+  merge | squash) exit 0 ;;
+esac
+
+# The author's address is the one check-dco.sh compares against, so it is also what --author must feed.
+ident="$(git var GIT_AUTHOR_IDENT)"
+git interpret-trailers --in-place --if-exists addIfDifferent --trailer "Signed-off-by: ${ident%> *}>" "$msg"

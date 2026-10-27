@@ -36,7 +36,7 @@ These live in [`.claude/rules/`](.claude/rules/) and apply to every change:
 
 ## Commits and sign-off
 
-Sign off every commit with `git commit -s`. This adds a `Signed-off-by` line certifying that you wrote the change, or have the right to submit it, under the project's MIT license, as described in the [Developer Certificate of Origin](https://developercertificate.org/). There is no CLA to sign. A check on each pull request fails when a commit is missing its sign-off. If you forgot, `git rebase --signoff origin/main` fixes it.
+Sign off every commit with `git commit -s`. This adds a `Signed-off-by` line certifying that you wrote the change, or have the right to submit it, under the project's MIT license, as described in the [Developer Certificate of Origin](https://developercertificate.org/). There is no CLA to sign. `bun install` turns on a git hook (`.githooks/prepare-commit-msg`) that adds the line for you, so a plain `git commit` is enough. A check on each pull request fails when a commit is missing its sign-off, for example when the hook is not installed. `git rebase --signoff origin/main` fixes the commits.
 
 Pull request titles in [Conventional Commits](https://www.conventionalcommits.org/) style (`fix(grid): keep scroll position`) are appreciated but not enforced.
 
@@ -48,7 +48,21 @@ For a change users will notice, add a line under `## [Unreleased]` in [`CHANGELO
 
 1. For a new feature, open an issue first so we can agree on the shape before you build it. Bug fixes can go straight to a pull request.
 2. Branch from `main`, make your change, and keep it focused on one thing.
-3. Open a pull request against `main` and fill in the template. CI runs tests, lint, a build check on macOS, Windows and Linux, a dependency audit and the sign-off check.
+3. Open a pull request against `main` and fill in the template. CI runs only what your change touches (see below) and always runs the sign-off check.
+
+### What CI runs
+
+The `changes` job in `.github/workflows/test.yml` compares your pull request with `main`. Its summary on the run page lists each area, whether it runs, and the first file that made it run. The rules are in `.github/scripts/changed-areas.sh`.
+
+| You changed | Runs |
+| --- | --- |
+| `apps/desktop`, `packages`, `crates`, `docker`, Cargo files | Desktop tests, lint, builds, Postgres integration, `cargo audit` when Cargo files changed |
+| `apps/web`, `CHANGELOG.md` | Landing page lint, tests and build |
+| `package.json`, `bun.lock`, `turbo.json`, `tsconfig.json` | Both of the above |
+| Only docs, `*.md`, `assets`, issue templates | Nothing but the sign-off check |
+| Workflows, CI scripts, or a path no rule knows | Everything |
+
+The `ci-required` check is green when every job that ran passed; jobs that had nothing to check are skipped. `cargo audit` also runs every Monday, because new advisories appear against dependencies you have not touched.
 
 ## Questions and bugs
 
