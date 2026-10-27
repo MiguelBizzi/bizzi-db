@@ -40,6 +40,7 @@ import {
   SET_COLUMN_DEFAULT,
 } from "../../lib/pendingChanges";
 import {
+  foreignKeyGoToFilter,
   foreignKeyPreviewSql,
   resolveReferencedTable,
 } from "../../lib/foreignKeyLookup";
@@ -131,7 +132,11 @@ interface TableDataGridProps {
     filters: FilterClause[],
   ) => Promise<void>;
   onLookup: FkLookupFn;
-  onOpenTable: (table: TableSchema) => void;
+  /** With a filter, the table opens showing only the rows it matches. */
+  onOpenTable: (table: TableSchema, filter?: FilterClause) => void;
+  /** A filter another tab asked this table to show; applied once, then reported through `onFilterRequestHandled`. */
+  filterRequest?: FilterClause;
+  onFilterRequestHandled?: () => void;
   /**
    * "query" renders a SQL result: no search or filters, and `onLoadRows` loads
    * a page of the query instead of a page of a table.
@@ -205,6 +210,8 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   onLoadRows,
   onLookup,
   onOpenTable,
+  filterRequest,
+  onFilterRequestHandled,
   variant = "table",
   pagination,
   matchCount,
@@ -503,6 +510,15 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     deleteRows: handleDeleteSelected,
     exportCsv: () => exportRef.current?.(),
   };
+
+  useEffect(() => {
+    if (!filterRequest) return;
+    setFilters([filterRequest]);
+    setShowFilters(true);
+    onFilterRequestHandled?.();
+    // Only a new request matters; the handler is allowed to change identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterRequest]);
 
   useEffect(() => {
     if (!showFilters || !focusFilterOnShow.current) return;
@@ -1083,7 +1099,13 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
           onClose={closeFkFloater}
           onNavigate={(target) => {
             closeFkFloater();
-            onOpenTable(target);
+            onOpenTable(
+              target,
+              foreignKeyGoToFilter(
+                fkFloater.targetColumn,
+                fkFloater.value,
+              ),
+            );
           }}
         />
       )}

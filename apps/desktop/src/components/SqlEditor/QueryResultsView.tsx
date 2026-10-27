@@ -1,7 +1,7 @@
 import React, { useMemo, useState, type RefObject } from 'react';
 import { motion } from 'motion/react';
 import { fade } from '../../lib/motion';
-import { PendingModifications, QueryExecutionResult, TableSchema } from '../../types';
+import { FilterClause, PendingModifications, QueryExecutionResult, TableSchema } from '../../types';
 import { ExplainPlanView } from './ExplainPlanView';
 import { QueryErrorCard } from './QueryErrorCard';
 import { Lock, Table, Network } from 'lucide-react';
@@ -37,7 +37,7 @@ export interface QueryGridActions {
   ) => void;
   onInsertRow: (table: TableSchema, sql: string) => Promise<{ error?: string }>;
   onLookup: FkLookupFn;
-  onOpenTable: (table: TableSchema) => void;
+  onOpenTable: (table: TableSchema, filter?: FilterClause) => void;
   /** Loads one page of the result's query and swaps its rows in; refreshes when the page is unchanged. */
   onLoadPage: (result: QueryExecutionResult, limit: number, offset: number) => Promise<void>;
   /** Runs the result's query without paging, for Copy and Export. */

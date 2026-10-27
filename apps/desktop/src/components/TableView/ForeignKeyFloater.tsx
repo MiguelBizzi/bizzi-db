@@ -1,15 +1,19 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Popover } from "../ui/Popover";
 import { createPortal } from "react-dom";
-import { ArrowRight, Key, Link, Loader2, X } from "lucide-react";
+import { ArrowUpRight, Check, Copy, Key, Link, Loader2, X } from "lucide-react";
 import type { TableSchema } from "../../types";
 import { formatCellValue } from "../../lib/pendingChanges";
 import {
   columnsForForeignRow,
   floaterPosition,
+  foreignRowClipboardText,
 } from "../../lib/foreignKeyLookup";
+import { writeClipboard } from "../../lib/dataExport";
+import { toast } from "../../lib/toast";
 
 const FLOATER_WIDTH = 320;
+const COPIED_FEEDBACK_MS = 1500;
 
 interface ForeignKeyFloaterProps {
   anchor: DOMRect;
@@ -37,6 +41,8 @@ export const ForeignKeyFloater: React.FC<ForeignKeyFloaterProps> = ({
   onNavigate,
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<number>(undefined);
   const [position, setPosition] = useState(() =>
     floaterPosition(
       anchor,
@@ -84,6 +90,8 @@ export const ForeignKeyFloater: React.FC<ForeignKeyFloaterProps> = ({
     };
   }, [onClose]);
 
+  useEffect(() => () => window.clearTimeout(copiedTimer.current), []);
+
   const qualified = table
     ? table.schema
       ? `${table.schema}.${table.name}`
@@ -95,6 +103,21 @@ export const ForeignKeyFloater: React.FC<ForeignKeyFloaterProps> = ({
       .filter((column) => column.isPrimary)
       .map((column) => column.name) ?? [],
   );
+
+  const copyRow = () => {
+    if (!row) return;
+    writeClipboard(foreignRowClipboardText(columns, row)).then(
+      () => {
+        setCopied(true);
+        window.clearTimeout(copiedTimer.current);
+        copiedTimer.current = window.setTimeout(
+          () => setCopied(false),
+          COPIED_FEEDBACK_MS,
+        );
+      },
+      () => toast.error("Could not copy to clipboard"),
+    );
+  };
 
   return createPortal(
     <Popover
@@ -176,14 +199,30 @@ export const ForeignKeyFloater: React.FC<ForeignKeyFloaterProps> = ({
       </div>
 
       {table && onNavigate && (
-        <div className="px-3 py-2 border-t border-border bg-background/60 shrink-0">
+        <div className="px-3 py-2 border-t border-border bg-background/60 shrink-0 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={copyRow}
+            disabled={!row}
+            title="Copy the whole row as JSON"
+            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-accent text-foreground text-xs font-medium border border-border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:pointer-events-none"
+          >
+            {copied ? (
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
+            <span>{copied ? "Copied" : "Copy row"}</span>
+          </button>
           <button
             type="button"
             onClick={() => onNavigate(table)}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-accent text-foreground text-xs font-medium border border-border transition-colors"
+            disabled={loading}
+            title={`Open ${qualified} filtered to ${targetColumn} = ${formatCellValue(value)}`}
+            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-popover disabled:opacity-50 disabled:pointer-events-none"
           >
-            <span>View table</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            <span>Go to row</span>
+            <ArrowUpRight className="w-3.5 h-3.5" />
           </button>
         </div>
       )}

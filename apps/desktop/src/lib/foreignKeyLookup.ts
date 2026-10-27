@@ -1,6 +1,7 @@
 import { DIALECTS } from '@db/database';
-import type { ColumnDefinition, TableSchema } from '../types';
+import type { ColumnDefinition, FilterClause, TableSchema } from '../types';
 import { sqlLiteral as typedSqlLiteral } from './dataExport';
+import { filterFromCell } from './tableCellActions';
 
 const quoteIdent = DIALECTS.PostgreSQL.quoteIdent;
 
@@ -156,6 +157,23 @@ export function columnsForForeignRow(
     seen.add(name);
     return true;
   });
+}
+
+export function foreignRowClipboardText(
+  columns: string[],
+  row: Record<string, unknown>
+): string {
+  const copy: Record<string, unknown> = {};
+  for (const name of columns) copy[name] = row[name] ?? null;
+  return JSON.stringify(copy, null, 2);
+}
+
+export function foreignKeyGoToFilter(
+  targetColumn: string,
+  value: unknown,
+  id?: string
+): FilterClause {
+  return filterFromCell(targetColumn, 'equals', value, id);
 }
 
 export function floaterPosition(
