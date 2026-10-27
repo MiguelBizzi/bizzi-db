@@ -5,8 +5,10 @@ import type {
   PendingModifications,
 } from "../../types";
 import { Checkbox } from "../ui/Checkbox";
+import { Select } from "../ui/Select";
 import { isSetColumnDefault } from "../../lib/pendingChanges";
 import { GRID_ROW_HEIGHT } from "../../lib/gridWindow";
+import { enumEditOptions } from "../../lib/insertRow";
 
 export const ROW_STYLE: React.CSSProperties = { height: GRID_ROW_HEIGHT };
 export const SPACER_CELL = "p-0 border-0";
@@ -121,6 +123,9 @@ function GridRowImpl({
           displayVal !== null &&
           !isSetColumnDefault(displayVal);
         const fk = col.foreignKey;
+        const enumOptions = isEditing
+          ? enumEditOptions(col, editing.value)
+          : [];
 
         return (
           <td
@@ -159,7 +164,29 @@ function GridRowImpl({
             }`}
           >
             {/* Cell Contents */}
-            {isEditing ? (
+            {isEditing && enumOptions.length > 0 ? (
+              <>
+                <span className="invisible px-3 py-2 pointer-events-none">
+                  {editing.value || " "}
+                </span>
+                <Select
+                  variant="cell"
+                  className="absolute inset-0 z-10"
+                  defaultOpen
+                  value={editing.value}
+                  options={enumOptions.map((value) => ({ value, label: value }))}
+                  onChange={(value) =>
+                    actions.submitEdit(rowPkVal, col.name, rawVal, value)
+                  }
+                  onOpenChange={(open) => {
+                    if (!open) actions.cancelEdit();
+                  }}
+                  searchable={enumOptions.length > 8}
+                  placeholder="Select a value…"
+                  aria-label={col.name}
+                />
+              </>
+            ) : isEditing ? (
               <>
                 <span className="invisible px-3 py-2 pointer-events-none">
                   {editing.value || " "}

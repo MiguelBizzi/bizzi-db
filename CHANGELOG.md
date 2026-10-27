@@ -4,6 +4,11 @@ All notable changes to Bizzi DB are recorded here. The format follows [Keep a Ch
 
 New entries go under `## [Unreleased]`; the release process moves them under a version heading. Write for people who use the app, not for people who read commits. See [RELEASING.md](RELEASING.md).
 
+## [Unreleased] - Pick ENUM values from a list
+
+### New
+- Double-clicking an ENUM cell in a table now opens a list of the allowed values, instead of a free-text field.
+
 ## [0.1.25] - 2026-10-26 - SQL colours are back
 
 SQL in the editor is colour-coded again, and the app shows up as Bizzi DB in your system's process list.

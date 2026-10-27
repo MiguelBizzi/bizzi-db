@@ -4,6 +4,9 @@ import { Popover } from './Popover';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Search } from 'lucide-react';
 
+/** `max-h-56` on the option list, plus the search box and padding. */
+const MENU_MAX_HEIGHT = 280;
+
 export interface SelectOption<T extends string = string> {
   value: T;
   label: string;
@@ -23,6 +26,10 @@ interface SelectProps<T extends string> {
   searchable?: boolean;
   placeholder?: string;
   disabled?: boolean;
+  /** `cell` fills a table cell like its inline text editor, and the menu grows to fit its options. */
+  variant?: 'field' | 'cell';
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function Select<T extends string>({
@@ -37,8 +44,16 @@ export function Select<T extends string>({
   searchable = false,
   placeholder,
   disabled = false,
+  variant = 'field',
+  defaultOpen = false,
+  onOpenChange,
 }: SelectProps<T>) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(defaultOpen);
+  const setOpen = (next: boolean | ((current: boolean) => boolean)) => {
+    const resolved = typeof next === 'function' ? next(open) : next;
+    setOpenState(resolved);
+    onOpenChange?.(resolved);
+  };
   const [query, setQuery] = useState('');
   const [menuBox, setMenuBox] = useState<{
     top: number;
@@ -54,6 +69,7 @@ export function Select<T extends string>({
   const listId = useId();
   const selected = options.find((option) => option.value === value);
   const compact = size === 'sm';
+  const inCell = variant === 'cell';
   const filtered = useMemo(() => {
     if (!searchable || !query.trim()) return options;
     const needle = query.trim().toLowerCase();
@@ -104,8 +120,16 @@ export function Select<T extends string>({
     };
   }, [open]);
 
+  // A cell near the bottom edge opens upward, since a table row can sit anywhere in the window.
+  const openUp =
+    placement === 'top' ||
+    (inCell &&
+      menuBox !== null &&
+      window.innerHeight - menuBox.bottom < MENU_MAX_HEIGHT &&
+      menuBox.top > window.innerHeight - menuBox.bottom);
+
   return (
-    <div ref={rootRef} className={`relative ${className ?? ''}`}>
+    <div ref={rootRef} className={`${inCell ? '' : 'relative'} ${className ?? ''}`}>
       <button
         id={id}
         type="button"
@@ -118,8 +142,12 @@ export function Select<T extends string>({
           if (disabled) return;
           setOpen((current) => !current);
         }}
-        className={`w-full flex items-center gap-2 bg-background border border-border text-foreground hover:border-primary/50 focus:outline-none focus:border-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-          compact ? 'h-7 px-2 rounded-lg text-xs' : 'h-9 px-3 rounded-xl text-xs'
+        className={`w-full flex items-center gap-2 bg-background text-foreground focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${
+          inCell
+            ? 'h-full px-3 text-xs border-2 border-primary rounded-none'
+            : `border border-border hover:border-primary/50 focus:border-primary transition-colors ${
+                compact ? 'h-7 px-2 rounded-lg text-xs' : 'h-9 px-3 rounded-xl text-xs'
+              }`
         }`}
       >
         <OptionMark option={selected} showEmoji={false} />
@@ -140,22 +168,22 @@ export function Select<T extends string>({
         <AnimatePresence>
         {open && menuBox && (
         <Popover
-          origin={placement === 'top' ? 'bottom' : 'top'}
+          origin={openUp ? 'bottom' : 'top'}
           ref={menuRef}
           className="fixed z-[200] bg-popover border border-border rounded-xl shadow-lg overflow-hidden"
-          style={
-            placement === 'top'
+          style={{
+            left: menuBox.left,
+            ...(inCell
               ? {
-                  left: menuBox.left,
-                  width: menuBox.width,
-                  bottom: window.innerHeight - menuBox.top + 4,
+                  minWidth: menuBox.width,
+                  width: 'max-content',
+                  maxWidth: Math.max(menuBox.width, window.innerWidth - menuBox.left - 8),
                 }
-              : {
-                  left: menuBox.left,
-                  width: menuBox.width,
-                  top: menuBox.bottom + 4,
-                }
-          }
+              : { width: menuBox.width }),
+            ...(openUp
+              ? { bottom: window.innerHeight - menuBox.top + 4 }
+              : { top: menuBox.bottom + 4 }),
+          }}
         >
           {searchable && (
             <div className="relative px-2 pt-2 pb-1">
