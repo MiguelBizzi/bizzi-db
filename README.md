@@ -20,12 +20,12 @@
 
 <p align="center">
   <a href="Cargo.toml"><img src="https://img.shields.io/badge/Built_with-Tauri_%C2%B7_React_%C2%B7_Rust-d87943" alt="Built with Tauri, React, and Rust"></a>
-  <a href="https://github.com/MiguelBizzi/bizzi-db/releases/latest"><img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-15171c" alt="Available for macOS and Windows"></a>
+  <a href="https://github.com/MiguelBizzi/bizzi-db/releases/latest"><img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-15171c" alt="Available for macOS, Windows, and Linux"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-d87943" alt="MIT license"></a>
   <a href="https://github.com/MiguelBizzi/bizzi-db/actions/workflows/test.yml"><img src="https://github.com/MiguelBizzi/bizzi-db/actions/workflows/test.yml/badge.svg?branch=main" alt="Test status"></a>
 </p>
 
-Bizzi DB is a PostgreSQL client written with [Tauri](https://tauri.app), React, and Rust. It runs on your machine, keeps your connections and passwords local, and starts quickly without a browser engine behind it. There is no account to create and no cloud service in between.
+Bizzi DB is a PostgreSQL client written with [Tauri](https://tauri.app), React, and Rust. It runs natively on macOS, Windows, and Linux, keeps your connections and passwords local, and starts quickly without a browser engine behind it. There is no account to create and no cloud service in between.
 
 <!-- Add a screenshot at assets/brand/png/app-screenshot.png and uncomment:
 ![Bizzi DB showing a table grid, schema diagram, and SQL editor](assets/brand/png/app-screenshot.png)
@@ -42,7 +42,8 @@ Bizzi DB is a PostgreSQL client written with [Tauri](https://tauri.app), React, 
 | **SQL editor** | Work in multiple tabs with query history and saved statements. Inspect query plans with EXPLAIN output. |
 | **Metrics and activity** | See database metrics and a log of what you have run. |
 | **Command palette** | Run actions from the keyboard. |
-| **Keychain storage** | Passwords live in your operating system's keychain, never in plain text on disk. |
+| **Native on every platform** | Each platform gets its own menus, window controls, and shortcuts. Ctrl replaces Cmd on Windows and Linux. Export and diagram saves use your system's save dialog. |
+| **Keychain storage** | Turn on the system keychain in Settings to keep passwords in macOS Keychain, Windows Credential Manager, or the Linux Secret Service keyring. Otherwise they stay in a local secrets file that only your user account can read. |
 | **SSL by default** | SSL is on for remote hosts. Bizzi DB warns you before you turn it off for a remote server. |
 | **Auto updates** | Checks on launch and every six hours. Updates download in the background, are verified, and install only after you confirm. |
 
@@ -77,7 +78,13 @@ Found a bug or have an idea? [Open an issue](https://github.com/MiguelBizzi/bizz
 
 ### Development
 
-You need [Bun](https://bun.sh) 1.3 or later, [Rust](https://rustup.rs) 1.88 or later, and [Docker](https://www.docker.com) for the local test database. On Windows you also need the Visual Studio Build Tools (C++ workload), [Strawberry Perl](https://strawberryperl.com) and [NASM](https://www.nasm.us), which the bundled OpenSSL build uses.
+You need [Bun](https://bun.sh) 1.3 or later, [Rust](https://rustup.rs) 1.88 or later, and [Docker](https://www.docker.com) for the local test database. On Windows you also need the Visual Studio Build Tools (C++ workload), [Strawberry Perl](https://strawberryperl.com) and [NASM](https://www.nasm.us), which the bundled OpenSSL build uses. On Linux, install the WebKitGTK development packages first. This is the Debian and Ubuntu list; other distributions need their equivalents:
+
+```sh
+sudo apt-get install -y libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev librsvg2-dev libayatana-appindicator3-dev libsecret-1-dev libssl-dev
+```
+
+Then, on any platform:
 
 ```sh
 bun install

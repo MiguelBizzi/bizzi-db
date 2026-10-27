@@ -94,7 +94,7 @@ export const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'How do I install it?',
-    a: 'Download the universal macOS DMG or the Windows x64 installer from the latest GitHub Release. On Windows the installer is not code-signed yet, so the first time SmartScreen says "Windows protected your PC": choose More info, then Run anyway. Updates after that install from inside the app and are verified before they run. Linux installers are not published yet.',
+    a: 'Download the universal macOS DMG, the Windows x64 installer, or the Linux x86_64 .deb or AppImage from the latest GitHub Release. On Windows the installer is not code-signed yet, so the first time SmartScreen says "Windows protected your PC": choose More info, then Run anyway. Updates after that install from inside the app and are verified before they run.',
   },
   {
     q: 'Why Rust and Tauri?',
