@@ -4,10 +4,16 @@ All notable changes to Bizzi DB are recorded here. The format follows [Keep a Ch
 
 New entries go under `## [Unreleased]`; the release process moves them under a version heading. Write for people who use the app, not for people who read commits. See [RELEASING.md](RELEASING.md).
 
-## [Unreleased] - Pick ENUM values from a list
+## [0.1.26] - 2026-10-27 - ENUM lists and foreign key shortcuts
+
+Editing an ENUM cell now offers only the allowed values, and the foreign key popup can copy or jump to the referenced row.
 
 ### New
-- Double-clicking an ENUM cell in a table now opens a list of the allowed values, instead of a free-text field.
+- Double-clicking an ENUM cell in a table now opens a list of the allowed values, instead of a free-text field. Press Esc to cancel.
+- The foreign key popup has a **Copy row** button that copies the referenced row as JSON.
+- **View table** in the foreign key popup is now **Go to row**. It opens the table filtered to that row, or reuses the table's tab if it is already open.
+- The sidebar can be collapsed and resized.
+- Error messages have a copy button, and their text can be selected.
 
 ## [0.1.25] - 2026-10-26 - SQL colours are back
 
