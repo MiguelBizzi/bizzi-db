@@ -4,6 +4,15 @@ All notable changes to Bizzi DB are recorded here. The format follows [Keep a Ch
 
 New entries go under `## [Unreleased]`; the release process moves them under a version heading. Write for people who use the app, not for people who read commits. See [RELEASING.md](RELEASING.md).
 
+## [0.1.27] - 2026-10-31 - MySQL
+
+Bizzi DB now connects to MySQL as well as PostgreSQL.
+
+### New
+- Connect to MySQL 8. Browse databases, tables, views, routines and indexes, run SQL, and change the schema the same way you do for PostgreSQL.
+- Leave the database blank to list every user database, or paste a `mysql://` or `jdbc:mysql://` address to fill the connection form.
+- Generated columns stay read-only. Saving a column, foreign key, view or routine keeps comments, fractional seconds, ON UPDATE, check options, and the original routine if the new definition does not apply.
+
 ## [0.1.26] - 2026-10-27 - ENUM lists and foreign key shortcuts
 
 Editing an ENUM cell now offers only the allowed values, and the foreign key popup can copy or jump to the referenced row.

@@ -961,7 +961,7 @@ dependencies = [
 
 [[package]]
 name = "db-core"
-version = "0.1.26"
+version = "0.1.27"
 dependencies = [
  "async-trait",
  "serde",
@@ -971,7 +971,7 @@ dependencies = [
 
 [[package]]
 name = "db-desktop"
-version = "0.1.26"
+version = "0.1.27"
 dependencies = [
  "chrono",
  "db-core",
@@ -1002,7 +1002,7 @@ dependencies = [
 
 [[package]]
 name = "db-mysql"
-version = "0.1.26"
+version = "0.1.27"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1015,7 +1015,7 @@ dependencies = [
 
 [[package]]
 name = "db-postgres"
-version = "0.1.26"
+version = "0.1.27"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1032,7 +1032,7 @@ dependencies = [
 
 [[package]]
 name = "db-storage"
-version = "0.1.26"
+version = "0.1.27"
 dependencies = [
  "db-core",
  "keyring",
