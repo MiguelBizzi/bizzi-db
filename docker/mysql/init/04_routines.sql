@@ -1,0 +1,36 @@
+SET NAMES utf8mb4;
+SET SESSION sql_mode = 'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION,ERROR_FOR_DIVISION_BY_ZERO';
+SET GLOBAL log_bin_trust_function_creators = 1;
+
+USE shop;
+
+DELIMITER $$
+
+CREATE FUNCTION role_rank(role_name VARCHAR(32)) RETURNS INT
+  DETERMINISTIC NO SQL
+  COMMENT 'Sort key for shop.users.role'
+  RETURN CASE role_name WHEN 'admin' THEN 1 WHEN 'staff' THEN 2 ELSE 3 END$$
+
+CREATE PROCEDURE touch_user(IN uid BIGINT, OUT touched INT)
+  MODIFIES SQL DATA
+  SQL SECURITY INVOKER
+  COMMENT 'Bumps last_login_at'
+BEGIN
+  UPDATE users SET last_login_at = CURRENT_TIMESTAMP(6) WHERE id = uid;
+  SET touched = ROW_COUNT();
+END$$
+
+CREATE PROCEDURE user_label(IN label VARCHAR(32))
+  READS SQL DATA
+BEGIN
+  SELECT email FROM users WHERE full_name = label;
+END$$
+
+CREATE PROCEDURE copy_name(INOUT label VARCHAR(255))
+  READS SQL DATA
+  SQL SECURITY INVOKER
+BEGIN
+  SET label = CONCAT(label, '!');
+END$$
+
+DELIMITER ;

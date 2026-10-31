@@ -22,6 +22,8 @@ export function ColumnDraftFields({
   errors,
   disabled,
   showName = true,
+  presets = DEFAULT_VALUE_PRESETS,
+  onDeleteActions = ON_DELETE_ACTIONS,
   onChange,
 }: {
   draft: ColumnDraft;
@@ -30,6 +32,8 @@ export function ColumnDraftFields({
   errors: Record<string, string>;
   disabled?: boolean;
   showName?: boolean;
+  presets?: readonly { label: string; sql: string }[];
+  onDeleteActions?: readonly { value: string; label: string }[];
   onChange: (next: ColumnDraft) => void;
 }) {
   const def = types.find((entry) => entry.id === draft.typeId);
@@ -86,7 +90,8 @@ export function ColumnDraftFields({
         {def?.params === 'length' && (
           <input
             type="number"
-            min={1}
+            min={def.minLength ?? 1}
+            max={def.maxLength}
             disabled={disabled}
             value={draft.length ?? ''}
             onChange={(event) =>
@@ -152,7 +157,7 @@ export function ColumnDraftFields({
           className={inputClass}
         />
         <div className="flex flex-wrap gap-1 mt-1.5">
-          {DEFAULT_VALUE_PRESETS.map((preset) => (
+          {presets.map((preset) => (
             <button
               key={preset.sql}
               type="button"
@@ -249,7 +254,7 @@ export function ColumnDraftFields({
               value={draft.foreignKey.onDelete}
               disabled={disabled}
               aria-label="Foreign key on delete"
-              options={ON_DELETE_ACTIONS.map((action) => ({
+              options={onDeleteActions.map((action) => ({
                 value: action.value,
                 label: action.label,
               }))}

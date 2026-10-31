@@ -3,11 +3,11 @@ import { OverlayPresence } from "../ui/OverlayPresence";
 import { Modal, ModalPanel } from "../ui/Modal";
 import { AlertTriangle, Check, Pencil, X } from "lucide-react";
 import { ErrorNotice } from "../ui/ErrorNotice";
-import type { ColumnTypeDef } from "@db/database";
-import type { ColumnDefinition, TableSchema } from "../../types";
+import { dialectModule, type ColumnTypeDef } from "@db/database";
+import type { ColumnDefinition, DatabaseDialect, TableSchema } from "../../types";
+import { tableDdlFor } from "../../lib/ddl/registry";
 import {
   alterWarnings,
-  buildAlterColumnSql,
   draftFromColumn,
   validateColumnDraft,
   type ColumnDraft,
@@ -16,6 +16,7 @@ import { ColumnDraftFields } from "./ColumnDraftFields";
 
 interface EditColumnModalProps {
   isOpen: boolean;
+  dialect?: DatabaseDialect;
   table: TableSchema;
   tables: TableSchema[];
   types: ColumnTypeDef[];
@@ -27,6 +28,7 @@ interface EditColumnModalProps {
 
 const EditColumnModalBody: React.FC<EditColumnModalProps> = ({
   isOpen,
+  dialect = "PostgreSQL",
   table,
   tables,
   types,
@@ -62,8 +64,11 @@ const EditColumnModalBody: React.FC<EditColumnModalProps> = ({
   }, [isOpen, onClose]);
 
   const sql = useMemo(
-    () => (column ? buildAlterColumnSql(table, column, draft, types) : ""),
-    [table, column, draft, types],
+    () =>
+      column
+        ? (tableDdlFor(dialect)?.buildAlterColumnSql(table, column, draft, types) ?? "")
+        : "",
+    [dialect, table, column, draft, types],
   );
   const warnings = useMemo(
     () => (column ? alterWarnings(column, draft, types) : []),
@@ -71,6 +76,7 @@ const EditColumnModalBody: React.FC<EditColumnModalProps> = ({
   );
   const valid =
     column != null &&
+    column.generated == null &&
     Object.keys(
       validateColumnDraft(draft, table, types, {
         excludeName: column.name,
@@ -155,12 +161,19 @@ const EditColumnModalBody: React.FC<EditColumnModalProps> = ({
                 ))}
               </div>
             )}
+            {column.generated != null && (
+              <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-[11px] font-mono">
+                Generated columns cannot be altered here.
+              </div>
+            )}
             <ColumnDraftFields
               draft={draft}
               types={types}
               tables={tables}
               errors={errors}
-              disabled={disabled || submitting}
+              disabled={disabled || submitting || column.generated != null}
+              onDeleteActions={dialectModule(dialect)?.foreignKeyActions}
+              presets={dialectModule(dialect)?.defaultPresets}
               onChange={(next) => {
                 setDraft(next);
                 setErrors({});

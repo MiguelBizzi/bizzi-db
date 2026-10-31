@@ -6,7 +6,7 @@ edition.workspace = true
 [dependencies]
 async-trait.workspace = true
 chrono.workspace = true
-db-core = { path = "../core" }
+db-core = { path = "../core", features = ["conformance"] }
 deadpool-postgres.workspace = true
 native-tls.workspace = true
 postgres-native-tls.workspace = true

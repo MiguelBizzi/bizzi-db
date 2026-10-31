@@ -6,6 +6,7 @@ import { useLatestRelease } from '../../lib/useLatestRelease';
 
 const NAV = [
   { href: '#showcase', label: 'Showcase' },
+  { href: '#databases', label: 'Databases' },
   { href: '#pillars', label: 'Philosophy' },
   { href: '#features', label: 'Features' },
   { href: '#architecture', label: 'Architecture' },

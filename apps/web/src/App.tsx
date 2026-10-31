@@ -2,6 +2,7 @@ import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
 import { Hero } from './components/sections/Hero';
 import { Showcase } from './components/sections/Showcase';
+import { Databases } from './components/sections/Databases';
 import { Pillars } from './components/sections/Pillars';
 import { Features } from './components/sections/Features';
 import { Architecture } from './components/sections/Architecture';
@@ -20,6 +21,7 @@ export default function App() {
       <main>
         <Hero />
         <Showcase />
+        <Databases />
         <Pillars />
         <Features />
         <Architecture />

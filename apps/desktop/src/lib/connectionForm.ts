@@ -1,5 +1,7 @@
+import { dialectModule } from '@db/database';
 import type {
   ConnectionProfile,
+  DatabaseDialect,
   Environment,
   SaveConnectionInput,
   SshAuthMethod,
@@ -28,6 +30,7 @@ export type ConnectionFormField =
   | 'sshPassphrase';
 
 export type ConnectionFormValues = {
+  dialect: DatabaseDialect;
   name: string;
   host: string;
   port: number;
@@ -68,6 +71,7 @@ const CONNECTION_TAB_FIELDS: ConnectionFormField[] = [
 export function defaultConnectionForm(): ConnectionFormValues {
   const host = '127.0.0.1';
   return {
+    dialect: 'PostgreSQL',
     name: 'Local PostgreSQL',
     host,
     port: 5432,
@@ -93,6 +97,7 @@ export function connectionFormFromProfile(
   profile: ConnectionProfile
 ): ConnectionFormValues {
   return {
+    dialect: profile.dialect,
     name: profile.name,
     host: profile.host,
     port: profile.port,
@@ -124,7 +129,8 @@ export function connectionFormErrors(
   if (!Number.isFinite(values.port) || values.port < 1 || values.port > 65535) {
     next.port = 'Enter a port from 1 to 65535';
   }
-  if (!values.databaseName.trim()) next.databaseName = 'Required';
+  const databaseOptional = dialectModule(values.dialect)?.capabilities.emptyDatabaseAllowed === true;
+  if (!databaseOptional && !values.databaseName.trim()) next.databaseName = 'Required';
   if (!values.username.trim()) next.username = 'Required';
   if (options.passwordRequired && !values.password) next.password = 'Required';
   if (!Number.isFinite(values.poolSize) || values.poolSize < 1 || values.poolSize > 32) {
@@ -149,6 +155,28 @@ export function connectionFormErrors(
   return next;
 }
 
+/** Switching engine replaces host defaults the user has not edited. */
+export function applyDialectDefaults(
+  values: ConnectionFormValues,
+  dialect: DatabaseDialect,
+): ConnectionFormValues {
+  const next = dialectModule(dialect);
+  const previous = dialectModule(values.dialect);
+  if (!next || dialect === values.dialect) return { ...values, dialect };
+  const untouched = (current: string, fallback: string | undefined) =>
+    fallback !== undefined && current === fallback;
+  return {
+    ...values,
+    dialect,
+    port: values.port === previous?.defaultPort ? next.defaultPort : values.port,
+    username: untouched(values.username, previous?.defaultUser) ? next.defaultUser : values.username,
+    databaseName: untouched(values.databaseName, previous?.defaultDatabase)
+      ? next.defaultDatabase
+      : values.databaseName,
+    name: values.name === `Local ${previous?.label}` ? `Local ${next.label}` : values.name,
+  };
+}
+
 export function firstTabWithErrors(
   errors: Partial<Record<ConnectionFormField, string>>
 ): ConnectionModalTab | null {
@@ -166,7 +194,7 @@ export function connectionFormToInput(
   return {
     ...(id ? { id } : {}),
     name: values.name.trim(),
-    dialect: 'PostgreSQL',
+    dialect: values.dialect,
     host: values.host.trim(),
     port: values.port,
     database: values.databaseName.trim(),

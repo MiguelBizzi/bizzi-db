@@ -70,7 +70,10 @@ export function queryErrorCopyText(result: QueryExecutionResult): string {
   if (!info) return queryErrorText(result.error);
 
   const lines = [
-    categoryLabel(info.category) + (info.code ? ` (${info.code})` : ''),
+    categoryLabel(info.category) +
+      (info.code || info.vendorCode != null
+        ? ` (${[info.code, info.vendorCode].filter((part) => part != null && part !== '').join(' · ')})`
+        : ''),
     info.message,
   ];
   const excerpt = errorExcerpt(result.query, info.position);

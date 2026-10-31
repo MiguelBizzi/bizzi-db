@@ -40,6 +40,9 @@ export interface IndexCapabilities {
   nullsNotDistinctMinVersion: number | null;
   /** Longest identifier, in bytes. */
   maxNameBytes: number;
+  /** Label of the non-blocking build option. Defaults to `CONCURRENTLY`. */
+  onlineBuildLabel?: string;
+  onlineBuildHint?: string;
 }
 
 export interface RoutineCapabilities {
@@ -59,6 +62,12 @@ export interface RoutineCapabilities {
   costAndRows: boolean;
   defaultLanguage: string;
   returnTypePresets: string[];
+  /** Show DETERMINISTIC instead of the volatility list. */
+  deterministic?: boolean;
+  /** Empty hides the control. MySQL data-access characteristics. */
+  dataAccessModes?: Array<'CONTAINS SQL' | 'NO SQL' | 'READS SQL DATA' | 'MODIFIES SQL DATA'>;
+  /** When set, functions only offer these modes. Procedures use `parameterModes`. */
+  functionParameterModes?: ParameterMode[];
 }
 
 export interface ObjectCapabilities {
@@ -217,6 +226,83 @@ export const POSTGRES_OBJECTS: ObjectCapabilities = {
 };
 
 /** Whether `version` (server_version_num) meets `minVersion`. Unknown versions pass. */
+export const MYSQL_OBJECTS: ObjectCapabilities = {
+  indexes: {
+    methods: [
+      {
+        id: 'btree',
+        label: 'B-tree',
+        description: 'Equality and range lookups. The default for InnoDB.',
+        unique: true,
+        ordering: true,
+        multiColumn: true,
+        includeMinVersion: null,
+        storageParams: [],
+      },
+      {
+        id: 'hash',
+        label: 'Hash',
+        description: 'Equality lookups. InnoDB uses a B-tree anyway.',
+        unique: true,
+        ordering: false,
+        multiColumn: false,
+        includeMinVersion: null,
+        storageParams: [],
+      },
+      {
+        id: 'fulltext',
+        label: 'Fulltext',
+        description: 'Word search in CHAR, VARCHAR and TEXT columns.',
+        unique: false,
+        ordering: false,
+        multiColumn: true,
+        includeMinVersion: null,
+        storageParams: [],
+      },
+      {
+        id: 'spatial',
+        label: 'Spatial',
+        description: 'A geometry column. The column must be NOT NULL.',
+        unique: false,
+        ordering: false,
+        multiColumn: false,
+        includeMinVersion: null,
+        storageParams: [],
+      },
+    ],
+    defaultMethod: 'btree',
+    expressions: true,
+    partial: false,
+    concurrent: true,
+    ifNotExists: false,
+    tablespaces: false,
+    opclasses: false,
+    collations: false,
+    nullsNotDistinctMinVersion: null,
+    maxNameBytes: 64,
+    onlineBuildLabel: 'ALGORITHM=INPLACE',
+    onlineBuildHint: 'ALGORITHM=INPLACE, LOCK=NONE. MySQL may still copy the table.',
+  },
+  routines: {
+    kinds: ['function', 'procedure'],
+    createOrReplace: false,
+    parameterModes: ['in', 'out', 'inout'],
+    functionParameterModes: ['in'],
+    returnsTable: false,
+    volatilities: [],
+    defaultVolatility: 'volatile',
+    parallelModes: [],
+    strict: false,
+    securityDefiner: true,
+    leakproof: false,
+    costAndRows: false,
+    deterministic: true,
+    dataAccessModes: ['CONTAINS SQL', 'NO SQL', 'READS SQL DATA', 'MODIFIES SQL DATA'],
+    defaultLanguage: 'SQL',
+    returnTypePresets: ['INT', 'BIGINT', 'VARCHAR(255)', 'DECIMAL(10,2)', 'JSON', 'DATETIME'],
+  },
+};
+
 export function versionAtLeast(version: number | undefined, minVersion: number | null | undefined) {
   if (minVersion === null) return false;
   if (minVersion === undefined || version === undefined || version <= 0) return true;

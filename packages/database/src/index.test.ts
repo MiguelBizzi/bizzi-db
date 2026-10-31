@@ -21,10 +21,12 @@ describe('quoteSqlIdent', () => {
 });
 
 describe('dialectMeta', () => {
-  test('returns PostgreSQL and undefined for unsupported dialects', () => {
+  test('returns PostgreSQL and MySQL, and undefined for other dialects', () => {
     expect(dialectMeta('PostgreSQL')?.defaultPort).toBe(5432);
-    expect(dialectMeta('MySQL')).toBeUndefined();
-    expect(SUPPORTED_DIALECTS).toHaveLength(1);
+    expect(dialectMeta('MySQL')?.defaultPort).toBe(3306);
+    expect(dialectMeta('MySQL')?.capabilities.transactionalDdl).toBe(false);
+    expect(dialectMeta('SQLite')).toBeUndefined();
+    expect(SUPPORTED_DIALECTS.map((d) => d.id)).toEqual(['PostgreSQL', 'MySQL']);
   });
 });
 
@@ -42,7 +44,15 @@ describe('columnTypesFor', () => {
   });
 
   test('returns undefined for dialects without a catalog', () => {
-    expect(columnTypesFor('MySQL')).toBeUndefined();
+    expect(columnTypesFor('MySQL')?.some((type) => type.id === 'varchar')).toBe(true);
+    expect(columnTypesFor('MySQL')?.find((type) => type.id === 'datetime')).toMatchObject({
+      params: 'length',
+      minLength: 0,
+      maxLength: 6,
+    });
+    expect(DIALECTS.MySQL.foreignKeyActions.some((action) => action.value === 'SET DEFAULT')).toBe(
+      false,
+    );
     expect(columnTypesFor('SQLite')).toBeUndefined();
     expect(columnTypesFor('ClickHouse')).toBeUndefined();
     expect(columnTypesFor('DuckDB')).toBeUndefined();
@@ -52,6 +62,12 @@ describe('columnTypesFor', () => {
 describe('quoteLiteral', () => {
   test('doubles single quotes', () => {
     expect(DIALECTS.PostgreSQL.quoteLiteral("it's")).toBe("'it''s'");
+  });
+
+  test('escapes backslashes for MySQL and leaves them literal for PostgreSQL', () => {
+    expect(DIALECTS.MySQL.quoteLiteral("C:\\temp")).toBe("'C:\\\\temp'");
+    expect(DIALECTS.MySQL.quoteLiteral("it's")).toBe("'it''s'");
+    expect(DIALECTS.PostgreSQL.quoteLiteral("C:\\temp")).toBe("'C:\\temp'");
   });
 });
 

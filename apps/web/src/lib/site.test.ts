@@ -10,7 +10,14 @@ import {
   detectPreferredPlatform,
 } from './site';
 import rootPackage from '../../../../package.json';
-import { ARCHITECTURE, CTA, FAQ, FEATURES, PILLARS } from './content';
+import {
+  ARCHITECTURE,
+  CTA,
+  DATABASES,
+  FAQ,
+  FEATURES,
+  PILLARS,
+} from './content';
 import { CHANGELOG } from './changelog';
 
 const BANNED = [
@@ -20,7 +27,6 @@ const BANNED = [
   'yay -s',
   'web studio',
   'interactive studio',
-  'mysql',
   'mariadb',
   'clickhouse',
   'turso',
@@ -37,6 +43,7 @@ function publishedCopy(): string {
     VERSION,
     SITE_TITLE,
     SITE_DESCRIPTION,
+    ...DATABASES.flatMap((item) => [item.name, item.body, ...item.highlights]),
     ...PILLARS.flatMap((item) => [item.title, item.body, item.footnote]),
     ...FEATURES.flatMap((item) => [item.title, item.body]),
     ...ARCHITECTURE.flatMap((item) => [item.title, item.body]),
@@ -107,11 +114,21 @@ describe('content', () => {
     }
   });
 
-  test('describes Postgres, Rust, and Tauri', () => {
+  test('describes Postgres, MySQL, Rust, and Tauri', () => {
     const copy = publishedCopy();
     expect(copy).toContain('postgres');
+    expect(copy).toContain('mysql');
     expect(copy).toContain('rust');
     expect(copy).toContain('tauri');
+  });
+
+  test('lists PostgreSQL and MySQL as supported databases', () => {
+    expect(DATABASES.map((db) => db.id)).toEqual(['postgres', 'mysql']);
+    for (const db of DATABASES) {
+      expect(db.highlights.length).toBeGreaterThan(0);
+    }
+    expect(SITE_TITLE).toContain('MySQL');
+    expect(SITE_DESCRIPTION).toContain('MySQL');
   });
 
   test('cta says the product is free and completely free', () => {
@@ -132,7 +149,8 @@ describe('index.html SEO', () => {
     expect(html).toContain(
       'https://github.com/MiguelBizzi/bizzi-db/releases/latest',
     );
-    expect(html).toContain('Postgres');
+    expect(html).toContain('PostgreSQL');
+    expect(html).toContain('MySQL');
     expect(html).toContain('Tauri');
     expect(html).toContain('og:title');
     expect(html).toContain('twitter:card');

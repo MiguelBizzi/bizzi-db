@@ -1,4 +1,3 @@
-import { DIALECTS } from '@db/database';
 import type {
   PendingCellUpdate,
   PendingModifications,
@@ -6,9 +5,9 @@ import type {
   PendingRowInsert,
   TableSchema,
 } from '../types';
-import { buildDropTableSql, buildTruncateTableSql } from './schemaChange';
-
-const quoteIdent = DIALECTS.PostgreSQL.quoteIdent;
+import type { DatabaseDialect } from '../types';
+import { tableDdlFor } from './ddl/registry';
+import { ident, moduleFor, qualify, stringLiteral } from './dialectQuote';
 
 export type PendingChangeKind = 'insert' | 'update' | 'delete' | 'truncate' | 'drop';
 
@@ -109,7 +108,8 @@ export function groupUpdateRows(updates: PendingCellUpdate[]): UpdateRowChange[]
 
 export function flattenPending(
   pendingByTable: Record<string, PendingModifications>,
-  tables: TableSchema[]
+  tables: TableSchema[],
+  defaultSchema = 'public',
 ): TablePendingBundle[] {
   const bundles: TablePendingBundle[] = [];
   for (const [tableId, mods] of Object.entries(pendingByTable)) {
@@ -119,7 +119,7 @@ export function flattenPending(
       tableId,
       table,
       tableName: table?.name || tableId,
-      schema: table?.schema || 'public',
+      schema: table?.schema || defaultSchema,
       inserts: mods.inserts,
       updateRows: groupUpdateRows(mods.updates),
       deletes: mods.deletes,
@@ -164,89 +164,119 @@ export function formatCellValue(value: unknown): string {
   return text.length > 80 ? `${text.slice(0, 77)}…` : text;
 }
 
-function qualifyTable(schema: string, name: string): string {
-  return schema ? `${quoteIdent(schema)}.${quoteIdent(name)}` : quoteIdent(name);
-}
-
-function sqlLiteral(value: unknown): string {
+function sqlLiteral(dialect: DatabaseDialect, value: unknown): string {
   if (isSetColumnDefault(value)) return 'DEFAULT';
   if (value === null || value === undefined) return 'NULL';
-  if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
+  if (typeof value === 'boolean') return moduleFor(dialect).booleanLiteral(value);
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   if (typeof value === 'bigint') return String(value);
   if (typeof value === 'object') {
     return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
   }
-  return `'${String(value).replace(/'/g, "''")}'`;
+  return stringLiteral(dialect, String(value));
 }
 
-function qualifiedName(bundle: TablePendingBundle): string {
-  return qualifyTable(bundle.schema, bundle.tableName);
+function qualifiedName(dialect: DatabaseDialect, bundle: TablePendingBundle): string {
+  return qualify(dialect, bundle.schema, bundle.tableName);
 }
 
-export function sqlForInsert(bundle: TablePendingBundle, insert: PendingRowInsert): string {
+export function sqlForInsert(
+  bundle: TablePendingBundle,
+  insert: PendingRowInsert,
+  dialect: DatabaseDialect = 'PostgreSQL',
+): string {
   const entries = Object.entries(insert.data).filter(
     ([, value]) => value !== null && value !== undefined
   );
+  const qualified = qualifiedName(dialect, bundle);
   if (entries.length === 0) {
-    return `INSERT INTO ${qualifiedName(bundle)} DEFAULT VALUES;`;
+    return `INSERT INTO ${qualified} ${moduleFor(dialect).emptyInsert};`;
   }
-  const cols = entries.map(([column]) => quoteIdent(column)).join(', ');
-  const vals = entries.map(([, value]) => sqlLiteral(value)).join(', ');
-  return `INSERT INTO ${qualifiedName(bundle)} (${cols}) VALUES (${vals});`;
+  const cols = entries.map(([column]) => ident(dialect, column)).join(', ');
+  const vals = entries.map(([, value]) => sqlLiteral(dialect, value)).join(', ');
+  return `INSERT INTO ${qualified} (${cols}) VALUES (${vals});`;
 }
 
-export function sqlForUpdateRow(bundle: TablePendingBundle, row: UpdateRowChange): string {
+export function sqlForUpdateRow(
+  bundle: TablePendingBundle,
+  row: UpdateRowChange,
+  dialect: DatabaseDialect = 'PostgreSQL',
+): string {
   const pk = primaryKeyColumn(bundle.table);
   const sets = row.cells
-    .map((cell) => `${quoteIdent(cell.columnName)} = ${sqlLiteral(cell.newValue)}`)
+    .map((cell) => `${ident(dialect, cell.columnName)} = ${sqlLiteral(dialect, cell.newValue)}`)
     .join(', ');
-  return `UPDATE ${qualifiedName(bundle)} SET ${sets} WHERE ${quoteIdent(pk)} = ${sqlLiteral(row.primaryKeyValue)};`;
+  return `UPDATE ${qualifiedName(dialect, bundle)} SET ${sets} WHERE ${ident(dialect, pk)} = ${sqlLiteral(dialect, row.primaryKeyValue)};`;
 }
 
-export function sqlForDelete(bundle: TablePendingBundle, row: PendingRowDelete): string {
+export function sqlForDelete(
+  bundle: TablePendingBundle,
+  row: PendingRowDelete,
+  dialect: DatabaseDialect = 'PostgreSQL',
+): string {
   const pk = primaryKeyColumn(bundle.table);
-  return `DELETE FROM ${qualifiedName(bundle)} WHERE ${quoteIdent(pk)} = ${sqlLiteral(row.primaryKeyValue)};`;
+  return `DELETE FROM ${qualifiedName(dialect, bundle)} WHERE ${ident(dialect, pk)} = ${sqlLiteral(dialect, row.primaryKeyValue)};`;
 }
 
-export function sqlForChange(bundle: TablePendingBundle, ref: PendingChangeRef): string | null {
+function tableActionSql(
+  dialect: DatabaseDialect,
+  bundle: TablePendingBundle,
+  kind: 'truncate' | 'drop',
+): string {
+  const ddl = tableDdlFor(dialect);
+  const table = { schema: bundle.schema, name: bundle.tableName };
+  if (!ddl) return '';
+  return kind === 'truncate' ? ddl.buildTruncateTableSql(table) : ddl.buildDropTableSql(table);
+}
+
+export function sqlForChange(
+  bundle: TablePendingBundle,
+  ref: PendingChangeRef,
+  dialect: DatabaseDialect = 'PostgreSQL',
+): string | null {
   if (ref.kind === 'insert') {
     const insert = bundle.inserts.find((row) => row.tempId === ref.tempId);
-    return insert ? sqlForInsert(bundle, insert) : null;
+    return insert ? sqlForInsert(bundle, insert, dialect) : null;
   }
   if (ref.kind === 'update') {
     const row = bundle.updateRows.find((candidate) => candidate.rowId === ref.rowId);
-    return row ? sqlForUpdateRow(bundle, row) : null;
+    return row ? sqlForUpdateRow(bundle, row, dialect) : null;
   }
   if (ref.kind === 'truncate' || ref.kind === 'drop') {
     if (bundle.tableAction !== ref.kind) return null;
-    const table = { schema: bundle.schema, name: bundle.tableName };
-    return ref.kind === 'truncate' ? buildTruncateTableSql(table) : buildDropTableSql(table);
+    return tableActionSql(dialect, bundle, ref.kind);
   }
   const row = bundle.deletes.find((candidate) => String(candidate.primaryKeyValue) === ref.rowId);
-  return row ? sqlForDelete(bundle, row) : null;
+  return row ? sqlForDelete(bundle, row, dialect) : null;
 }
 
-export function sqlForBundle(bundle: TablePendingBundle): string {
+export function sqlForBundle(
+  bundle: TablePendingBundle,
+  dialect: DatabaseDialect = 'PostgreSQL',
+): string {
   const statements = [
-    ...bundle.inserts.map((row) => sqlForInsert(bundle, row)),
-    ...bundle.updateRows.map((row) => sqlForUpdateRow(bundle, row)),
-    ...bundle.deletes.map((row) => sqlForDelete(bundle, row)),
+    ...bundle.inserts.map((row) => sqlForInsert(bundle, row, dialect)),
+    ...bundle.updateRows.map((row) => sqlForUpdateRow(bundle, row, dialect)),
+    ...bundle.deletes.map((row) => sqlForDelete(bundle, row, dialect)),
   ];
-  if (bundle.tableAction === 'truncate') {
-    statements.push(buildTruncateTableSql({ schema: bundle.schema, name: bundle.tableName }));
-  } else if (bundle.tableAction === 'drop') {
-    statements.push(buildDropTableSql({ schema: bundle.schema, name: bundle.tableName }));
+  if (bundle.tableAction === 'truncate' || bundle.tableAction === 'drop') {
+    statements.push(tableActionSql(dialect, bundle, bundle.tableAction));
   }
   return statements.join('\n');
 }
 
-export function rowStatementsForAll(bundles: TablePendingBundle[]): string {
-  return bundles.map(sqlForBundle).filter(Boolean).join('\n');
+export function rowStatementsForAll(
+  bundles: TablePendingBundle[],
+  dialect: DatabaseDialect = 'PostgreSQL',
+): string {
+  return bundles.map((bundle) => sqlForBundle(bundle, dialect)).filter(Boolean).join('\n');
 }
 
-export function sqlForAll(bundles: TablePendingBundle[]): string {
-  const body = rowStatementsForAll(bundles);
+export function sqlForAll(
+  bundles: TablePendingBundle[],
+  dialect: DatabaseDialect = 'PostgreSQL',
+): string {
+  const body = rowStatementsForAll(bundles, dialect);
   if (!body) return '';
   return `BEGIN;\n${body}\nCOMMIT;`;
 }

@@ -38,6 +38,9 @@ export interface IndexDraft {
   /** Build without blocking writes (not inside a transaction). */
   concurrently: boolean;
   ifNotExists: boolean;
+  /** MySQL `INVISIBLE`. */
+  invisible?: boolean;
+  comment?: string;
 }
 
 export interface RoutineParameterDraft {
@@ -76,6 +79,8 @@ export interface RoutineDraft {
   cost: string;
   rows: string;
   comment: string;
+  /** MySQL data-access characteristic. Omitted for Postgres. */
+  dataAccess?: 'CONTAINS SQL' | 'NO SQL' | 'READS SQL DATA' | 'MODIFIES SQL DATA';
 }
 
 export interface ViewDraft {
@@ -90,6 +95,10 @@ export interface ViewDraft {
   withData: boolean;
   /** Plain views: drop and recreate instead of CREATE OR REPLACE. */
   recreate: boolean;
+  /** MySQL `WITH CHECK OPTION`. */
+  checkOption?: boolean;
+  /** MySQL `SQL SECURITY`. Omitted means DEFINER, the server default. */
+  sqlSecurity?: 'DEFINER' | 'INVOKER';
 }
 
 /**

@@ -44,6 +44,7 @@ pub(crate) fn query_error_from_parts(parts: DbErrorParts, sql: &str) -> QueryErr
         category: category_for_sqlstate(&parts.code),
         severity: Some(parts.severity),
         code: Some(parts.code),
+        vendor_code: None,
         message: parts.message,
         detail: parts.detail,
         hint: parts.hint,

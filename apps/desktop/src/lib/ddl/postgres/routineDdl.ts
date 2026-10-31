@@ -1,9 +1,10 @@
 import { DIALECTS } from '@db/database';
 import type { RoutineDefinition, RoutineKind } from '../../../types';
-import { parseTypeSql, qualifyTable } from '../../schemaChange';
+import { parseTypeSql, qualifyTable as qualifyQuoted } from '../../schemaChange';
 import type { DdlResult, ReturnDraft, RoutineDraft, RoutineParameterDraft } from '../types';
 
 const { quoteIdent, quoteLiteral } = DIALECTS.PostgreSQL;
+const qualifyTable = (schema: string, name: string) => qualifyQuoted(schema, name, quoteIdent);
 const caps = DIALECTS.PostgreSQL.objects.routines;
 
 const DEFAULT_COST = 100;

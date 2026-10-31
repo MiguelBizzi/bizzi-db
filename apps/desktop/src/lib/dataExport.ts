@@ -1,9 +1,8 @@
 import { exportSaveFile, type ExportFile } from '@db/core';
-import { DIALECTS } from '@db/database';
+import type { DatabaseDialect } from '../types';
 import { formatAccelerator, type Platform } from './commands/accelerator';
 import { currentPlatform } from './commands/shortcutLabel';
-
-const quoteIdent = DIALECTS.PostgreSQL.quoteIdent;
+import { ident, moduleFor, qualify, stringLiteral } from './dialectQuote';
 
 export function copyCsvShortcut(platform: Platform = currentPlatform()): string {
   return formatAccelerator('CmdOrCtrl+C', platform);
@@ -33,16 +32,20 @@ export function inferQualifiedTable(sql?: string): { schema: string; table: stri
   if (!sql) return { schema: '', table: 'query_result' };
   const stripped = sql.replace(/--[^\n]*/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ');
   const match = stripped.match(
-    /\bfrom\s+(?:"([^"]+)"|([A-Za-z_][\w$]*))(?:\s*\.\s*(?:"([^"]+)"|([A-Za-z_][\w$]*)))?/i
+    /\bfrom\s+(?:"([^"]+)"|`([^`]+)`|([A-Za-z_][\w$]*))(?:\s*\.\s*(?:"([^"]+)"|`([^`]+)`|([A-Za-z_][\w$]*)))?/i
   );
   if (!match) return { schema: '', table: 'query_result' };
-  const first = match[1] || match[2];
-  const second = match[3] || match[4];
+  const first = match[1] || match[2] || match[3];
+  const second = match[4] || match[5] || match[6];
   if (second) return { schema: first, table: second };
   return { schema: '', table: first };
 }
 
-export function formatExport(input: DataExportInput, format: DataExportFormat): string {
+export function formatExport(
+  input: DataExportInput,
+  format: DataExportFormat,
+  dialect: DatabaseDialect = 'PostgreSQL',
+): string {
   switch (format) {
     case 'csv':
       return formatCsv(input);
@@ -51,7 +54,7 @@ export function formatExport(input: DataExportInput, format: DataExportFormat): 
     case 'markdown':
       return formatMarkdown(input);
     case 'sql':
-      return formatSqlInsert(input);
+      return formatSqlInsert(input, dialect);
   }
 }
 
@@ -126,12 +129,15 @@ function formatMarkdown({ columns, rows }: DataExportInput): string {
   return [header, divider, ...body].join('\n');
 }
 
-function formatSqlInsert({ columns, rows, tableName, schema }: DataExportInput): string {
+function formatSqlInsert(
+  { columns, rows, tableName, schema }: DataExportInput,
+  dialect: DatabaseDialect,
+): string {
   if (rows.length === 0 || columns.length === 0) return '';
-  const table = qualifyTable(schema || '', tableName || 'query_result');
-  const cols = columns.map(quoteIdent).join(', ');
+  const table = qualify(dialect, schema || '', tableName || 'query_result');
+  const cols = columns.map((column) => ident(dialect, column)).join(', ');
   const tuples = rows.map((row) => {
-    const values = columns.map((column) => sqlLiteral(row[column])).join(', ');
+    const values = columns.map((column) => sqlLiteral(row[column], dialect)).join(', ');
     return `(${values})`;
   });
   return `INSERT INTO ${table} (${cols}) VALUES\n  ${tuples.join(',\n  ')};`;
@@ -149,16 +155,16 @@ function mdCell(value: unknown): string {
   return stringifyCell(value).replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
 }
 
-export function sqlLiteral(value: unknown): string {
+export function sqlLiteral(value: unknown, dialect: DatabaseDialect = 'PostgreSQL'): string {
   if (value === null || value === undefined) return 'NULL';
-  if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
+  if (typeof value === 'boolean') return moduleFor(dialect).booleanLiteral(value);
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   if (typeof value === 'bigint') return String(value);
-  if (value instanceof Date) return `'${value.toISOString().replace(/'/g, "''")}'`;
+  if (value instanceof Date) return moduleFor(dialect).quoteLiteral(value.toISOString());
   if (typeof value === 'object') {
-    return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+    return moduleFor(dialect).quoteLiteral(JSON.stringify(value));
   }
-  return `'${String(value).replace(/'/g, "''")}'`;
+  return stringLiteral(dialect, String(value));
 }
 
 function stringifyCell(value: unknown): string {
@@ -173,9 +179,6 @@ function stringifyCell(value: unknown): string {
   return String(value);
 }
 
-function qualifyTable(schema: string, name: string): string {
-  return schema ? `${quoteIdent(schema)}.${quoteIdent(name)}` : quoteIdent(name);
-}
 
 function sanitizeFileName(name: string): string {
   const cleaned = name.replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '');

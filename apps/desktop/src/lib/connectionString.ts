@@ -1,4 +1,4 @@
-import type { SslMode } from '../types';
+import type { DatabaseDialect, SslMode } from '../types';
 import {
   defaultConnectionForm,
   type ConnectionFormValues,
@@ -6,6 +6,7 @@ import {
 import { defaultSslForHost } from './connectionSecurity';
 
 export type ParsedConnection = {
+  dialect: DatabaseDialect;
   host: string;
   port: number;
   username: string;
@@ -25,9 +26,7 @@ const GENERIC_PARSE_ERROR =
 const DEFAULT_PORT = 5432;
 
 const UNSUPPORTED_SCHEMES: Record<string, string> = {
-  mysql: 'MySQL',
-  mysql2: 'MySQL',
-  mariadb: 'MySQL',
+  mariadb: 'MariaDB',
   sqlite: 'SQLite',
   mongodb: 'MongoDB',
   'mongodb+srv': 'MongoDB',
@@ -36,6 +35,7 @@ const UNSUPPORTED_SCHEMES: Record<string, string> = {
 };
 
 const POSTGRES_SCHEMES = new Set(['postgres', 'postgresql', 'jdbc:postgresql']);
+const MYSQL_SCHEMES = new Set(['mysql', 'mysql2', 'jdbc:mysql']);
 
 export function parseConnectionString(raw: string): ParseConnectionStringResult {
   const trimmed = raw.trim();
@@ -54,7 +54,12 @@ export function parseConnectionString(raw: string): ParseConnectionStringResult 
     };
   }
 
-  if (!POSTGRES_SCHEMES.has(scheme)) {
+  const dialect: DatabaseDialect = MYSQL_SCHEMES.has(scheme)
+    ? 'MySQL'
+    : POSTGRES_SCHEMES.has(scheme)
+      ? 'PostgreSQL'
+      : 'PostgreSQL';
+  if (!POSTGRES_SCHEMES.has(scheme) && !MYSQL_SCHEMES.has(scheme)) {
     return { ok: false, error: GENERIC_PARSE_ERROR };
   }
 
@@ -75,7 +80,7 @@ export function parseConnectionString(raw: string): ParseConnectionStringResult 
     return { ok: false, error: GENERIC_PARSE_ERROR };
   }
 
-  const port = url.port ? Number(url.port) : DEFAULT_PORT;
+  const port = url.port ? Number(url.port) : dialect === 'MySQL' ? 3306 : DEFAULT_PORT;
   if (!Number.isFinite(port) || port < 1 || port > 65535) {
     return { ok: false, error: GENERIC_PARSE_ERROR };
   }
@@ -89,6 +94,7 @@ export function parseConnectionString(raw: string): ParseConnectionStringResult 
     ok: true,
     empty: false,
     value: {
+      dialect,
       host,
       port,
       username,
@@ -107,6 +113,7 @@ export function applyParsedConnection(
   const replaceName = !form.name.trim() || form.name === defaultName;
   return {
     ...form,
+    dialect: parsed.dialect,
     host: parsed.host,
     port: parsed.port,
     username: parsed.username,

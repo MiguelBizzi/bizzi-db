@@ -20,6 +20,9 @@ export interface ColumnTypeDef {
   family: ColumnTypeFamily;
   params: ColumnTypeParams;
   defaultLength?: number;
+  /** Smallest accepted length. Defaults to 1. `0` allows an omitted fractional-seconds precision. */
+  minLength?: number;
+  maxLength?: number;
   defaultPrecision?: number;
   defaultScale?: number;
 }
@@ -92,7 +95,34 @@ const POSTGRES_COLUMN_TYPES: ColumnTypeDef[] = [
   { id: 'custom', label: 'Custom…', sqlName: '', family: 'other', params: 'custom' },
 ];
 
+const MYSQL_COLUMN_TYPES: ColumnTypeDef[] = [
+  { id: 'tinyint', label: 'tinyint', sqlName: 'tinyint', family: 'integer', params: 'none' },
+  { id: 'smallint', label: 'smallint', sqlName: 'smallint', family: 'integer', params: 'none' },
+  { id: 'int', label: 'int', sqlName: 'int', family: 'integer', params: 'none' },
+  { id: 'bigint', label: 'bigint', sqlName: 'bigint', family: 'integer', params: 'none' },
+  { id: 'decimal', label: 'decimal', sqlName: 'decimal', family: 'decimal', params: 'precisionScale', defaultPrecision: 10, defaultScale: 2 },
+  { id: 'float', label: 'float', sqlName: 'float', family: 'decimal', params: 'none' },
+  { id: 'double', label: 'double', sqlName: 'double', family: 'decimal', params: 'none' },
+  { id: 'bit', label: 'bit', sqlName: 'bit', family: 'other', params: 'length', defaultLength: 1 },
+  { id: 'boolean', label: 'boolean', sqlName: 'boolean', family: 'bool', params: 'none' },
+  { id: 'year', label: 'year', sqlName: 'year', family: 'temporal', params: 'none' },
+  { id: 'date', label: 'date', sqlName: 'date', family: 'temporal', params: 'none' },
+  { id: 'time', label: 'time', sqlName: 'time', family: 'temporal', params: 'length', minLength: 0, maxLength: 6 },
+  { id: 'datetime', label: 'datetime', sqlName: 'datetime', family: 'temporal', params: 'length', minLength: 0, maxLength: 6 },
+  { id: 'timestamp', label: 'timestamp', sqlName: 'timestamp', family: 'temporal', params: 'length', minLength: 0, maxLength: 6 },
+  { id: 'char', label: 'char', sqlName: 'char', family: 'text', params: 'length', defaultLength: 1 },
+  { id: 'varchar', label: 'varchar', sqlName: 'varchar', family: 'text', params: 'length', defaultLength: 255 },
+  { id: 'text', label: 'text', sqlName: 'text', family: 'text', params: 'none' },
+  { id: 'json', label: 'json', sqlName: 'json', family: 'json', params: 'none' },
+  { id: 'binary', label: 'binary', sqlName: 'binary', family: 'binary', params: 'length', defaultLength: 16 },
+  { id: 'varbinary', label: 'varbinary', sqlName: 'varbinary', family: 'binary', params: 'length', defaultLength: 255 },
+  { id: 'blob', label: 'blob', sqlName: 'blob', family: 'binary', params: 'none' },
+  { id: 'enum', label: 'enum', sqlName: 'enum', family: 'other', params: 'custom' },
+  { id: 'custom', label: 'Custom…', sqlName: '', family: 'other', params: 'custom' },
+];
+
 export function columnTypesFor(dialect: DatabaseDialect): ColumnTypeDef[] | undefined {
   if (dialect === 'PostgreSQL') return POSTGRES_COLUMN_TYPES;
+  if (dialect === 'MySQL') return MYSQL_COLUMN_TYPES;
   return undefined;
 }

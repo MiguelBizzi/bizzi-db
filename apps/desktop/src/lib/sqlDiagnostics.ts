@@ -5,20 +5,33 @@ export interface SqlDiagnostic {
   message: string;
 }
 
-export function sqlDiagnostics(sql: string): SqlDiagnostic[] {
+export interface SqlDiagnosticOptions {
+  /** PostgreSQL dollar quotes. Off for engines that do not have them. */
+  dollarQuotes?: boolean;
+  /** MySQL `#` line comments. */
+  hashComments?: boolean;
+}
+
+export function sqlDiagnostics(sql: string, options: SqlDiagnosticOptions = {}): SqlDiagnostic[] {
   const diags: SqlDiagnostic[] = [];
-  diags.push(...delimiterErrors(sql));
+  diags.push(...delimiterErrors(sql, options));
   diags.push(...logicWarnings(sql));
   return diags;
 }
 
-function delimiterErrors(sql: string): SqlDiagnostic[] {
+function delimiterErrors(sql: string, options: SqlDiagnosticOptions): SqlDiagnostic[] {
+  const dollarQuotes = options.dollarQuotes !== false;
+  const hashComments = options.hashComments === true;
   const diags: SqlDiagnostic[] = [];
   const chars = [...sql];
   let i = 0;
   const parenStack: number[] = [];
   while (i < chars.length) {
     const c = chars[i];
+    if (hashComments && c === '#') {
+      while (i < chars.length && chars[i] !== '\n') i += 1;
+      continue;
+    }
     if (c === '-' && chars[i + 1] === '-') {
       while (i < chars.length && chars[i] !== '\n') i += 1;
       continue;
@@ -29,7 +42,7 @@ function delimiterErrors(sql: string): SqlDiagnostic[] {
       i += 2;
       continue;
     }
-    if (c === '$') {
+    if (dollarQuotes && c === '$') {
       const tag = readDollarTag(chars, i);
       if (tag) {
         const start = i;

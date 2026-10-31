@@ -20,7 +20,6 @@ const ActivityLogDrawerBody: React.FC<ActivityLogDrawerProps> = ({
   return (
     <Drawer scrim={false}>
     <DrawerPanel className="fixed inset-y-0 right-0 z-40 w-full max-w-md bg-popover border-l border-border shadow-2xl flex flex-col font-sans select-none text-popover-foreground">
-      {/* Header */}
       <div className="p-4 border-b border-border bg-background/60 flex items-center justify-between">
         <div className="flex items-center gap-2 font-mono font-bold text-xs text-foreground">
           <Logs className="w-4 h-4 text-secondary" />
@@ -34,7 +33,6 @@ const ActivityLogDrawerBody: React.FC<ActivityLogDrawerProps> = ({
         </button>
       </div>
 
-      {/* Log Stream Body */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2.5 font-mono text-xs">
         {logs.map((log) => (
           <div

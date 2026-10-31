@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import { columnTypesFor } from '@db/database';
 import type { ColumnDefinition, TableSchema } from '../types';
 import {
-  alterWarnings,
   buildAddColumnSql,
   buildAlterColumnSql,
   buildCreateTableSql,
@@ -10,6 +9,9 @@ import {
   buildDropTableSql,
   buildTableDdlPreview,
   buildTruncateTableSql,
+} from './ddl/postgres/tableDdl';
+import {
+  alterWarnings,
   canConfirmDelete,
   draftFromColumn,
   emptyColumnDraft,
@@ -250,6 +252,9 @@ describe('typeChangeRisk', () => {
     expect(typeChangeRisk('character varying(40)', 'integer')).toBe('lossy');
     expect(typeChangeRisk('boolean', 'uuid')).toBe('incompatible');
     expect(typeChangeRisk('jsonb', 'integer')).toBe('incompatible');
+    expect(typeChangeRisk('int', 'bigint')).toBe('safe');
+    expect(typeChangeRisk('datetime(6)', 'timestamp')).toBe('safe');
+    expect(typeChangeRisk('tinyint', 'varchar(20)')).toBe('lossy');
   });
 });
 

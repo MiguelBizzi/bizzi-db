@@ -2,17 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { OverlayPresence } from '../ui/OverlayPresence';
 import { Modal, ModalPanel } from '../ui/Modal';
 import { AlertTriangle, Eraser, Trash2, X } from 'lucide-react';
-import type { TableSchema } from '../../types';
-import {
-  buildDropTableSql,
-  buildTruncateTableSql,
-  canConfirmDelete,
-} from '../../lib/schemaChange';
-import { objectDdlFor } from '../../lib/ddl/registry';
+import type { DatabaseDialect, TableSchema } from '../../types';
+import { canConfirmDelete } from '../../lib/schemaChange';
+import { objectDdlFor, tableDdlFor } from '../../lib/ddl/registry';
 import { planScript } from '../../lib/ddl/types';
 
 interface ConfirmTableActionModalProps {
   table: TableSchema | null;
+  dialect?: DatabaseDialect;
   action: 'truncate' | 'drop' | null;
   onClose: () => void;
   onConfirm: () => void;
@@ -20,6 +17,7 @@ interface ConfirmTableActionModalProps {
 
 const ConfirmTableActionModalBody: React.FC<ConfirmTableActionModalProps> = ({
   table,
+  dialect = 'PostgreSQL',
   action,
   onClose,
   onConfirm,
@@ -45,13 +43,14 @@ const ConfirmTableActionModalBody: React.FC<ConfirmTableActionModalProps> = ({
 
   const isDrop = action === 'drop';
   const isView = Boolean(table.isView);
-  const viewDrop = isView && isDrop ? objectDdlFor('PostgreSQL')?.dropView(table) : undefined;
+  const viewDrop = isView && isDrop ? objectDdlFor(dialect)?.dropView(table) : undefined;
+  const tables = tableDdlFor(dialect);
   const sql =
     viewDrop && viewDrop.ok
       ? planScript(viewDrop)
       : isDrop
-        ? buildDropTableSql(table)
-        : buildTruncateTableSql(table);
+        ? (tables?.buildDropTableSql(table) ?? '')
+        : (tables?.buildTruncateTableSql(table) ?? '');
   const matched = canConfirmDelete(typed, table.name);
   const viewNoun = table.isMaterialized ? 'materialized view' : 'view';
   const title = isView ? `Delete ${viewNoun}` : isDrop ? 'Delete table' : 'Empty table';

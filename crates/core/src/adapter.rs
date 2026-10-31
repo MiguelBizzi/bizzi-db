@@ -1,9 +1,12 @@
 use async_trait::async_trait;
 
-use crate::types::{DatabaseSchema, QueryExecutionResult, RoutineSource, SslMode, TableFilter};
+use crate::types::{
+    DatabaseDialect, DatabaseSchema, QueryExecutionResult, RoutineSource, SslMode, TableFilter,
+};
 
 #[derive(Clone)]
 pub struct ConnectConfig {
+    pub dialect: DatabaseDialect,
     pub host: String,
     pub port: u16,
     pub database: String,
@@ -16,6 +19,7 @@ pub struct ConnectConfig {
 impl std::fmt::Debug for ConnectConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ConnectConfig")
+            .field("dialect", &self.dialect)
             .field("host", &self.host)
             .field("port", &self.port)
             .field("database", &self.database)
@@ -148,10 +152,11 @@ pub fn schema_cache_is_fresh(
 #[cfg(test)]
 mod tests {
     use super::{schema_cache_is_fresh, ConnectConfig, SshTunnelAuth, SshTunnelConfig};
-    use crate::types::SslMode;
+    use crate::types::{DatabaseDialect, SslMode};
 
     fn sample() -> ConnectConfig {
         ConnectConfig {
+            dialect: DatabaseDialect::PostgreSQL,
             host: "db.example.com".into(),
             port: 5432,
             database: "app".into(),

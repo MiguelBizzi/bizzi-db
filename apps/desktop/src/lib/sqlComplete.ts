@@ -1,7 +1,6 @@
-import { DIALECTS } from '@db/database';
+import type { DatabaseDialect } from '../types';
+import { ident } from './dialectQuote';
 import { analyzeSql, type KeywordHint, type SqlContext, type TableRef } from './sqlContext';
-
-const quoteIdent = DIALECTS.PostgreSQL.quoteIdent;
 
 export interface SqlSchemaTable {
   schema: string;
@@ -22,11 +21,20 @@ interface Candidate extends SqlCompletion {
   name: string;
 }
 
+/** Set for the duration of `sqlCompletions`. The function is synchronous. */
+let completionDialect: DatabaseDialect = 'PostgreSQL';
+
+function quoteIdent(name: string): string {
+  return ident(completionDialect, name);
+}
+
 export function sqlCompletions(
   sql: string,
   cursor: number,
-  tables: SqlSchemaTable[]
+  tables: SqlSchemaTable[],
+  dialect: DatabaseDialect = 'PostgreSQL',
 ): SqlCompletion[] {
+  completionDialect = dialect;
   const ctx = analyzeSql(sql, cursor);
   const needle = ctx.prefix.toLowerCase();
   switch (ctx.expects) {

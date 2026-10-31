@@ -3,10 +3,10 @@ import { OverlayPresence } from "../ui/OverlayPresence";
 import { Drawer, DrawerPanel } from "../ui/Drawer";
 import { Check, Plus, X } from "lucide-react";
 import { ErrorNotice } from "../ui/ErrorNotice";
-import type { ColumnTypeDef } from "@db/database";
-import type { TableSchema } from "../../types";
+import { dialectModule, type ColumnTypeDef } from "@db/database";
+import type { DatabaseDialect, TableSchema } from "../../types";
+import { tableDdlFor } from "../../lib/ddl/registry";
 import {
-  buildAddColumnSql,
   emptyColumnDraft,
   validateColumnDraft,
   type ColumnDraft,
@@ -15,6 +15,7 @@ import { ColumnDraftFields } from "./ColumnDraftFields";
 
 interface AddColumnDrawerProps {
   isOpen: boolean;
+  dialect?: DatabaseDialect;
   table: TableSchema;
   tables: TableSchema[];
   types: ColumnTypeDef[];
@@ -25,6 +26,7 @@ interface AddColumnDrawerProps {
 
 const AddColumnDrawerBody: React.FC<AddColumnDrawerProps> = ({
   isOpen,
+  dialect = "PostgreSQL",
   table,
   tables,
   types,
@@ -57,8 +59,11 @@ const AddColumnDrawerBody: React.FC<AddColumnDrawerProps> = ({
   }, [isOpen, onClose]);
 
   const sql = useMemo(
-    () => (draft.name.trim() ? buildAddColumnSql(table, draft, types) : ""),
-    [table, draft, types],
+    () =>
+      draft.name.trim()
+        ? (tableDdlFor(dialect)?.buildAddColumnSql(table, draft, types) ?? "")
+        : "",
+    [dialect, table, draft, types],
   );
   const valid =
     Object.keys(validateColumnDraft(draft, table, types, { tables })).length ===
@@ -137,6 +142,8 @@ const AddColumnDrawerBody: React.FC<AddColumnDrawerProps> = ({
               tables={tables}
               errors={errors}
               disabled={disabled || submitting}
+              onDeleteActions={dialectModule(dialect)?.foreignKeyActions}
+              presets={dialectModule(dialect)?.defaultPresets}
               onChange={(next) => {
                 setDraft(next);
                 setErrors({});

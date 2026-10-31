@@ -7,10 +7,11 @@ import {
   type StorageParamSpec,
 } from '@db/database';
 import type { IndexDefinition, TableSchema } from '../../../types';
-import { qualifyTable } from '../../schemaChange';
+import { qualifyTable as qualifyQuoted } from '../../schemaChange';
 import { emptyKeyDraft, type DdlPlan, type DdlResult, type IndexContext, type IndexDraft, type IndexKeyDraft } from '../types';
 
 const { quoteIdent } = DIALECTS.PostgreSQL;
+const qualifyTable = (schema: string, name: string) => qualifyQuoted(schema, name, quoteIdent);
 const caps = DIALECTS.PostgreSQL.objects.indexes;
 
 const CONSTRAINT_LABEL = { primary: 'primary key', unique: 'unique', exclusion: 'exclusion' } as const;

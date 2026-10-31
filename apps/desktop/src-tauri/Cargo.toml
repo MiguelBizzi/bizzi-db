@@ -12,6 +12,7 @@ tauri-build = { version = "=2.0.4", features = [] }
 
 [dependencies]
 db-core = { path = "../../../crates/core" }
+db-mysql = { path = "../../../crates/mysql" }
 db-postgres = { path = "../../../crates/postgres" }
 db-storage = { path = "../../../crates/storage" }
 serde.workspace = true

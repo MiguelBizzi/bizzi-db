@@ -56,7 +56,6 @@ const JsonModalBody: React.FC<JsonModalProps> = ({
   return (
     <Modal>
       <ModalPanel className="w-full max-w-xl bg-popover border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col text-popover-foreground">
-        {/* Header */}
         <div className="px-4 py-3 border-b border-border flex items-center justify-between bg-background/60">
           <div className="flex items-center gap-2">
             <Code className="w-4 h-4 text-primary" />
@@ -72,7 +71,6 @@ const JsonModalBody: React.FC<JsonModalProps> = ({
           </button>
         </div>
 
-        {/* Textarea Code Body */}
         <div className="p-4 space-y-3">
           {error && (
             <div className="field-message p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2 font-mono">
@@ -93,7 +91,6 @@ const JsonModalBody: React.FC<JsonModalProps> = ({
           />
         </div>
 
-        {/* Footer */}
         <div className="px-4 py-3 border-t border-border bg-background/60 flex items-center justify-between">
           <button
             onClick={handleCopy}

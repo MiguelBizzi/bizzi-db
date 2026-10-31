@@ -7,7 +7,7 @@
 
 <h1 align="center">Bizzi DB</h1>
 
-<p align="center"><strong>PostgreSQL, native and fast.</strong><br>A private desktop workspace for browsing data, designing schemas, and running SQL.</p>
+<p align="center"><strong>PostgreSQL and MySQL, native and fast.</strong><br>A private desktop workspace for browsing data, designing schemas, and running SQL.</p>
 
 <p align="center">
   <a href="https://github.com/MiguelBizzi/bizzi-db/releases/latest"><strong>Download</strong></a> ·
@@ -25,7 +25,7 @@
   <a href="https://github.com/MiguelBizzi/bizzi-db/actions/workflows/test.yml"><img src="https://github.com/MiguelBizzi/bizzi-db/actions/workflows/test.yml/badge.svg?branch=main" alt="Test status"></a>
 </p>
 
-Bizzi DB is a PostgreSQL client written with [Tauri](https://tauri.app), React, and Rust. It runs natively on macOS, Windows, and Linux, keeps your connections and passwords local, and starts quickly without a browser engine behind it. There is no account to create and no cloud service in between.
+Bizzi DB is a PostgreSQL and MySQL client written with [Tauri](https://tauri.app), React, and Rust. It runs natively on macOS, Windows, and Linux, keeps your connections and passwords local, and starts quickly without a browser engine behind it. There is no account to create and no cloud service in between.
 
 <!-- Add a screenshot at assets/brand/png/app-screenshot.png and uncomment:
 ![Bizzi DB showing a table grid, schema diagram, and SQL editor](assets/brand/png/app-screenshot.png)
@@ -60,7 +60,7 @@ The first install is always manual. After that, Bizzi DB updates itself from the
 
 ## Start querying
 
-1. Open Bizzi DB and add a connection with the host, port, database, and user for your PostgreSQL server. Turn on SSL for remote servers.
+1. Open Bizzi DB and add a connection. Pick PostgreSQL or MySQL, then the host, port, database, and user. The database can be left blank for MySQL; it only sets the default schema. Turn on SSL for remote servers.
 2. Pick a table in the sidebar to browse its data, or open the SQL editor to write a query.
 3. Review pending changes before you apply them.
 
@@ -88,7 +88,7 @@ Then, on any platform:
 
 ```sh
 bun install
-bun run db:up   # local PostgreSQL on 127.0.0.1:5433 (user postgres, password postgres)
+bun run db:up   # Postgres on 127.0.0.1:5433 (postgres/postgres) and MySQL 8.4 on 127.0.0.1:3307 (root/mysql)
 bun run dev     # launch the desktop app
 ```
 

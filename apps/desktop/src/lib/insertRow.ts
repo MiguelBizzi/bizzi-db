@@ -1,7 +1,5 @@
-import { DIALECTS } from '@db/database';
-import type { ColumnDefinition, TableSchema } from '../types';
-
-const quoteIdent = DIALECTS.PostgreSQL.quoteIdent;
+import type { ColumnDefinition, DatabaseDialect, TableSchema } from '../types';
+import { ident, moduleFor, qualify, stringLiteral } from './dialectQuote';
 
 export type InsertFieldMode = 'default' | 'null' | 'now' | 'value';
 
@@ -167,22 +165,18 @@ export function assignmentFromField(
   }
 }
 
-function qualifyTable(schema: string, name: string): string {
-  return schema ? `${quoteIdent(schema)}.${quoteIdent(name)}` : quoteIdent(name);
-}
-
-function sqlLiteral(value: unknown): string {
+function sqlLiteral(dialect: DatabaseDialect, value: unknown): string {
   if (value === null || value === undefined) return 'NULL';
-  if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
+  if (typeof value === 'boolean') return moduleFor(dialect).booleanLiteral(value);
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   if (typeof value === 'bigint') return String(value);
   if (typeof value === 'object') {
-    return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+    return moduleFor(dialect).quoteLiteral(JSON.stringify(value));
   }
-  return `'${String(value).replace(/'/g, "''")}'`;
+  return stringLiteral(dialect, String(value));
 }
 
-function formatAssignment(value: InsertSqlValue): string | null {
+function formatAssignment(dialect: DatabaseDialect, value: InsertSqlValue): string | null {
   switch (value.kind) {
     case 'omit':
       return null;
@@ -191,26 +185,27 @@ function formatAssignment(value: InsertSqlValue): string | null {
     case 'expr':
       return value.sql;
     case 'literal':
-      return sqlLiteral(value.value);
+      return sqlLiteral(dialect, value.value);
   }
 }
 
 export function buildInsertSql(
   table: TableSchema,
-  fields: Record<string, InsertFieldState>
+  fields: Record<string, InsertFieldState>,
+  dialect: DatabaseDialect = 'PostgreSQL',
 ): string {
-  const qualified = qualifyTable(table.schema, table.name);
+  const qualified = qualify(dialect, table.schema, table.name);
   const included: { column: string; sql: string }[] = [];
   for (const column of table.columns) {
     const field = fields[column.name] ?? initialFieldState(column);
-    const formatted = formatAssignment(assignmentFromField(column, field));
+    const formatted = formatAssignment(dialect, assignmentFromField(column, field));
     if (formatted === null) continue;
     included.push({ column: column.name, sql: formatted });
   }
   if (included.length === 0) {
-    return `INSERT INTO ${qualified} DEFAULT VALUES;`;
+    return `INSERT INTO ${qualified} ${moduleFor(dialect).emptyInsert};`;
   }
-  const cols = included.map((entry) => quoteIdent(entry.column)).join(', ');
+  const cols = included.map((entry) => ident(dialect, entry.column)).join(', ');
   const vals = included.map((entry) => entry.sql).join(', ');
   return `INSERT INTO ${qualified} (${cols}) VALUES (${vals});`;
 }

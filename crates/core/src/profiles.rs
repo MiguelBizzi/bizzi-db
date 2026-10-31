@@ -1,9 +1,34 @@
 use crate::adapter::{ConnectConfig, SshTunnelAuth, SshTunnelConfig};
-use crate::sql::classify_sql;
+use crate::sql::SqlDialect;
 use crate::types::{
-    ActivityLogItem, ConnectionProfile, ConnectionStatus, DatabaseSchema, HistoryStatus,
-    QueryExecutionResult, SaveConnectionInput, SshAuthMethod,
+    ActivityLogItem, ConnectionProfile, ConnectionStatus, DatabaseDialect, DatabaseSchema,
+    HistoryStatus, QueryExecutionResult, SaveConnectionInput, SshAuthMethod,
 };
+
+pub fn dialect_label(dialect: DatabaseDialect) -> &'static str {
+    match dialect {
+        DatabaseDialect::PostgreSQL => "PostgreSQL",
+        DatabaseDialect::MySQL => "MySQL",
+        DatabaseDialect::SQLite => "SQLite",
+        DatabaseDialect::ClickHouse => "ClickHouse",
+        DatabaseDialect::DuckDB => "DuckDB",
+    }
+}
+
+/// Engines with a registered adapter. The enum stays wider so an old profile
+/// still loads; saving or connecting one of the others is refused.
+pub fn dialect_is_supported(dialect: DatabaseDialect) -> bool {
+    matches!(
+        dialect,
+        DatabaseDialect::PostgreSQL | DatabaseDialect::MySQL
+    )
+}
+
+/// MySQL treats the database field as an optional default schema and lists
+/// every user database on the server. Other engines need a database name.
+pub fn database_required(dialect: DatabaseDialect) -> bool {
+    !matches!(dialect, DatabaseDialect::MySQL)
+}
 
 pub const MIN_POOL_SIZE: u32 = 1;
 pub const MAX_POOL_SIZE: u32 = 32;
@@ -30,7 +55,10 @@ pub fn validate_save_input(
     if input.port == 0 {
         return Err("Port must be between 1 and 65535".into());
     }
-    if input.database.trim().is_empty() {
+    if !dialect_is_supported(input.dialect) {
+        return Err(format!("{} is not supported", dialect_label(input.dialect)));
+    }
+    if database_required(input.dialect) && input.database.trim().is_empty() {
         return Err("Database is required".into());
     }
     if input.user.trim().is_empty() {
@@ -179,6 +207,7 @@ pub fn connect_config_from_profile(
     tunnel_port: Option<u16>,
 ) -> ConnectConfig {
     ConnectConfig {
+        dialect: profile.dialect,
         host: if tunnel_port.is_some() {
             "127.0.0.1".into()
         } else {
@@ -266,13 +295,14 @@ pub fn history_item_from_result(
     id: String,
     profile: &ConnectionProfile,
     result: &QueryExecutionResult,
+    dialect: &dyn SqlDialect,
 ) -> ActivityLogItem {
     ActivityLogItem {
         id,
         timestamp: result.timestamp.clone(),
         database_name: profile.name.clone(),
         query: result.query.clone(),
-        query_type: classify_sql(&result.query).into(),
+        query_type: dialect.classify(&result.query).into(),
         execution_time_ms: result.execution_time_ms,
         rows_affected: result.affected_rows.unwrap_or(0),
         status: if result.error.is_some() {
@@ -407,6 +437,19 @@ mod tests {
             validate_save_input(&missing_user, false).unwrap_err(),
             "Username is required"
         );
+
+        let mut sqlite = ok.clone();
+        sqlite.dialect = DatabaseDialect::SQLite;
+        assert_eq!(
+            validate_save_input(&sqlite, false).unwrap_err(),
+            "SQLite is not supported"
+        );
+
+        let mut mysql = ok.clone();
+        mysql.dialect = DatabaseDialect::MySQL;
+        mysql.database.clear();
+        mysql.port = 3306;
+        assert!(validate_save_input(&mysql, false).is_ok());
     }
 
     #[test]
@@ -496,6 +539,7 @@ mod tests {
         let direct = connect_config_from_profile(&profile, "secret".into(), None);
         assert_eq!(direct.host, "db.example.com");
         assert_eq!(direct.port, 5432);
+        assert_eq!(direct.dialect, DatabaseDialect::PostgreSQL);
         assert_eq!(direct.ssl_mode, crate::types::SslMode::Disabled);
 
         let tunneled = connect_config_from_profile(&profile, "secret".into(), Some(61_001));
@@ -553,6 +597,7 @@ mod tests {
                 page_offset: None,
                 total_rows: None,
             },
+            &crate::sql::PostgresSql,
         );
         assert_eq!(ok.query_type, HistoryQueryType::Insert);
         assert_eq!(ok.status, HistoryStatus::Success);
@@ -574,6 +619,7 @@ mod tests {
                 page_offset: None,
                 total_rows: None,
             },
+            &crate::sql::PostgresSql,
         );
         assert_eq!(err.status, HistoryStatus::Error);
         assert_eq!(err.error_message.as_deref(), Some("boom"));

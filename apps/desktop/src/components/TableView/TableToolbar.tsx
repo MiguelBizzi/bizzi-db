@@ -1,6 +1,7 @@
 import React, { useMemo, useState, type Ref, type RefObject } from 'react';
 import { Check, Filter, Plus, Trash2, Search, RefreshCw, X } from 'lucide-react';
-import { TableSchema, FilterClause } from '../../types';
+import { dialectModule } from '@db/database';
+import { TableSchema, FilterClause, type DatabaseDialect } from '../../types';
 import { Select, SelectOption } from '../ui/Select';
 import { Checkbox } from '../ui/Checkbox';
 import { DataExportMenu } from '../DataExport/DataExportMenu';
@@ -19,6 +20,7 @@ const REFRESH_SHORTCUT = shortcutLabel('conn.refreshTable');
 
 interface TableToolbarProps {
   table: TableSchema;
+  dialect?: DatabaseDialect;
   searchTerm: string;
   onSearchChange: (val: string) => void;
   filters: FilterClause[];
@@ -51,6 +53,7 @@ interface TableToolbarProps {
 
 export const TableToolbar: React.FC<TableToolbarProps> = ({
   table,
+  dialect = 'PostgreSQL',
   searchTerm,
   onSearchChange,
   filters,
@@ -138,7 +141,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
     { value: '>=', label: '>=' },
     { value: '<=', label: '<=' },
     { value: 'LIKE', label: 'LIKE' },
-    { value: 'ILIKE', label: 'ILIKE' },
+    { value: 'ILIKE', label: dialectModule(dialect)?.capabilities.ilike === false ? 'LIKE' : 'ILIKE' },
     { value: 'IN', label: 'IN' },
     { value: 'IS NULL', label: 'IS NULL' },
     { value: 'IS NOT NULL', label: 'IS NOT NULL' },
@@ -146,13 +149,10 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
 
   return (
     <div className="bg-card border-b border-border p-2.5 flex flex-col gap-2 shrink-0">
-      {/* Top Main Bar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        {/* Left Tools */}
         <div className="flex items-center gap-2 flex-wrap">
           {leading}
 
-          {/* Quick Search */}
           {!isQuery && (
           <div className="relative">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-muted-foreground" />
@@ -166,7 +166,6 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
           </div>
           )}
 
-          {/* Filter Builder Toggle — first open adds a default condition */}
           {!isQuery && (
           <button
             type="button"
@@ -189,7 +188,6 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
             disabled={isLoading}
           />
 
-          {/* Insert Row */}
           <button
             onClick={onInsertRow}
             disabled={insertBlocked}
@@ -200,7 +198,6 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
             <span>Add Row</span>
           </button>
 
-          {/* Delete Selected Rows */}
           {selectedRowsCount > 0 && (
             <button
               onClick={onDeleteSelectedRows}
@@ -212,7 +209,6 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
           )}
         </div>
 
-        {/* Right Tools: Refresh & Export */}
         <div className="flex items-center gap-2">
           {trailing}
           <button

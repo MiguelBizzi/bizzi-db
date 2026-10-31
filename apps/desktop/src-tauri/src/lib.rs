@@ -8,15 +8,18 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use db_core::{
-    connect_config_from_profile, history_item_from_result, new_connection_requires_password,
-    overlay_schema, profile_from_save_input, resolve_connection_password, schema_cache_is_fresh,
-    ssh_secret_key, ssh_tunnel_from_profile, ssh_tunnel_from_save, validate_folder_name,
-    validate_save_input, ActivityLogItem, Adapter, AppSettings, ConnectionFolder,
-    ConnectionProfile, ConnectionStatus, DatabaseSchema, ExecuteQueryRequest, QueryExecuteResponse,
-    QueryExecutionResult, QueryPageRequest, RoutineSource, RoutineSourceRequest,
-    SaveConnectionInput, SaveFolderInput, SavedQuery, SchemaSyncRequest, SchemaSyncResponse,
-    Session, SqlRange, SshAuthMethod, TablePreviewRequest, TestConnectionResult, WorkspaceState,
+    connect_config_from_profile, dialect_label, history_item_from_result,
+    new_connection_requires_password, overlay_schema, profile_from_save_input,
+    resolve_connection_password, schema_cache_is_fresh, ssh_secret_key, ssh_tunnel_from_profile,
+    ssh_tunnel_from_save, validate_folder_name, validate_save_input, ActivityLogItem, Adapter,
+    AppSettings, ConnectionFolder, ConnectionProfile, ConnectionStatus, DatabaseDialect,
+    DatabaseSchema, ExecuteQueryRequest, PostgresSql, QueryExecuteResponse, QueryExecutionResult,
+    QueryPageRequest, RoutineSource, RoutineSourceRequest, SaveConnectionInput, SaveFolderInput,
+    SavedQuery, SchemaSyncRequest, SchemaSyncResponse, Session, SqlDialect, SqlRange,
+    SshAuthMethod, TablePreviewRequest, TestConnectionResult, WorkspaceState,
 };
+use db_mysql::MySqlSql;
+use db_mysql::MysqlAdapter;
 use db_postgres::PostgresAdapter;
 use db_storage::{
     keychain_unavailable_message, DualSecretStore, FileSecrets, KeychainSecrets, Storage,
@@ -37,6 +40,25 @@ pub struct AppState {
 
 fn map_err(err: impl std::fmt::Display) -> String {
     err.to_string()
+}
+
+static POSTGRES_ADAPTER: PostgresAdapter = PostgresAdapter;
+static MYSQL_ADAPTER: MysqlAdapter = MysqlAdapter;
+static MYSQL_SQL: MySqlSql = MySqlSql;
+
+fn adapter_for(dialect: DatabaseDialect) -> Result<&'static dyn Adapter, String> {
+    match dialect {
+        DatabaseDialect::PostgreSQL => Ok(&POSTGRES_ADAPTER),
+        DatabaseDialect::MySQL => Ok(&MYSQL_ADAPTER),
+        other => Err(format!("{} is not supported", dialect_label(other))),
+    }
+}
+
+fn sql_dialect_for(dialect: DatabaseDialect) -> &'static dyn SqlDialect {
+    match dialect {
+        DatabaseDialect::MySQL => &MYSQL_SQL,
+        _ => &PostgresSql,
+    }
 }
 
 fn keychain_enabled(state: &AppState) -> Result<bool, String> {
@@ -252,7 +274,7 @@ async fn connections_test(
         None => None,
     };
     let profile = profile_from_input(input);
-    let adapter = PostgresAdapter;
+    let adapter = adapter_for(profile.dialect)?;
     let cfg = connect_config_from_profile(
         &profile,
         password,
@@ -302,7 +324,7 @@ async fn connections_connect(
         ),
         None => None,
     };
-    let adapter = PostgresAdapter;
+    let adapter = adapter_for(profile.dialect)?;
     let session = adapter
         .connect(&connect_config_from_profile(
             &profile,
@@ -426,8 +448,25 @@ async fn query_page(
 }
 
 #[tauri::command]
-fn sql_statement_ranges(sql: String) -> Vec<SqlRange> {
-    db_core::split_sql_ranges(&sql)
+fn sql_statement_ranges(
+    state: State<'_, AppState>,
+    sql: String,
+    connection_id: Option<String>,
+) -> Result<Vec<SqlRange>, String> {
+    let dialect = match connection_id {
+        Some(id) => {
+            state
+                .storage
+                .lock()
+                .map_err(map_err)?
+                .get_connection(&id)
+                .map_err(map_err)?
+                .ok_or_else(|| "Connection not found".to_string())?
+                .dialect
+        }
+        None => DatabaseDialect::PostgreSQL,
+    };
+    Ok(sql_dialect_for(dialect).split_ranges(&sql))
 }
 
 fn record_history(
@@ -435,7 +474,12 @@ fn record_history(
     profile: &ConnectionProfile,
     result: &QueryExecutionResult,
 ) -> Result<(), String> {
-    let item = history_item_from_result(format!("log_{}", Uuid::new_v4()), profile, result);
+    let item = history_item_from_result(
+        format!("log_{}", Uuid::new_v4()),
+        profile,
+        result,
+        sql_dialect_for(profile.dialect),
+    );
     state
         .storage
         .lock()

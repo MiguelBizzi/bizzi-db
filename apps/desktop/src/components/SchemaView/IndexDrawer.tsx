@@ -684,8 +684,8 @@ const IndexDrawerBody: React.FC<IndexDrawerProps> = ({
                 <CheckRow
                   checked={draft.concurrently}
                   disabled={busy}
-                  label="CONCURRENTLY"
-                  hint="Build without blocking writes. Slower, and runs outside a transaction."
+                  label={caps.onlineBuildLabel ?? "CONCURRENTLY"}
+                  hint={caps.onlineBuildHint ?? "Build without blocking writes. Slower, and runs outside a transaction."}
                   onChange={(concurrently) => update({ concurrently })}
                 />
               )}
