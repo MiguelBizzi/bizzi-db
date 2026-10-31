@@ -5,6 +5,27 @@ export const UPCOMING: UpcomingEntry | null = null;
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.27",
+    "date": "2026-10-31",
+    "releases": 1,
+    "title": "MySQL",
+    "summary": "Bizzi DB now connects to MySQL as well as PostgreSQL.",
+    "changes": [
+      {
+        "kind": "new",
+        "text": "Connect to MySQL 8. Browse databases, tables, views, routines and indexes, run SQL, and change the schema the same way you do for PostgreSQL."
+      },
+      {
+        "kind": "new",
+        "text": "Leave the database blank to list every user database, or paste a `mysql://` or `jdbc:mysql://` address to fill the connection form."
+      },
+      {
+        "kind": "new",
+        "text": "Generated columns stay read-only. Saving a column, foreign key, view or routine keeps comments, fractional seconds, ON UPDATE, check options, and the original routine if the new definition does not apply."
+      }
+    ]
+  },
+  {
     "version": "0.1.26",
     "date": "2026-10-27",
     "releases": 1,
