@@ -37,7 +37,6 @@ export const DatabaseMetrics: React.FC<DatabaseMetricsProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full bg-background overflow-y-auto p-6 font-sans text-foreground space-y-6 select-none">
-      {/* Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
         <div>
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
@@ -59,7 +58,6 @@ export const DatabaseMetrics: React.FC<DatabaseMetricsProps> = ({
         </div>
       </div>
 
-      {/* Metric Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 font-mono">
         <div className="p-4 rounded-2xl bg-card border border-border space-y-1">
           <div className="text-xs text-muted-foreground flex items-center justify-between">
@@ -110,9 +108,7 @@ export const DatabaseMetrics: React.FC<DatabaseMetricsProps> = ({
         </div>
       </div>
 
-      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-mono text-xs">
-        {/* QPS Line Chart */}
         <div className="lg:col-span-3 p-4 rounded-2xl bg-card border border-border space-y-3">
           <div className="font-bold text-foreground flex items-center justify-between">
             <span>Queries Per Second & Latency Trend</span>

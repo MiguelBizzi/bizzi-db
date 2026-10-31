@@ -93,7 +93,6 @@ function GridRowImpl({
         isPendingDelete ? "bg-rose-500/10" : isSelected ? "bg-primary/10" : ""
       }`}
     >
-      {/* Select Checkbox */}
       {!readOnly && (
         <td
           style={ROW_STYLE}
@@ -109,7 +108,6 @@ function GridRowImpl({
 
       {leftSpan > 0 && <td colSpan={leftSpan} className={SPACER_CELL} />}
 
-      {/* Cells */}
       {columns.slice(colStart, colEnd).map((col) => {
         const rawVal = row[col.name];
         const pendingUpd = rowPending?.[col.name];
@@ -163,7 +161,6 @@ function GridRowImpl({
                   : "text-foreground"
             }`}
           >
-            {/* Cell Contents */}
             {isEditing && enumOptions.length > 0 ? (
               <>
                 <span className="invisible px-3 py-2 pointer-events-none">
@@ -256,7 +253,6 @@ function GridRowImpl({
               </span>
             )}
 
-            {/* Pending Edit Badge indicator */}
             {isPending && (
               <span
                 title={`Original: ${pendingUpd.oldValue}`}

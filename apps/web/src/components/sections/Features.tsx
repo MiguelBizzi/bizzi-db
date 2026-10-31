@@ -74,8 +74,8 @@ export function Features() {
               The workspace you actually get
             </h2>
             <p className="mt-4 text-sm text-muted-foreground leading-relaxed">
-              SQL, tables, schema, and connections — Postgres only, running on
-              your machine.
+              SQL, tables, schema, and connections — for PostgreSQL and MySQL,
+              running on your machine.
             </p>
           </div>
 

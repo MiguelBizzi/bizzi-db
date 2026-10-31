@@ -9,7 +9,7 @@ export function Pillars() {
             Core design
           </span>
           <h2 className="mt-3 text-3xl sm:text-5xl font-extrabold text-foreground tracking-tight leading-[1.1]">
-            Built as a native Postgres tool
+            Built as a native database tool
           </h2>
           <p className="mt-4 text-base text-muted-foreground leading-relaxed">
             Rust for the session. Tauri for the window. The UI stays out of the

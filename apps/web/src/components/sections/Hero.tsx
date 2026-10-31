@@ -23,20 +23,20 @@ export function Hero() {
             {PRODUCT_NAME} v{version}
           </span>
           <span>—</span>
-          <span>Postgres · Rust · Tauri 2</span>
+          <span>Postgres · MySQL · Rust · Tauri 2</span>
         </div>
 
         <div className="space-y-4 max-w-4xl mx-auto">
           <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-foreground leading-[1.08]">
             A Modern, Minimal <br className="hidden sm:inline" />
             <span className="bg-gradient-to-r from-primary to-primary/50 bg-clip-text text-transparent">
-              Postgres Client Built for Speed.
+              Database Client Built for Speed.
             </span>
           </h1>
 
           <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            A calm, distraction-free workspace for PostgreSQL. Rust runs the
-            session. Tauri keeps the shell light — fast to open, fast to query.
+            A calm, distraction-free workspace for PostgreSQL and MySQL. Rust runs
+            the session. Tauri keeps the shell light — fast to open, fast to query.
           </p>
         </div>
 

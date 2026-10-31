@@ -149,13 +149,10 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
 
   return (
     <div className="bg-card border-b border-border p-2.5 flex flex-col gap-2 shrink-0">
-      {/* Top Main Bar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        {/* Left Tools */}
         <div className="flex items-center gap-2 flex-wrap">
           {leading}
 
-          {/* Quick Search */}
           {!isQuery && (
           <div className="relative">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-muted-foreground" />
@@ -169,7 +166,6 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
           </div>
           )}
 
-          {/* Filter Builder Toggle — first open adds a default condition */}
           {!isQuery && (
           <button
             type="button"
@@ -192,7 +188,6 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
             disabled={isLoading}
           />
 
-          {/* Insert Row */}
           <button
             onClick={onInsertRow}
             disabled={insertBlocked}
@@ -203,7 +198,6 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
             <span>Add Row</span>
           </button>
 
-          {/* Delete Selected Rows */}
           {selectedRowsCount > 0 && (
             <button
               onClick={onDeleteSelectedRows}
@@ -215,7 +209,6 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
           )}
         </div>
 
-        {/* Right Tools: Refresh & Export */}
         <div className="flex items-center gap-2">
           {trailing}
           <button

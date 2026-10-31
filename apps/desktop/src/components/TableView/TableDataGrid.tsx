@@ -337,7 +337,6 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
 
-  // Sort toggle handler
   const handleSortToggle = (colName: string) => {
     if (loading) return;
     if (sort?.column === colName) {
@@ -351,7 +350,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     }
   };
 
-  // Filter & Search processing. Memoised: scrolling re-renders this component.
+  // Scrolling re-renders this component, so the filtered rows stay memoised.
   const filteredRows = useMemo(
     () => applyTableView(rows, { searchTerm, sort }),
     [rows, searchTerm, sort],
@@ -466,7 +465,6 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     setPage(1);
   };
 
-  // Checkbox row select all
   const allSelected =
     filteredRows.length > 0 &&
     filteredRows.every((r) => selectedPkSet.has(r[pkCol]));
@@ -579,7 +577,6 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     scopeRef.current?.setContext({ modalOpen: overlayOpen });
   }, [overlayOpen]);
 
-  // Inline edit submit
   const handleCellEditSubmit = (
     rowPk: any,
     colName: string,
@@ -768,7 +765,6 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
       onFocus={() => scopeRef.current?.claim()}
       onMouseDownCapture={() => scopeRef.current?.claim()}
     >
-      {/* Toolbar */}
       <TableToolbar
         table={table}
         dialect={dialect}
@@ -804,7 +800,6 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
         exportTriggerRef={exportRef}
       />
 
-      {/* Spreadsheet Grid Canvas */}
       <div
         ref={portRef}
         className="flex-1 table-scroll-port"
@@ -822,10 +817,8 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
               <col key={col.name} style={{ width: columnWidths[i] }} />
             ))}
           </colgroup>
-          {/* Header */}
           <thead>
             <tr>
-              {/* Checkbox column */}
               {!readOnly && (
                 <th className="w-10 px-3 py-2 text-center border-r border-b border-border bg-card">
                   <Checkbox
@@ -838,7 +831,6 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
 
               {leftSpan > 0 && <th colSpan={leftSpan} className={HEADER_SPACER} />}
 
-              {/* Data Columns (only those near the viewport are mounted) */}
               {windowColumns.map((col) => {
                 const isSorted = sort?.column === col.name;
                 return (
@@ -871,7 +863,6 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
                         )}
                       </div>
 
-                      {/* Sort Icon */}
                       <div className="text-muted-foreground shrink-0">
                         {isSorted ? (
                           sort?.direction === "ASC" ? (
@@ -892,7 +883,6 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
             </tr>
           </thead>
 
-          {/* Body */}
           <tbody className="divide-y divide-border bg-background">
             {loading ? (
               <TableSkeletonRows
@@ -1010,7 +1000,6 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
         </div>
       )}
 
-      {/* Grid Bottom Footer: pagination */}
       {paged && (
       <div className="px-3 py-1.5 bg-card border-t border-border text-xs font-mono text-muted-foreground flex items-center justify-between gap-3 shrink-0">
         <div className="min-w-0 truncate">
@@ -1134,7 +1123,6 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
       )}
       </AnimatePresence>
 
-      {/* JSON Inspector Modal */}
       <JsonModal
         isOpen={jsonModalState.isOpen}
         columnName={jsonModalState.columnName}

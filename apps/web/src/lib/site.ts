@@ -11,9 +11,9 @@ export const LATEST_RELEASE_API =
 export const SUPPORT_URL = 'https://buymeacoffee.com/miguelbizzi';
 
 export const SITE_TITLE =
-  'Bizzi DB — Native Postgres client, built with Rust and Tauri';
+  'Bizzi DB — Native PostgreSQL & MySQL client, built with Rust and Tauri';
 export const SITE_DESCRIPTION =
-  'A local-first PostgreSQL desktop client. Connections, queries, and SSH run in Rust. The UI is Tauri 2 — a system WebView, not Electron.';
+  'A local-first PostgreSQL and MySQL desktop client. Connections, queries, and SSH run in Rust. The UI is Tauri 2 — a system WebView, not Electron.';
 
 export type DownloadPlatformId = 'macos' | 'windows' | 'linux';
 

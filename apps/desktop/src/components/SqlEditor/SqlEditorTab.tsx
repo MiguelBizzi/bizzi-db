@@ -223,14 +223,12 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
       : readResultsFraction(localStorage)
   );
 
-  // Save Modal state
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [saveTitle, setSaveTitle] = useState('');
   const [saveDescription, setSaveDescription] = useState('');
   const [saveTags, setSaveTags] = useState<string[]>(['Analytics']);
   const [newTagInput, setNewTagInput] = useState('');
 
-  // Saved Queries Panel search & tag filter
   const [savedSearchTerm, setSavedSearchTerm] = useState('');
   const [selectedFilterTag, setSelectedFilterTag] = useState<string>('ALL');
   const [inlineNewTagQueryId, setInlineNewTagQueryId] = useState<string | null>(null);
@@ -373,7 +371,7 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
       });
       setSql(formatted);
     } catch {
-      // Fallback formatting if syntax incomplete
+      // Incomplete SQL makes the formatter throw; leave the text as typed.
     }
   };
 
@@ -430,12 +428,10 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
     }
   };
 
-  // Collect all unique tags from savedQueries
   const allUniqueTags = Array.from(
     new Set(savedQueries.flatMap((sq) => sq.tags || []))
   );
 
-  // Filtered saved queries
   const filteredSavedQueries = savedQueries.filter((sq) => {
     const matchesSearch =
       sq.title.toLowerCase().includes(savedSearchTerm.toLowerCase()) ||
@@ -454,11 +450,8 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
       onFocus={() => scopeRef.current?.claim()}
       onMouseDownCapture={() => scopeRef.current?.claim()}
     >
-      {/* Main Editor & Results Pane Column */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Editor Action Header Bar */}
         <div className="p-2.5 bg-card border-b border-border flex flex-wrap items-center justify-between gap-2 shrink-0 font-mono text-xs">
-          {/* Left Action Buttons */}
           <div className="flex items-center gap-2">
             <div ref={runMenuRef} className="relative flex items-stretch">
               <button
@@ -537,7 +530,6 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
           </div>
         </div>
 
-        {/* Saved Queries Overlay Drawer / Panel */}
         {showSavedQueries && (
           <div className="p-4 bg-popover border-b border-border space-y-3 max-h-72 overflow-y-auto font-sans shadow-inner shrink-0 text-popover-foreground">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -549,7 +541,6 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
                 </span>
               </div>
 
-              {/* Search input */}
               <div className="relative">
                 <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-muted-foreground" />
                 <input
@@ -562,7 +553,6 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
               </div>
             </div>
 
-            {/* Tag Filter Chips */}
             {allUniqueTags.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5 pt-1">
                 <span className="text-[10px] font-mono text-muted-foreground mr-1 flex items-center gap-1">
@@ -594,7 +584,6 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
               </div>
             )}
 
-            {/* Saved Queries Grid List */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
               {filteredSavedQueries.map((sq) => (
                 <div
@@ -643,7 +632,6 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
                     </div>
                   </div>
 
-                  {/* Tags Row */}
                   <div className="flex flex-wrap items-center gap-1 pt-1 border-t border-border">
                     {(sq.tags || []).map((t) => (
                       <span
@@ -661,7 +649,6 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
                       </span>
                     ))}
 
-                    {/* Add Tag Inline Button */}
                     {inlineNewTagQueryId === sq.id ? (
                       <div className="flex items-center gap-1">
                         <input
@@ -712,7 +699,6 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
           </div>
         )}
 
-        {/* Code Area + Results */}
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <div
             className="min-h-0 bg-background overflow-hidden"
@@ -761,12 +747,10 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
         </div>
       </div>
 
-      {/* Save Query Modal */}
       <AnimatePresence>
       {isSaveModalOpen && (
         <Modal>
           <ModalPanel className="bg-popover border border-border rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden font-sans text-popover-foreground">
-            {/* Modal Header */}
             <div className="p-4 bg-background/60 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2 text-foreground font-bold text-sm font-mono">
                 <Save className="w-4 h-4 text-amber-400" />
@@ -780,7 +764,6 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
               </button>
             </div>
 
-            {/* Modal Form */}
             <form onSubmit={handleConfirmSaveQuery} className="p-5 space-y-4 text-xs">
               <div>
                 <label className="block text-muted-foreground font-medium mb-1 font-mono">
@@ -814,7 +797,6 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
                   Tags & Categories
                 </label>
 
-                {/* Suggested Tags Toggles */}
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {SUGGESTED_TAGS.map((tag) => {
                     const isSelected = saveTags.includes(tag);
@@ -835,7 +817,6 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
                   })}
                 </div>
 
-                {/* Custom Tag Input */}
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
@@ -860,7 +841,6 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
                 </div>
               </div>
 
-              {/* SQL Code Preview */}
               <div>
                 <label className="block text-muted-foreground font-medium mb-1 font-mono">
                   SQL Code Preview
@@ -870,7 +850,6 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
                 </div>
               </div>
 
-              {/* Form Buttons */}
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
                 <button
                   type="button"
