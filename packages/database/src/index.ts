@@ -63,6 +63,8 @@ export interface DialectMeta {
   emptyInsert: string;
   /** A `\x` hex payload from a binary cell, as a SQL literal. */
   byteaLiteral: (hex: string) => string;
+  /** `ON DELETE` choices. MySQL has no `SET DEFAULT`. */
+  foreignKeyActions: { value: string; label: string }[];
   defaultPresets: { label: string; sql: string }[];
   objects: ObjectCapabilities;
   capabilities: EngineCapabilities;
@@ -73,6 +75,19 @@ export type DialectModule = DialectMeta;
 function quoteSqlLiteral(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
+
+/** MySQL string literals treat `\` as an escape unless NO_BACKSLASH_ESCAPES is on. */
+function quoteMysqlLiteral(value: string): string {
+  return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`;
+}
+
+const FOREIGN_KEY_ACTIONS = [
+  { value: '', label: 'Default' },
+  { value: 'NO ACTION', label: 'NO ACTION' },
+  { value: 'RESTRICT', label: 'RESTRICT' },
+  { value: 'CASCADE', label: 'CASCADE' },
+  { value: 'SET NULL', label: 'SET NULL' },
+];
 
 function quoteSqlIdent(name: string): string {
   return `"${name.replace(/"/g, '""')}"`;
@@ -116,6 +131,7 @@ export const DIALECTS: Record<'PostgreSQL' | 'MySQL', DialectMeta> = {
     booleanLiteral: (value) => (value ? 'TRUE' : 'FALSE'),
     emptyInsert: 'DEFAULT VALUES',
     byteaLiteral: (hex) => `'\\x${hex}'`,
+    foreignKeyActions: [...FOREIGN_KEY_ACTIONS, { value: 'SET DEFAULT', label: 'SET DEFAULT' }],
     defaultPresets: POSTGRES_PRESETS,
     objects: POSTGRES_OBJECTS,
     capabilities: {
@@ -147,10 +163,11 @@ export const DIALECTS: Record<'PostgreSQL' | 'MySQL', DialectMeta> = {
     formatterLanguage: 'mysql',
     editorDialect: 'MySQL',
     quoteIdent: quoteMysqlIdent,
-    quoteLiteral: quoteSqlLiteral,
+    quoteLiteral: quoteMysqlLiteral,
     booleanLiteral: (value) => (value ? 'TRUE' : 'FALSE'),
     emptyInsert: '() VALUES ()',
     byteaLiteral: (hex) => `X'${hex}'`,
+    foreignKeyActions: FOREIGN_KEY_ACTIONS,
     defaultPresets: MYSQL_PRESETS,
     objects: MYSQL_OBJECTS,
     capabilities: {

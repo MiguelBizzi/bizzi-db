@@ -19,5 +19,5 @@ export function qualify(dialect: DatabaseDialect, schema: string, name: string):
 export function stringLiteral(dialect: DatabaseDialect, text: string): string {
   const hex = /^\\x([0-9A-Fa-f]+)$/.exec(text);
   if (hex) return moduleFor(dialect).byteaLiteral(hex[1]);
-  return `'${text.replace(/'/g, "''")}'`;
+  return moduleFor(dialect).quoteLiteral(text);
 }

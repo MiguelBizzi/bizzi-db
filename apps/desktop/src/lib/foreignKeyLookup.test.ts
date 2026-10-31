@@ -174,6 +174,11 @@ describe('buildLookupSql', () => {
     );
   });
 
+  test('MySQL search keeps a literal percent inside the LIKE pattern', () => {
+    const sql = buildLookupSql(users, 'id', "O'Brien%", 0, 20, 'MySQL');
+    expect(sql).toContain("LOWER(CAST(`id` AS CHAR)) LIKE LOWER('%O''Brien\\\\%%')");
+  });
+
   test('ILIKE-searches label columns and escapes wildcards', () => {
     expect(buildLookupSql(users, 'id', "O'Brien%", 20)).toBe(
       `SELECT "id", "name", "email" FROM "public"."users" WHERE CAST("id" AS text) ILIKE '%O''Brien\\%%' ESCAPE '\\' OR CAST("name" AS text) ILIKE '%O''Brien\\%%' ESCAPE '\\' OR CAST("email" AS text) ILIKE '%O''Brien\\%%' ESCAPE '\\' ORDER BY "id" LIMIT 21 OFFSET 20;`

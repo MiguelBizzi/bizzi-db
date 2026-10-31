@@ -462,8 +462,8 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
             )}
             {indexes.some((index) => index.scans != null) && (
               <p className="mt-2 text-[10px] text-muted-foreground font-sans">
-                Scans count index lookups since PostgreSQL statistics were last reset, on this server
-                only.
+                Scans count index lookups since {dialectModule(dialect)?.label ?? dialect} statistics
+                were last reset, on this server only.
               </p>
             )}
           </div>

@@ -171,7 +171,7 @@ function sqlLiteral(dialect: DatabaseDialect, value: unknown): string {
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   if (typeof value === 'bigint') return String(value);
   if (typeof value === 'object') {
-    return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+    return moduleFor(dialect).quoteLiteral(JSON.stringify(value));
   }
   return stringLiteral(dialect, String(value));
 }

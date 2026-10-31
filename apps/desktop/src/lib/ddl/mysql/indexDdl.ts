@@ -183,11 +183,12 @@ export function planIndexChange(original: IndexDefinition, draft: IndexDraft, ct
   };
 }
 
-export function dropIndex(index: IndexDefinition, table: TableSchema, _opts: { concurrently: boolean }): DdlResult {
+export function dropIndex(index: IndexDefinition, table: TableSchema, opts: { concurrently: boolean }): DdlResult {
   const qualified = qualify(table.schema, table.name);
+  const online = opts.concurrently && !index.isPrimary ? ' ALGORITHM=INPLACE, LOCK=NONE' : '';
   const sql = index.isPrimary
     ? `ALTER TABLE ${qualified} DROP PRIMARY KEY;`
-    : `DROP INDEX ${quoteIdent(index.name)} ON ${qualified};`;
+    : `DROP INDEX ${quoteIdent(index.name)} ON ${qualified}${online};`;
   return {
     ok: true,
     mode: 'drop',

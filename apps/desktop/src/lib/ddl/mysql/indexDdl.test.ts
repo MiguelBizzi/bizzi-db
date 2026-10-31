@@ -41,5 +41,9 @@ describe('mysql index ddl', () => {
     expect(plan.statements[0]).toContain('DROP INDEX `users_org`, ADD INDEX `users_org`');
     const dropped = dropIndex({ ...original, isPrimary: true, name: 'PRIMARY' }, table, { concurrently: false });
     expect(dropped.ok && dropped.statements[0]).toBe('ALTER TABLE `shop`.`users` DROP PRIMARY KEY;');
+    const online = dropIndex(original, table, { concurrently: true });
+    expect(online.ok && online.statements[0]).toBe(
+      'DROP INDEX `users_org` ON `shop`.`users` ALGORITHM=INPLACE, LOCK=NONE;',
+    );
   });
 });

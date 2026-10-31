@@ -20,6 +20,12 @@ BEGIN
   SET touched = ROW_COUNT();
 END$$
 
+CREATE PROCEDURE user_label(IN label VARCHAR(32))
+  READS SQL DATA
+BEGIN
+  SELECT email FROM users WHERE full_name = label;
+END$$
+
 CREATE PROCEDURE copy_name(INOUT label VARCHAR(255))
   READS SQL DATA
   SQL SECURITY INVOKER

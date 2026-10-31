@@ -1725,6 +1725,7 @@ export default function App() {
             registerMenuScope
             isFocusedPane={tab.id === activeTabId}
             table={table}
+            dialect={currentDatabase.dialect}
             rows={rows}
             pagination={
               cachedPage

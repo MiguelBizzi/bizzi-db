@@ -97,6 +97,8 @@ export interface ViewDraft {
   recreate: boolean;
   /** MySQL `WITH CHECK OPTION`. */
   checkOption?: boolean;
+  /** MySQL `SQL SECURITY`. Omitted means DEFINER, the server default. */
+  sqlSecurity?: 'DEFINER' | 'INVOKER';
 }
 
 /**

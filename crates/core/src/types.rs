@@ -76,6 +76,9 @@ pub struct ForeignKeyRef {
     pub target_schema: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub on_delete: Option<String>,
+    /// Constraint name when the engine reports one. MySQL needs it to drop the key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -98,6 +101,12 @@ pub struct ColumnDefinition {
     pub enum_values: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub foreign_key: Option<ForeignKeyRef>,
+    /// Generation expression. Present only for a generated column.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generated: Option<String>,
+    /// `ON UPDATE` expression, such as `CURRENT_TIMESTAMP(6)`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_update: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -237,6 +246,9 @@ pub struct RoutineDefinition {
     pub comment: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner: Option<String>,
+    /// MySQL data-access characteristic (`READS SQL DATA`, …).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data_access: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -275,6 +287,9 @@ pub struct TableSchema {
     pub view_sql: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub is_materialized: Option<bool>,
+    /// MySQL `SQL SECURITY` (`DEFINER` or `INVOKER`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sql_security: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

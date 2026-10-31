@@ -25,6 +25,7 @@ import {
   FilterClause,
   SortClause,
   ColumnDefinition,
+  type DatabaseDialect,
 } from "../../types";
 import { TableToolbar } from "./TableToolbar";
 import type { FilterExpressionInputHandle } from "./FilterExpressionInput";
@@ -160,6 +161,7 @@ interface TableDataGridProps {
   readOnlyReason?: string;
   /** Result columns that cannot be edited (aliases, expressions). */
   readOnlyColumns?: ReadonlySet<string>;
+  dialect?: DatabaseDialect;
   /** Table that Add Row inserts into when `table` is only a projection of it. */
   insertTable?: TableSchema;
   toolbarLeading?: React.ReactNode;
@@ -219,6 +221,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   readOnly = false,
   readOnlyReason,
   readOnlyColumns,
+  dialect = "PostgreSQL",
   insertTable,
   toolbarLeading,
   toolbarTrailing,
@@ -278,8 +281,15 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     [table.columns, hiddenColumns],
   );
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
+  const lockedColumns = useMemo(() => {
+    const names = new Set(readOnlyColumns);
+    for (const column of table.columns) {
+      if (column.generated != null) names.add(column.name);
+    }
+    return names;
+  }, [readOnlyColumns, table.columns]);
   const isCellLocked = (columnName: string) =>
-    readOnly || Boolean(readOnlyColumns?.has(columnName));
+    readOnly || lockedColumns.has(columnName);
   const dataColSpan = visibleColumns.length + (readOnly ? 0 : 1);
   const leadingWidth = readOnly ? 0 : GRID_SELECT_COLUMN_WIDTH;
   const portRef = useRef<HTMLDivElement>(null);
@@ -761,6 +771,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
       {/* Toolbar */}
       <TableToolbar
         table={table}
+        dialect={dialect}
         searchTerm={searchInput}
         onSearchChange={setSearchInput}
         filters={filters}
@@ -909,7 +920,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
                       colStart={colStart}
                       colEnd={colEnd}
                       readOnly={readOnly}
-                      readOnlyColumns={readOnlyColumns}
+                      readOnlyColumns={lockedColumns}
                       isSelected={selectedPkSet.has(rowPkVal)}
                       isPendingDelete={pendingDeletePks.has(String(rowPkVal))}
                       rowPending={pendingByRow.get(String(rowPkVal))}

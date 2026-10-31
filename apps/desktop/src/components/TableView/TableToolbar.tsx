@@ -1,6 +1,7 @@
 import React, { useMemo, useState, type Ref, type RefObject } from 'react';
 import { Check, Filter, Plus, Trash2, Search, RefreshCw, X } from 'lucide-react';
-import { TableSchema, FilterClause } from '../../types';
+import { dialectModule } from '@db/database';
+import { TableSchema, FilterClause, type DatabaseDialect } from '../../types';
 import { Select, SelectOption } from '../ui/Select';
 import { Checkbox } from '../ui/Checkbox';
 import { DataExportMenu } from '../DataExport/DataExportMenu';
@@ -19,6 +20,7 @@ const REFRESH_SHORTCUT = shortcutLabel('conn.refreshTable');
 
 interface TableToolbarProps {
   table: TableSchema;
+  dialect?: DatabaseDialect;
   searchTerm: string;
   onSearchChange: (val: string) => void;
   filters: FilterClause[];
@@ -51,6 +53,7 @@ interface TableToolbarProps {
 
 export const TableToolbar: React.FC<TableToolbarProps> = ({
   table,
+  dialect = 'PostgreSQL',
   searchTerm,
   onSearchChange,
   filters,
@@ -138,7 +141,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
     { value: '>=', label: '>=' },
     { value: '<=', label: '<=' },
     { value: 'LIKE', label: 'LIKE' },
-    { value: 'ILIKE', label: 'ILIKE' },
+    { value: 'ILIKE', label: dialectModule(dialect)?.capabilities.ilike === false ? 'LIKE' : 'ILIKE' },
     { value: 'IN', label: 'IN' },
     { value: 'IS NULL', label: 'IS NULL' },
     { value: 'IS NOT NULL', label: 'IS NOT NULL' },

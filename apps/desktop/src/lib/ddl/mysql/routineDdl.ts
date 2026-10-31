@@ -6,7 +6,10 @@ import type { DdlResult, RoutineDraft } from '../types';
 const { quoteIdent, quoteLiteral } = DIALECTS.MySQL;
 const qualify = (schema: string, name: string) => qualifyQuoted(schema, name, quoteIdent);
 const caps = DIALECTS.MySQL.objects.routines;
-const NOT_ATOMIC = 'MySQL has no CREATE OR REPLACE for routines. This drops the routine and creates it again, and the two statements are not one atomic change.';
+const NOT_ATOMIC =
+  'The new body is created under a temporary name first. If that fails, the original routine is left in place. MySQL still commits each statement immediately.';
+const BINLOG_WARNING =
+  'A binary-logged server rejects this function (errno 1418) unless it is DETERMINISTIC, or NO SQL, or READS SQL DATA.';
 
 export function emptyRoutineDraft(schema: string, kind: RoutineKind): RoutineDraft {
   return {
@@ -25,7 +28,7 @@ export function emptyRoutineDraft(schema: string, kind: RoutineKind): RoutineDra
     cost: '',
     rows: '',
     comment: '',
-    dataAccess: kind === 'function' ? 'CONTAINS SQL' : 'MODIFIES SQL DATA',
+    dataAccess: kind === 'function' ? 'READS SQL DATA' : 'MODIFIES SQL DATA',
   };
 }
 
@@ -44,7 +47,29 @@ export function routineDraftFrom(routine: RoutineDefinition, body: string): Rout
     volatility: routine.volatility === 'immutable' ? 'immutable' : 'volatile',
     securityDefiner: routine.securityDefiner,
     comment: routine.comment ?? '',
+    dataAccess: dataAccessOf(routine.dataAccess, routine.kind),
   };
+}
+
+function dataAccessOf(
+  value: string | undefined,
+  kind: RoutineDraft['kind'],
+): RoutineDraft['dataAccess'] {
+  if (
+    value === 'CONTAINS SQL' ||
+    value === 'NO SQL' ||
+    value === 'READS SQL DATA' ||
+    value === 'MODIFIES SQL DATA'
+  ) {
+    return value;
+  }
+  return kind === 'function' ? 'READS SQL DATA' : 'MODIFIES SQL DATA';
+}
+
+function binlogWarning(draft: RoutineDraft): string | undefined {
+  if (draft.kind !== 'function' || draft.volatility === 'immutable') return undefined;
+  if (draft.dataAccess === 'NO SQL' || draft.dataAccess === 'READS SQL DATA') return undefined;
+  return BINLOG_WARNING;
 }
 
 export function validateRoutine(draft: RoutineDraft): string[] {
@@ -80,8 +105,15 @@ function characteristics(draft: RoutineDraft): string {
   return parts.join('\n');
 }
 
-function createStatement(draft: RoutineDraft): string {
-  const qualified = qualify(draft.schema.trim(), draft.name.trim());
+function tempRoutineName(name: string): string {
+  const suffix = '__bnew';
+  const room = 64 - suffix.length;
+  const base = name.length > room ? name.slice(0, room) : name;
+  return `${base}${suffix}`;
+}
+
+function createStatement(draft: RoutineDraft, name = draft.name.trim()): string {
+  const qualified = qualify(draft.schema.trim(), name);
   const params = paramSql(draft);
   const header =
     draft.kind === 'function'
@@ -94,12 +126,13 @@ export function createRoutine(draft: RoutineDraft): DdlResult {
   const errors = validateRoutine(draft);
   if (errors.length > 0) return { ok: false, reason: errors[0] };
   const statement = createStatement(draft);
+  const warning = binlogWarning(draft);
   return {
     ok: true,
     mode: 'create',
     statements: [`DELIMITER $$\n${statement}$$\nDELIMITER ;`],
     transactional: false,
-    warnings: [],
+    warnings: warning ? [warning] : [],
   };
 }
 
@@ -107,14 +140,18 @@ export function planRoutineChange(original: RoutineDefinition, _body: string, dr
   const errors = validateRoutine(draft);
   if (errors.length > 0) return { ok: false, reason: errors[0] };
   const kind = original.kind === 'procedure' ? 'PROCEDURE' : 'FUNCTION';
+  const temp = tempRoutineName(original.name);
+  const probe = createStatement(draft, temp);
   const drop = `DROP ${kind} IF EXISTS ${qualify(original.schema, original.name)}`;
   const statement = createStatement(draft);
+  const dropTemp = `DROP ${kind} IF EXISTS ${qualify(original.schema, temp)}`;
+  const warning = binlogWarning(draft);
   return {
     ok: true,
     mode: 'recreate',
-    statements: [`DELIMITER $$\n${drop}$$\n${statement}$$\nDELIMITER ;`],
+    statements: [`DELIMITER $$\n${probe}$$\n${drop}$$\n${statement}$$\n${dropTemp}$$\nDELIMITER ;`],
     transactional: false,
-    warnings: [NOT_ATOMIC],
+    warnings: warning ? [NOT_ATOMIC, warning] : [NOT_ATOMIC],
   };
 }
 

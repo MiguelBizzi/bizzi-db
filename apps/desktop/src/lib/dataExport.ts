@@ -160,9 +160,9 @@ export function sqlLiteral(value: unknown, dialect: DatabaseDialect = 'PostgreSQ
   if (typeof value === 'boolean') return moduleFor(dialect).booleanLiteral(value);
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   if (typeof value === 'bigint') return String(value);
-  if (value instanceof Date) return `'${value.toISOString().replace(/'/g, "''")}'`;
+  if (value instanceof Date) return moduleFor(dialect).quoteLiteral(value.toISOString());
   if (typeof value === 'object') {
-    return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+    return moduleFor(dialect).quoteLiteral(JSON.stringify(value));
   }
   return stringLiteral(dialect, String(value));
 }

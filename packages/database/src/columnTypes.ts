@@ -20,6 +20,9 @@ export interface ColumnTypeDef {
   family: ColumnTypeFamily;
   params: ColumnTypeParams;
   defaultLength?: number;
+  /** Smallest accepted length. Defaults to 1. `0` allows an omitted fractional-seconds precision. */
+  minLength?: number;
+  maxLength?: number;
   defaultPrecision?: number;
   defaultScale?: number;
 }
@@ -104,9 +107,9 @@ const MYSQL_COLUMN_TYPES: ColumnTypeDef[] = [
   { id: 'boolean', label: 'boolean', sqlName: 'boolean', family: 'bool', params: 'none' },
   { id: 'year', label: 'year', sqlName: 'year', family: 'temporal', params: 'none' },
   { id: 'date', label: 'date', sqlName: 'date', family: 'temporal', params: 'none' },
-  { id: 'time', label: 'time', sqlName: 'time', family: 'temporal', params: 'none' },
-  { id: 'datetime', label: 'datetime', sqlName: 'datetime', family: 'temporal', params: 'none' },
-  { id: 'timestamp', label: 'timestamp', sqlName: 'timestamp', family: 'temporal', params: 'none' },
+  { id: 'time', label: 'time', sqlName: 'time', family: 'temporal', params: 'length', minLength: 0, maxLength: 6 },
+  { id: 'datetime', label: 'datetime', sqlName: 'datetime', family: 'temporal', params: 'length', minLength: 0, maxLength: 6 },
+  { id: 'timestamp', label: 'timestamp', sqlName: 'timestamp', family: 'temporal', params: 'length', minLength: 0, maxLength: 6 },
   { id: 'char', label: 'char', sqlName: 'char', family: 'text', params: 'length', defaultLength: 1 },
   { id: 'varchar', label: 'varchar', sqlName: 'varchar', family: 'text', params: 'length', defaultLength: 255 },
   { id: 'text', label: 'text', sqlName: 'text', family: 'text', params: 'none' },

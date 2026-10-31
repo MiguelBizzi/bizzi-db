@@ -21,3 +21,7 @@ CREATE VIEW active_customers AS
 CREATE VIEW labeled_users AS
   SELECT id, user_label(id) AS label
   FROM users;
+
+CREATE SQL SECURITY INVOKER VIEW invoker_users AS
+  SELECT id, email
+  FROM users;

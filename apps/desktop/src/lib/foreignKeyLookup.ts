@@ -19,8 +19,8 @@ const LABEL_HINTS = [
 ];
 
 
-function sqlLiteral(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
+function sqlLiteral(dialect: DatabaseDialect, value: string): string {
+  return moduleFor(dialect).quoteLiteral(value);
 }
 
 function ilikePattern(raw: string): string {
@@ -97,7 +97,7 @@ export function buildLookupSql(
   if (!trimmed) {
     return `SELECT ${selectList} FROM ${qualified} ORDER BY ${order} LIMIT ${fetch} OFFSET ${start};`;
   }
-  const pattern = sqlLiteral(ilikePattern(trimmed));
+  const pattern = sqlLiteral(dialect, ilikePattern(trimmed));
   const where = columns
     .map((column) => likePredicate(dialect, ident(dialect, column), pattern))
     .join(' OR ');

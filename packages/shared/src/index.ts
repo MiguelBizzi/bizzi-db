@@ -30,7 +30,13 @@ export interface ColumnDefinition {
     targetColumn: string;
     targetSchema?: string;
     onDelete?: string;
+    /** Constraint name. MySQL uses it to drop the key. */
+    name?: string;
   };
+  /** Generation expression. Present only for a generated column. */
+  generated?: string;
+  /** `ON UPDATE` expression, such as `CURRENT_TIMESTAMP(6)`. */
+  onUpdate?: string;
 }
 
 export interface IndexKey {
@@ -100,6 +106,8 @@ export interface RoutineDefinition {
   hasSqlBody: boolean;
   comment?: string;
   owner?: string;
+  /** MySQL data-access characteristic (`READS SQL DATA`, …). */
+  dataAccess?: string;
 }
 
 export interface RoutineSource {
@@ -128,6 +136,8 @@ export interface TableSchema {
   isView?: boolean;
   viewSql?: string;
   isMaterialized?: boolean;
+  /** MySQL `SQL SECURITY` (`DEFINER` or `INVOKER`). */
+  sqlSecurity?: string;
 }
 
 export interface DatabaseSchema {

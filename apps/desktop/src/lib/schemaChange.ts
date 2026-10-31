@@ -125,24 +125,26 @@ export function typeFamily(sqlType: string): ColumnTypeFamily {
     return 'text';
   }
   if (
-    /^(smallint|integer|bigint|smallserial|serial|bigserial)$/.test(base)
+    /^(tinyint|smallint|mediumint|int|integer|bigint|smallserial|serial|bigserial)$/.test(base)
   ) {
     return 'integer';
   }
-  if (/^(numeric|decimal|real|double precision|float|money)$/.test(base)) {
+  if (/^(numeric|decimal|real|double precision|double|float|float4|float8|money)$/.test(base)) {
     return 'decimal';
   }
   if (base === 'boolean') return 'bool';
   if (base === 'uuid') return 'uuid';
   if (base === 'json' || base === 'jsonb') return 'json';
   if (
-    /^(date|time|timetz|timestamp|timestamptz|interval)$/.test(base) ||
+    /^(date|time|timetz|timestamp|timestamptz|datetime|year|interval)$/.test(base) ||
     base.startsWith('timestamp') ||
     base.startsWith('time')
   ) {
     return 'temporal';
   }
-  if (base === 'bytea') return 'binary';
+  if (base === 'bytea' || base === 'blob' || base === 'binary' || base === 'varbinary') {
+    return 'binary';
+  }
   return 'other';
 }
 
@@ -166,7 +168,8 @@ export function formatColumnType(draft: ColumnDraft, types: ColumnTypeDef[]): st
     return (draft.customType ?? '').trim();
   }
   if (def.params === 'length') {
-    const length = draft.length ?? def.defaultLength ?? 255;
+    const length = draft.length ?? def.defaultLength;
+    if (length == null) return def.sqlName;
     return `${def.sqlName}(${length})`;
   }
   if (def.params === 'precisionScale') {
@@ -228,8 +231,17 @@ export function validateColumnDraft(
     if (!(draft.customType ?? '').trim()) errors.type = 'Enter a type';
   } else if (def.params === 'length') {
     const length = draft.length ?? def.defaultLength;
-    if (length == null || !Number.isInteger(length) || length <= 0) {
-      errors.type = 'Length must be greater than 0';
+    const min = def.minLength ?? 1;
+    const max = def.maxLength;
+    if (length == null) {
+      if (min > 0) errors.type = 'Length must be greater than 0';
+    } else if (
+      !Number.isInteger(length) ||
+      length < min ||
+      (max != null && length > max)
+    ) {
+      errors.type =
+        max != null ? `Length must be between ${min} and ${max}` : 'Length must be greater than 0';
     }
   } else if (def.params === 'precisionScale') {
     const precision = draft.precision ?? def.defaultPrecision;
@@ -271,7 +283,8 @@ export function validateNewTable(
   table: TableRef,
   columns: NewTableColumn[],
   types: ColumnTypeDef[],
-  tables: TableSchema[]
+  tables: TableSchema[],
+  options?: { requireSchema?: boolean }
 ): { table?: string; columns: Record<string, string>[]; form?: string } {
   const result: { table?: string; columns: Record<string, string>[]; form?: string } = {
     columns: [],
@@ -279,6 +292,8 @@ export function validateNewTable(
   const name = table.name.trim();
   if (!name) {
     result.table = 'Table name is required';
+  } else if (options?.requireSchema && !table.schema.trim()) {
+    result.table = 'Choose a database';
   } else if (tables.some((t) => t.schema === table.schema && t.name === name)) {
     result.table = 'A table with this name already exists';
   }

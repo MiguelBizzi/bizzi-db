@@ -272,7 +272,7 @@ async fn run_statement(
 }
 
 /// Derived tables cannot repeat a column name (errno 1060). Read the statement
-/// and keep the requested slice.
+/// and keep only the requested slice; the rest is counted and dropped.
 async fn stream_page(
     conn: &mut mysql_async::Conn,
     stmt: &str,
@@ -280,19 +280,9 @@ async fn stream_page(
     timestamp: String,
     started: Instant,
 ) -> QueryExecutionResult {
-    match exec_rows(conn, stmt, Vec::new()).await {
-        Ok(rows) => {
-            let total = rows.len() as u64;
-            let start = page.offset.max(0) as usize;
-            let end = start
-                .saturating_add(page.limit.max(1) as usize)
-                .min(rows.len());
-            let page_rows = if start >= rows.len() {
-                Vec::new()
-            } else {
-                rows[start..end].to_vec()
-            };
-            let mut result = success_result(stmt, timestamp, started, &page_rows);
+    match collect_page(conn, stmt, page.offset.max(0), page.limit.max(1)).await {
+        Ok((rows, total)) => {
+            let mut result = success_result(stmt, timestamp, started, &rows);
             result.page_size = Some(page.limit.max(1));
             result.page_offset = Some(page.offset.max(0));
             if page.with_count {
@@ -303,6 +293,30 @@ async fn stream_page(
         }
         Err(err) => error_result(stmt, timestamp, started, err),
     }
+}
+
+#[allow(clippy::result_large_err)]
+async fn collect_page(
+    conn: &mut mysql_async::Conn,
+    sql: &str,
+    offset: i64,
+    limit: i64,
+) -> Result<(Vec<serde_json::Value>, u64), QueryError> {
+    let mut result = conn
+        .query_iter(sql)
+        .await
+        .map_err(|err| map_error(&err, sql))?;
+    let start = offset.max(0) as u64;
+    let end = start.saturating_add(limit.max(1) as u64);
+    let mut kept = Vec::new();
+    let mut index = 0u64;
+    while let Some(row) = result.next().await.map_err(|err| map_error(&err, sql))? {
+        if index >= start && index < end {
+            kept.push(row_object(&row));
+        }
+        index += 1;
+    }
+    Ok((kept, index))
 }
 
 #[allow(clippy::result_large_err)]

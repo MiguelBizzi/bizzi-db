@@ -11,7 +11,7 @@ import {
   type TableRef,
 } from '../../schemaChange';
 
-const { quoteIdent } = DIALECTS.MySQL;
+const { quoteIdent, quoteLiteral } = DIALECTS.MySQL;
 const qualify = (schema: string, name: string) => qualifyTable(schema, name, quoteIdent);
 
 function defaultSql(value: string): string | undefined {
@@ -20,20 +20,56 @@ function defaultSql(value: string): string | undefined {
   return trimmed;
 }
 
-function columnDefinitionParts(draft: ColumnDraft, types: ColumnTypeDef[]): string[] {
-  const parts = [`${quoteIdent(draft.name.trim())} ${formatColumnType(draft, types)}`];
+// MySQL rejects CURRENT_TIMESTAMP(n) when n is not the column's fractional precision.
+function alignTimestampPrecision(expression: string, fsp: number | null | undefined): string {
+  if (fsp == null || !Number.isInteger(fsp)) return expression;
+  return expression.replace(
+    /\b(CURRENT_TIMESTAMP|LOCALTIMESTAMP|LOCALTIME|NOW)\s*\(\s*\d+\s*\)/gi,
+    `$1(${fsp})`,
+  );
+}
+
+function columnDefinitionParts(
+  draft: ColumnDraft,
+  types: ColumnTypeDef[],
+  keep?: { forAlter?: boolean; comment?: string; onUpdate?: string },
+): string[] {
+  const typeSql = formatColumnType(draft, types);
+  const temporal = /^(datetime|timestamp|time)\b/i.test(typeSql);
+  const fsp = temporal ? draft.length : undefined;
+  const parts = [`${quoteIdent(draft.name.trim())} ${typeSql}`];
   parts.push(draft.nullable ? 'NULL' : 'NOT NULL');
   if (draft.defaultValue.trim().toUpperCase() === 'AUTO_INCREMENT') {
     parts.push('AUTO_INCREMENT');
   } else {
-    const fallback = defaultSql(draft.defaultValue);
+    const fallback = defaultSql(alignTimestampPrecision(draft.defaultValue, fsp));
     if (fallback) parts.push(`DEFAULT ${fallback}`);
   }
-  if (draft.unique) parts.push('UNIQUE');
+  if (keep?.onUpdate?.trim()) {
+    parts.push(`ON UPDATE ${alignTimestampPrecision(keep.onUpdate.trim(), fsp)}`);
+  }
+  if (!keep?.forAlter && draft.unique) parts.push('UNIQUE');
   const check = draft.checkExpression.trim();
-  if (check) parts.push(`CHECK (${check})`);
-  if (draft.foreignKey) parts.push(referencesClause(draft.foreignKey).trimStart());
+  if (check && !keep?.forAlter) parts.push(`CHECK (${check})`);
+  if (draft.foreignKey && !keep?.forAlter) {
+    parts.push(referencesClause(draft.foreignKey).trimStart());
+  }
+  if (keep?.comment?.trim()) parts.push(`COMMENT ${quoteLiteral(keep.comment.trim())}`);
   return parts;
+}
+
+function fkEqual(
+  current: ColumnDefinition['foreignKey'] | undefined,
+  draft: ForeignKeyDraft | null,
+): boolean {
+  if (!current && !draft) return true;
+  if (!current || !draft) return false;
+  return (
+    (current.targetSchema ?? '') === (draft.targetSchema ?? '') &&
+    current.targetTable === draft.targetTable &&
+    current.targetColumn === draft.targetColumn &&
+    (current.onDelete ?? '') === (draft.onDelete ?? '')
+  );
 }
 
 function referencesClause(fk: ForeignKeyDraft): string {
@@ -74,6 +110,7 @@ export function buildAlterColumnSql(
   draft: ColumnDraft,
   types: ColumnTypeDef[],
 ): string {
+  if (current.generated != null) return '';
   const nextName = draft.name.trim();
   const statements: string[] = [];
   const qualified = qualify(table.schema, table.name);
@@ -92,7 +129,11 @@ export function buildAlterColumnSql(
   if (typeChanged || nullChanged || defaultChanged) {
     const working = { ...draft, name: nextName || current.name };
     statements.push(
-      `ALTER TABLE ${qualified} MODIFY COLUMN ${columnDefinitionParts(working, types).join(' ')};`,
+      `ALTER TABLE ${qualified} MODIFY COLUMN ${columnDefinitionParts(working, types, {
+        forAlter: true,
+        comment: current.comment,
+        onUpdate: current.onUpdate,
+      }).join(' ')};`,
     );
   }
   const currentlyUnique = current.isUnique === true;
@@ -110,14 +151,18 @@ export function buildAlterColumnSql(
   const check = draft.checkExpression.trim();
   if (check) {
     const name = constraintIdent(table.name, nextName || current.name, 'check');
-    statements.push(`ALTER TABLE ${qualified} DROP CHECK ${name};`);
     statements.push(`ALTER TABLE ${qualified} ADD CONSTRAINT ${name} CHECK (${check});`);
   }
-  if (draft.foreignKey) {
-    const name = constraintIdent(table.name, nextName || current.name, 'fkey');
-    statements.push(`ALTER TABLE ${qualified} DROP FOREIGN KEY ${name};`);
+  if (draft.foreignKey && !fkEqual(current.foreignKey, draft.foreignKey)) {
+    const existing = current.foreignKey?.name?.trim();
+    if (existing) {
+      statements.push(`ALTER TABLE ${qualified} DROP FOREIGN KEY ${quoteIdent(existing)};`);
+    }
+    const constraint = existing
+      ? quoteIdent(existing)
+      : constraintIdent(table.name, nextName || current.name, 'fkey');
     statements.push(
-      `ALTER TABLE ${qualified} ADD CONSTRAINT ${name} FOREIGN KEY (${quoteIdent(nextName || current.name)})${referencesClause(draft.foreignKey)};`,
+      `ALTER TABLE ${qualified} ADD CONSTRAINT ${constraint} FOREIGN KEY (${quoteIdent(nextName || current.name)})${referencesClause(draft.foreignKey)};`,
     );
   }
   return statements.join('\n');
@@ -136,14 +181,16 @@ export function buildDropTableSql(table: TableRef): string {
 }
 
 export function buildTableDdlPreview(table: TableSchema): string {
-  const cols = table.columns
-    .map((column) => {
-      const bits = [`  ${quoteIdent(column.name)} ${column.type}`];
-      if (column.isPrimary) bits.push('PRIMARY KEY');
-      if (column.isNullable === false) bits.push('NOT NULL');
-      if (column.defaultValue?.trim()) bits.push(`DEFAULT ${column.defaultValue}`);
-      return bits.join(' ');
-    })
-    .join(',\n');
-  return `CREATE TABLE ${qualify(table.schema, table.name)} (\n${cols}\n) ENGINE=InnoDB;`;
+  const lines = table.columns.map((column) => {
+    const bits = [`  ${quoteIdent(column.name)} ${column.type}`];
+    if (column.isNullable === false) bits.push('NOT NULL');
+    const fallback = column.defaultValue?.trim() ?? '';
+    if (fallback.toUpperCase() === 'AUTO_INCREMENT') bits.push('AUTO_INCREMENT');
+    else if (fallback) bits.push(`DEFAULT ${fallback}`);
+    if (column.onUpdate?.trim()) bits.push(`ON UPDATE ${column.onUpdate.trim()}`);
+    return bits.join(' ');
+  });
+  const primary = table.columns.filter((column) => column.isPrimary).map((column) => quoteIdent(column.name));
+  if (primary.length > 0) lines.push(`  PRIMARY KEY (${primary.join(', ')})`);
+  return `CREATE TABLE ${qualify(table.schema, table.name)} (\n${lines.join(',\n')}\n) ENGINE=InnoDB;`;
 }

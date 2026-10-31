@@ -142,6 +142,7 @@ const AddColumnDrawerBody: React.FC<AddColumnDrawerProps> = ({
               tables={tables}
               errors={errors}
               disabled={disabled || submitting}
+              onDeleteActions={dialectModule(dialect)?.foreignKeyActions}
               presets={dialectModule(dialect)?.defaultPresets}
               onChange={(next) => {
                 setDraft(next);

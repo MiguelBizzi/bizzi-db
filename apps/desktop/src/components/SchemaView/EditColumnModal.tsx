@@ -76,6 +76,7 @@ const EditColumnModalBody: React.FC<EditColumnModalProps> = ({
   );
   const valid =
     column != null &&
+    column.generated == null &&
     Object.keys(
       validateColumnDraft(draft, table, types, {
         excludeName: column.name,
@@ -160,12 +161,18 @@ const EditColumnModalBody: React.FC<EditColumnModalProps> = ({
                 ))}
               </div>
             )}
+            {column.generated != null && (
+              <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-[11px] font-mono">
+                Generated columns cannot be altered here.
+              </div>
+            )}
             <ColumnDraftFields
               draft={draft}
               types={types}
               tables={tables}
               errors={errors}
-              disabled={disabled || submitting}
+              disabled={disabled || submitting || column.generated != null}
+              onDeleteActions={dialectModule(dialect)?.foreignKeyActions}
               presets={dialectModule(dialect)?.defaultPresets}
               onChange={(next) => {
                 setDraft(next);

@@ -693,6 +693,7 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
                     Some(target_schema)
                 },
                 on_delete: on_delete_from_confdeltype(confdeltype.trim()),
+                name: None,
             },
         );
     }
@@ -755,6 +756,8 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
                     Some(enum_values)
                 },
                 foreign_key: fks.get(&key).cloned(),
+                generated: None,
+                on_update: None,
             });
     }
 
@@ -790,6 +793,7 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
             is_view: Some(kind == "v" || kind == "m"),
             view_sql,
             is_materialized: if kind == "m" { Some(true) } else { None },
+            sql_security: None,
         });
     }
 

@@ -34,7 +34,7 @@ CREATE TABLE users (
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   last_login_at DATETIME(6) NULL,
   metadata JSON NOT NULL,
-  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'When the row was created',
   full_name_upper VARCHAR(255) AS (UPPER(full_name)) VIRTUAL,
   UNIQUE KEY users_email_key (email),
   CONSTRAINT users_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES organizations (id),
@@ -222,6 +222,18 @@ CREATE TABLE type_samples (
   comment_col VARCHAR(64) NULL COMMENT 'column comment',
   CONSTRAINT type_samples_unsigned_chk CHECK (unsigned_int >= 0)
 ) ENGINE=InnoDB COMMENT='One row of every common MySQL type';
+
+-- Unnamed foreign key (InnoDB names it audit_notes_ibfk_1), fractional
+-- timestamps with ON UPDATE, and a generated column. These exist so the
+-- editor is tested against names and clauses the rest of the seed spells out.
+CREATE TABLE audit_notes (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  body VARCHAR(255) NOT NULL,
+  touched_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'last write',
+  touched_year VARCHAR(4) AS (DATE_FORMAT(touched_at, '%Y')) VIRTUAL,
+  FOREIGN KEY (user_id) REFERENCES users (id)
+) ENGINE=InnoDB;
 
 USE analytics;
 

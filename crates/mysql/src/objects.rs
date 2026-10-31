@@ -63,14 +63,15 @@ pub async fn introspect(
     let views = fetch(
         conn,
         &format!(
-            "SELECT TABLE_SCHEMA, TABLE_NAME, VIEW_DEFINITION FROM information_schema.VIEWS WHERE TABLE_SCHEMA NOT IN ({SKIP})"
+            "SELECT TABLE_SCHEMA, TABLE_NAME, VIEW_DEFINITION, CHECK_OPTION, SECURITY_TYPE
+             FROM information_schema.VIEWS WHERE TABLE_SCHEMA NOT IN ({SKIP})"
         ),
     )
     .await?;
     let columns = fetch(
         conn,
         &format!(
-            "SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_COMMENT, EXTRA, COLUMN_KEY
+            "SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_COMMENT, EXTRA, COLUMN_KEY, GENERATION_EXPRESSION
              FROM information_schema.COLUMNS WHERE TABLE_SCHEMA NOT IN ({SKIP})
              ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         ),
@@ -79,7 +80,7 @@ pub async fn introspect(
     let foreign_keys = fetch(
         conn,
         &format!(
-            "SELECT k.TABLE_SCHEMA, k.TABLE_NAME, k.COLUMN_NAME, k.REFERENCED_TABLE_SCHEMA, k.REFERENCED_TABLE_NAME, k.REFERENCED_COLUMN_NAME, r.DELETE_RULE
+            "SELECT k.TABLE_SCHEMA, k.TABLE_NAME, k.COLUMN_NAME, k.REFERENCED_TABLE_SCHEMA, k.REFERENCED_TABLE_NAME, k.REFERENCED_COLUMN_NAME, r.DELETE_RULE, k.CONSTRAINT_NAME
              FROM information_schema.KEY_COLUMN_USAGE k
              JOIN information_schema.REFERENTIAL_CONSTRAINTS r
                ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME AND r.TABLE_NAME = k.TABLE_NAME
@@ -107,9 +108,9 @@ pub async fn introspect(
     let parameters = fetch(
         conn,
         &format!(
-            "SELECT SPECIFIC_SCHEMA, SPECIFIC_NAME, ORDINAL_POSITION, PARAMETER_NAME, PARAMETER_MODE, DTD_IDENTIFIER
+            "SELECT SPECIFIC_SCHEMA, SPECIFIC_NAME, ROUTINE_TYPE, ORDINAL_POSITION, PARAMETER_NAME, PARAMETER_MODE, DTD_IDENTIFIER
              FROM information_schema.PARAMETERS WHERE SPECIFIC_SCHEMA NOT IN ({SKIP})
-             ORDER BY SPECIFIC_SCHEMA, SPECIFIC_NAME, ORDINAL_POSITION"
+             ORDER BY SPECIFIC_SCHEMA, SPECIFIC_NAME, ROUTINE_TYPE, ORDINAL_POSITION"
         ),
     )
     .await?;
@@ -124,7 +125,18 @@ pub async fn introspect(
     .await
     .unwrap_or_default();
 
-    let view_sql = keyed(&views, |row| (key2(row), cell(row, 2).unwrap_or_default()));
+    let mut view_sql: HashMap<String, String> = HashMap::new();
+    let mut view_security: HashMap<String, String> = HashMap::new();
+    for row in &views {
+        let key = key2(row);
+        view_sql.insert(
+            key.clone(),
+            view_definition(&cell(row, 2).unwrap_or_default(), cell(row, 3).as_deref()),
+        );
+        if let Some(security) = cell(row, 4).filter(|value| !value.is_empty()) {
+            view_security.insert(key, security);
+        }
+    }
     let mut columns_by: HashMap<String, Vec<ColumnDefinition>> = HashMap::new();
     for row in &columns {
         columns_by
@@ -143,6 +155,7 @@ pub async fn introspect(
                 target_table: cell(row, 4).unwrap_or_default(),
                 target_column: cell(row, 5).unwrap_or_default(),
                 on_delete: cell(row, 6),
+                name: cell(row, 7).filter(|value| !value.is_empty()),
             });
         }
     }
@@ -218,17 +231,24 @@ pub async fn introspect(
 
     let mut params_by: HashMap<String, Vec<RoutineParameter>> = HashMap::new();
     for row in &parameters {
-        let ordinal: i32 = cell(row, 2).and_then(|v| v.parse().ok()).unwrap_or(0);
+        let ordinal: i32 = cell(row, 3).and_then(|v| v.parse().ok()).unwrap_or(0);
         if ordinal == 0 {
             continue;
         }
+        // A function and a procedure may share a name. The kind keeps their parameters apart.
+        let routine_key = format!(
+            "{}\u{1}{}\u{1}{}",
+            cell(row, 0).unwrap_or_default(),
+            cell(row, 2).unwrap_or_default().to_ascii_uppercase(),
+            cell(row, 1).unwrap_or_default()
+        );
         params_by
-            .entry(key2(row))
+            .entry(routine_key)
             .or_default()
             .push(RoutineParameter {
-                name: cell(row, 3).unwrap_or_default(),
-                data_type: cell(row, 5).unwrap_or_default(),
-                mode: match cell(row, 4)
+                name: cell(row, 4).unwrap_or_default(),
+                data_type: cell(row, 6).unwrap_or_default(),
+                mode: match cell(row, 5)
                     .unwrap_or_default()
                     .to_ascii_uppercase()
                     .as_str()
@@ -266,6 +286,7 @@ pub async fn introspect(
             is_view: if is_view { Some(true) } else { None },
             view_sql: view_sql.get(&map_key).cloned(),
             is_materialized: None,
+            sql_security: view_security.get(&map_key).cloned(),
         });
     }
 
@@ -284,7 +305,10 @@ pub async fn introspect(
         };
         let oid = format!("{schema}.{kind_name}.{name}");
         let params = params_by
-            .remove(&format!("{schema}\u{1}{name}"))
+            .remove(&format!(
+                "{schema}\u{1}{}\u{1}{name}",
+                cell(row, 2).unwrap_or_default().to_ascii_uppercase()
+            ))
             .unwrap_or_default();
         let identity = params
             .iter()
@@ -316,6 +340,7 @@ pub async fn introspect(
             has_sql_body: true,
             comment: cell(row, 7).filter(|c| !c.is_empty()),
             owner: None,
+            data_access: cell(row, 5).filter(|value| !value.is_empty()),
         });
     }
 
@@ -339,8 +364,10 @@ pub async fn introspect(
 }
 
 pub async fn schema_fingerprint(conn: &mut Conn) -> Result<String, AdapterError> {
+    // Each catalog row is hashed before the concat, so a large schema is not
+    // cut off at the default 1KB group_concat_max_len. 16MB covers the hashes.
     let _ = conn
-        .query_drop("SET SESSION group_concat_max_len = 1048576")
+        .query_drop("SET SESSION group_concat_max_len = 16777216")
         .await;
     let _ = conn
         .query_drop("SET SESSION information_schema_stats_expiry = 0")
@@ -348,18 +375,30 @@ pub async fn schema_fingerprint(conn: &mut Conn) -> Result<String, AdapterError>
     scalar(
         conn,
         &format!(
-            "SELECT SHA2(IFNULL(GROUP_CONCAT(part ORDER BY part SEPARATOR '\n'), ''), 256) FROM (
+            "SELECT SHA2(IFNULL(GROUP_CONCAT(SHA2(part, 256) ORDER BY SHA2(part, 256) SEPARATOR ''), ''), 256) FROM (
                SELECT CONCAT_WS('|', 't', TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, IFNULL(TABLE_COMMENT, '')) AS part
                FROM information_schema.TABLES WHERE TABLE_SCHEMA NOT IN ({SKIP})
                UNION ALL
-               SELECT CONCAT_WS('|', 'c', TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, IFNULL(COLUMN_DEFAULT, ''), EXTRA)
+               SELECT CONCAT_WS('|', 'c', TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, IFNULL(COLUMN_DEFAULT, ''), EXTRA, IFNULL(GENERATION_EXPRESSION, ''))
                FROM information_schema.COLUMNS WHERE TABLE_SCHEMA NOT IN ({SKIP})
                UNION ALL
                SELECT CONCAT_WS('|', 'i', TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX, IFNULL(COLUMN_NAME, ''), IFNULL(EXPRESSION, ''), NON_UNIQUE, INDEX_TYPE)
                FROM information_schema.STATISTICS WHERE TABLE_SCHEMA NOT IN ({SKIP})
                UNION ALL
-               SELECT CONCAT_WS('|', 'r', ROUTINE_SCHEMA, ROUTINE_NAME, ROUTINE_TYPE, IFNULL(ROUTINE_DEFINITION, ''))
+               SELECT CONCAT_WS('|', 'r', ROUTINE_SCHEMA, ROUTINE_NAME, ROUTINE_TYPE, IFNULL(ROUTINE_DEFINITION, ''), IFNULL(SQL_DATA_ACCESS, ''))
                FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA NOT IN ({SKIP})
+               UNION ALL
+               SELECT CONCAT_WS('|', 'p', SPECIFIC_SCHEMA, SPECIFIC_NAME, ROUTINE_TYPE, ORDINAL_POSITION, IFNULL(PARAMETER_NAME, ''), IFNULL(PARAMETER_MODE, ''), IFNULL(DTD_IDENTIFIER, ''))
+               FROM information_schema.PARAMETERS WHERE SPECIFIC_SCHEMA NOT IN ({SKIP})
+               UNION ALL
+               SELECT CONCAT_WS('|', 'v', TABLE_SCHEMA, TABLE_NAME, IFNULL(VIEW_DEFINITION, ''), IFNULL(CHECK_OPTION, ''), IFNULL(SECURITY_TYPE, ''))
+               FROM information_schema.VIEWS WHERE TABLE_SCHEMA NOT IN ({SKIP})
+               UNION ALL
+               SELECT CONCAT_WS('|', 'f', CONSTRAINT_SCHEMA, TABLE_NAME, CONSTRAINT_NAME, DELETE_RULE, UPDATE_RULE)
+               FROM information_schema.REFERENTIAL_CONSTRAINTS WHERE CONSTRAINT_SCHEMA NOT IN ({SKIP})
+               UNION ALL
+               SELECT CONCAT_WS('|', 'k', CONSTRAINT_SCHEMA, CONSTRAINT_NAME, CHECK_CLAUSE)
+               FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA NOT IN ({SKIP})
                UNION ALL
                SELECT CONCAT_WS('|', 'g', TRIGGER_SCHEMA, TRIGGER_NAME, EVENT_MANIPULATION, ACTION_TIMING, ACTION_STATEMENT)
                FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA NOT IN ({SKIP})
@@ -439,20 +478,59 @@ fn column_from(row: &[Option<String>]) -> ColumnDefinition {
         comment: cell(row, 6).filter(|c| !c.is_empty()),
         enum_values: enum_values(&column_type),
         foreign_key: None,
+        generated: generated_expression(&extra, cell(row, 9)),
+        on_update: on_update_clause(&extra),
     }
-    .with_generated(&extra)
+    .with_auto_increment(&extra)
 }
 
-trait WithGenerated {
-    fn with_generated(self, extra: &str) -> Self;
+trait WithAutoIncrement {
+    fn with_auto_increment(self, extra: &str) -> Self;
 }
 
-impl WithGenerated for ColumnDefinition {
-    fn with_generated(mut self, extra: &str) -> Self {
+impl WithAutoIncrement for ColumnDefinition {
+    fn with_auto_increment(mut self, extra: &str) -> Self {
         if extra.to_ascii_lowercase().contains("auto_increment") {
             self.default_value = self.default_value.or(Some("AUTO_INCREMENT".into()));
         }
         self
+    }
+}
+
+/// `EXTRA` looks like `DEFAULT_GENERATED on update CURRENT_TIMESTAMP(6)`.
+fn on_update_clause(extra: &str) -> Option<String> {
+    let lower = extra.to_ascii_lowercase();
+    let marker = "on update ";
+    let start = lower.find(marker)? + marker.len();
+    let rest = extra[start..].trim();
+    let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+    let clause = rest[..end].trim().to_string();
+    if clause.is_empty() {
+        None
+    } else {
+        Some(clause)
+    }
+}
+
+fn generated_expression(extra: &str, expression: Option<String>) -> Option<String> {
+    let lower = extra.to_ascii_lowercase();
+    // DEFAULT_GENERATED is a timestamp default, not a generated column.
+    if !lower.contains("virtual generated") && !lower.contains("stored generated") {
+        return None;
+    }
+    Some(expression.unwrap_or_default())
+}
+
+/// `information_schema.VIEWS.VIEW_DEFINITION` is the SELECT only.
+fn view_definition(select_sql: &str, check_option: Option<&str>) -> String {
+    let body = select_sql.trim().trim_end_matches(';').trim();
+    match check_option
+        .map(|value| value.to_ascii_uppercase())
+        .as_deref()
+    {
+        Some("LOCAL") => format!("{body}\nWITH LOCAL CHECK OPTION"),
+        Some("CASCADED") => format!("{body}\nWITH CASCADED CHECK OPTION"),
+        _ => body.to_string(),
     }
 }
 
@@ -505,13 +583,6 @@ fn key2(row: &[Option<String>]) -> String {
         cell(row, 0).unwrap_or_default(),
         cell(row, 1).unwrap_or_default()
     )
-}
-
-fn keyed(
-    rows: &[Vec<Option<String>>],
-    f: impl Fn(&[Option<String>]) -> (String, String),
-) -> HashMap<String, String> {
-    rows.iter().map(|row| f(row)).collect()
 }
 
 fn cell(row: &[Option<String>], index: usize) -> Option<String> {
@@ -572,5 +643,41 @@ mod tests {
     fn body_keeps_begin_and_return() {
         assert!(routine_body("CREATE FUNCTION f() RETURNS INT RETURN 1").starts_with("RETURN"));
         assert!(routine_body("CREATE PROCEDURE p()\nBEGIN\n  SELECT 1;\nEND").starts_with("BEGIN"));
+    }
+
+    #[test]
+    fn extra_keeps_on_update_and_generated_expressions() {
+        assert_eq!(
+            on_update_clause("DEFAULT_GENERATED on update CURRENT_TIMESTAMP(6)"),
+            Some("CURRENT_TIMESTAMP(6)".into())
+        );
+        assert_eq!(on_update_clause("auto_increment"), None);
+        assert_eq!(
+            generated_expression("VIRTUAL GENERATED", Some("UPPER(full_name)".into())).as_deref(),
+            Some("UPPER(full_name)")
+        );
+        assert_eq!(
+            generated_expression("STORED GENERATED", None),
+            Some("".into())
+        );
+        // A timestamp default is DEFAULT_GENERATED, which is not a generated column.
+        assert_eq!(generated_expression("DEFAULT_GENERATED", None), None);
+        assert_eq!(
+            generated_expression("DEFAULT_GENERATED on update CURRENT_TIMESTAMP(6)", None),
+            None
+        );
+        assert_eq!(generated_expression("auto_increment", None), None);
+    }
+
+    #[test]
+    fn view_definition_keeps_the_check_option() {
+        assert_eq!(
+            view_definition("SELECT id FROM users", Some("CASCADED")),
+            "SELECT id FROM users\nWITH CASCADED CHECK OPTION"
+        );
+        assert_eq!(
+            view_definition("SELECT id FROM users", Some("NONE")),
+            "SELECT id FROM users"
+        );
     }
 }

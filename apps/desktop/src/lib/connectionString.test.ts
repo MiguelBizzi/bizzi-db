@@ -173,6 +173,9 @@ describe('parseConnectionString', () => {
       },
     });
     expect(parseConnectionString('mysql://root@localhost').ok).toBe(true);
+    const jdbc = parseConnectionString('jdbc:mysql://root:mysql@127.0.0.1:3306/shop');
+    expect(jdbc.ok && !jdbc.empty && jdbc.value.dialect).toBe('MySQL');
+    if (jdbc.ok && !jdbc.empty) expect(jdbc.value.port).toBe(3306);
   });
 
   test('rejects unsupported engines with an actionable message', () => {

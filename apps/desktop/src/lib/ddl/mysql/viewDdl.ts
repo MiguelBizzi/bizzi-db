@@ -23,13 +23,20 @@ function clean(sql: string): string {
   return sql.trim().replace(/;+\s*$/, '').trim();
 }
 
+function splitCheckOption(sql: string): { definition: string; checkOption: boolean } {
+  const match = sql.match(/\s+WITH\s+(?:CASCADED\s+|LOCAL\s+)?CHECK OPTION\s*$/i);
+  if (!match || match.index == null) return { definition: sql.trim(), checkOption: false };
+  return { definition: sql.slice(0, match.index).trim(), checkOption: true };
+}
+
 export function viewDraftFrom(view: TableSchema): ViewDraft {
-  const definition = clean(view.viewSql ?? '');
+  const parsed = splitCheckOption(clean(view.viewSql ?? ''));
   return {
     ...emptyViewDraft(view.schema),
     name: view.name,
-    definition,
-    checkOption: /with\s+(?:cascaded\s+|local\s+)?check\s+option/i.test(definition),
+    definition: parsed.definition,
+    checkOption: parsed.checkOption,
+    sqlSecurity: view.sqlSecurity?.toUpperCase() === 'INVOKER' ? 'INVOKER' : undefined,
   };
 }
 
@@ -44,7 +51,8 @@ export function validateView(draft: ViewDraft): string[] {
 
 function createStatement(draft: ViewDraft, schema = draft.schema, name = draft.name): string {
   const option = draft.checkOption ? '\nWITH CHECK OPTION' : '';
-  return `CREATE OR REPLACE VIEW ${qualify(schema.trim(), name.trim())} AS\n${clean(draft.definition)}${option};`;
+  const security = draft.sqlSecurity === 'INVOKER' ? ' SQL SECURITY INVOKER' : '';
+  return `CREATE OR REPLACE${security} VIEW ${qualify(schema.trim(), name.trim())} AS\n${clean(draft.definition)}${option};`;
 }
 
 export function createView(draft: ViewDraft): DdlResult {

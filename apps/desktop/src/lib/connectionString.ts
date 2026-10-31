@@ -35,7 +35,7 @@ const UNSUPPORTED_SCHEMES: Record<string, string> = {
 };
 
 const POSTGRES_SCHEMES = new Set(['postgres', 'postgresql', 'jdbc:postgresql']);
-const MYSQL_SCHEMES = new Set(['mysql', 'mysql2']);
+const MYSQL_SCHEMES = new Set(['mysql', 'mysql2', 'jdbc:mysql']);
 
 export function parseConnectionString(raw: string): ParseConnectionStringResult {
   const trimmed = raw.trim();

@@ -768,6 +768,8 @@ async fn introspect_view_definitions() {
 #[tokio::test]
 #[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
 async fn session_matches_the_shared_conformance_suite() {
+    // Same catalog as the fingerprint tests; a parallel CREATE changes the hash.
+    let _guard = FINGERPRINT_DDL.lock().await;
     let session = connect().await;
     db_core::conformance::assert_session(
         session.as_ref(),

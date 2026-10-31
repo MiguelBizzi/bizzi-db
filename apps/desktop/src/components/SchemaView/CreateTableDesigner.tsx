@@ -59,7 +59,12 @@ export const CreateTableDesigner: React.FC<CreateTableDesignerProps> = ({
     return names;
   }, [tables, dialect]);
 
-  const [schema, setSchema] = useTabFormState(tabId, "schema", schemas[0] ?? "public");
+  const requireSchema = dialect === "MySQL";
+  const [schema, setSchema] = useTabFormState(
+    tabId,
+    "schema",
+    schemas[0] ?? (requireSchema ? "" : "public"),
+  );
   const [name, setName] = useTabFormState(tabId, "name", "");
   const [columns, setColumns] = useTabFormState<NewTableColumn[]>(
     tabId,
@@ -72,7 +77,7 @@ export const CreateTableDesigner: React.FC<CreateTableDesignerProps> = ({
 
   const ref = { schema, name };
   const validation = useMemo(
-    () => validateNewTable(ref, columns, types, tables),
+    () => validateNewTable(ref, columns, types, tables, { requireSchema }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [schema, name, columns, types, tables],
   );
@@ -272,6 +277,7 @@ export const CreateTableDesigner: React.FC<CreateTableDesignerProps> = ({
                   draft={column}
                   types={types}
                   tables={tables}
+                  onDeleteActions={dialectModule(dialect)?.foreignKeyActions}
                   errors={errors}
                   disabled={readOnly || submitting}
                   showName={false}
