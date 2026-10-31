@@ -22,6 +22,7 @@ export function ColumnDraftFields({
   errors,
   disabled,
   showName = true,
+  presets = DEFAULT_VALUE_PRESETS,
   onChange,
 }: {
   draft: ColumnDraft;
@@ -30,6 +31,7 @@ export function ColumnDraftFields({
   errors: Record<string, string>;
   disabled?: boolean;
   showName?: boolean;
+  presets?: readonly { label: string; sql: string }[];
   onChange: (next: ColumnDraft) => void;
 }) {
   const def = types.find((entry) => entry.id === draft.typeId);
@@ -152,7 +154,7 @@ export function ColumnDraftFields({
           className={inputClass}
         />
         <div className="flex flex-wrap gap-1 mt-1.5">
-          {DEFAULT_VALUE_PRESETS.map((preset) => (
+          {presets.map((preset) => (
             <button
               key={preset.sql}
               type="button"

@@ -90,7 +90,8 @@ export function RoutineForm({
   const setReturns = (returns: ReturnDraft) => set({ returns });
   const languageOptions = Array.from(new Set([draft.language, ...languages].filter(Boolean)));
   const schemaOptions = Array.from(new Set([draft.schema, ...schemas].filter(Boolean)));
-  const modes = caps.parameterModes.filter(
+  const modeSource = isFunction && caps.functionParameterModes ? caps.functionParameterModes : caps.parameterModes;
+  const modes = modeSource.filter(
     (mode): mode is RoutineParameterDraft["mode"] => mode !== "table",
   );
   const setReturnsSet = draft.returns.kind === "table" || draft.returns.setOf;
@@ -387,7 +388,7 @@ export function RoutineForm({
             onChange={(language) => set({ language })}
           />
         </div>
-        {isFunction && (
+        {isFunction && caps.volatilities.length > 0 && (
           <div>
             <label className={labelClass} htmlFor="routine-volatility">
               Volatility
@@ -454,6 +455,30 @@ export function RoutineForm({
       </div>
 
       <div className="flex flex-wrap gap-x-6 gap-y-2">
+        {isFunction && caps.deterministic && (
+          <label className="flex items-center gap-1.5 text-xs font-mono cursor-pointer">
+            <Checkbox
+              checked={draft.volatility === "immutable"}
+              aria-label="Deterministic"
+              onCheckedChange={(deterministic) => set({ volatility: deterministic ? "immutable" : "volatile" })}
+            />
+            DETERMINISTIC
+            <span className="text-[10px] text-muted-foreground font-sans">same inputs, same result</span>
+          </label>
+        )}
+        {isFunction && caps.dataAccessModes && caps.dataAccessModes.length > 0 && (
+          <label className="flex items-center gap-1.5 text-xs font-mono">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Data access</span>
+            <Select
+              value={draft.dataAccess ?? caps.dataAccessModes[0]}
+              aria-label="Data access"
+              options={caps.dataAccessModes.map((mode) => ({ value: mode, label: mode }))}
+              onChange={(dataAccess) =>
+                set({ dataAccess: dataAccess as NonNullable<RoutineDraft["dataAccess"]> })
+              }
+            />
+          </label>
+        )}
         {isFunction && caps.strict && (
           <label className="flex items-center gap-1.5 text-xs font-mono cursor-pointer">
             <Checkbox checked={draft.strict} aria-label="Strict" onCheckedChange={(strict) => set({ strict })} />

@@ -1,9 +1,7 @@
-import { DIALECTS } from '@db/database';
-import type { ColumnDefinition, FilterClause } from '../types';
+import type { ColumnDefinition, DatabaseDialect, FilterClause } from '../types';
+import { ident } from './dialectQuote';
 import { enumValuesFor } from './insertRow';
 import { filterNeedsValue } from './tableFilters';
-
-const quoteIdent = DIALECTS.PostgreSQL.quoteIdent;
 
 const KEYWORDS = new Set([
   'AND',
@@ -252,9 +250,9 @@ function formatClause(filter: FilterClause): string {
   return `${column} ${filter.operator} ${formatValue(filter.operator, filter.value)}`;
 }
 
-function formatColumn(name: string): string {
+function formatColumn(name: string, dialect: DatabaseDialect = 'PostgreSQL'): string {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) || KEYWORDS.has(name.toUpperCase())) {
-    return quoteIdent(name);
+    return ident(dialect, name);
   }
   return name;
 }

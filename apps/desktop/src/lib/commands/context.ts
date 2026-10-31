@@ -1,5 +1,10 @@
 import type { TabType } from '../../types';
 
+export interface CommandCapabilities {
+  /** New Function is available. Engines without routines leave it off. */
+  routines: boolean;
+}
+
 export interface CommandContext {
   activeTabType: TabType | null;
   tabCount: number;
@@ -12,6 +17,7 @@ export interface CommandContext {
   sqlSelectionPresent: boolean;
   sqlResultPresent: boolean;
   closedTabCount: number;
+  capabilities: CommandCapabilities;
 }
 
 export const EMPTY_CONTEXT: CommandContext = {
@@ -26,6 +32,7 @@ export const EMPTY_CONTEXT: CommandContext = {
   sqlSelectionPresent: false,
   sqlResultPresent: false,
   closedTabCount: 0,
+  capabilities: { routines: true },
 };
 
 /** Input types that take no typed text (a focused row checkbox is not typing). */

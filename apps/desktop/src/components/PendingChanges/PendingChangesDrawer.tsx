@@ -20,7 +20,8 @@ import {
   Layers,
   AlertTriangle,
 } from 'lucide-react';
-import type { PendingModifications, TableSchema } from '../../types';
+import type { DatabaseDialect, PendingModifications, TableSchema } from '../../types';
+import { dialectModule } from '@db/database';
 import {
   PendingChangeRef,
   TablePendingBundle,
@@ -47,6 +48,7 @@ interface PendingChangesDrawerProps {
   pendingByTable: Record<string, PendingModifications>;
   schemaChanges: StagedSchemaChange[];
   tables: TableSchema[];
+  dialect?: DatabaseDialect;
   applyingKey: string | null;
   applyingAll: boolean;
   statusMessage: string | null;
@@ -66,6 +68,7 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
   pendingByTable,
   schemaChanges,
   tables,
+  dialect = 'PostgreSQL',
   applyingKey,
   applyingAll,
   statusMessage,
@@ -86,13 +89,17 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
   const [armed, setArmed] = useState<string | null>(initialArmed);
 
   const bundles = useMemo(
-    () => flattenPending(pendingByTable, tables),
-    [pendingByTable, tables]
+    () => flattenPending(pendingByTable, tables, dialectModule(dialect)?.defaultSchema),
+    [pendingByTable, tables, dialect]
   );
   const total = countPendingChanges(pendingByTable) + schemaChanges.length;
+  const transactionalDdl = dialectModule(dialect)?.capabilities.transactionalDdl !== false;
   const allSql = useMemo(
-    () => applyAllScripts(rowStatementsForAll(bundles), schemaChanges).join('\n\n'),
-    [bundles, schemaChanges]
+    () =>
+      applyAllScripts(rowStatementsForAll(bundles, dialect), schemaChanges, {
+        transactionalDdl,
+      }).join('\n\n'),
+    [bundles, schemaChanges, dialect, transactionalDdl]
   );
   const busy = applyingAll || applyingKey !== null;
 
@@ -148,6 +155,11 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
                   ? 'Nothing staged'
                   : `${total} change${total === 1 ? '' : 's'} waiting for review`}
               </div>
+              {!transactionalDdl && schemaChanges.length > 0 && (
+                <p className="text-[10px] text-amber-400 mt-1">
+                  Schema changes commit immediately on this server and cannot be rolled back. Row edits stay in one transaction.
+                </p>
+              )}
             </div>
           </div>
 
@@ -271,7 +283,7 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
                         key={changeKey(ref)}
                         kind="insert"
                         title="New row"
-                        sql={sqlForChange(bundle, ref) || ''}
+                        sql={sqlForChange(bundle, ref, dialect) || ''}
                         mode={mode}
                         busy={busy}
                         applying={applyingKey === changeKey(ref)}
@@ -305,7 +317,7 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
                         key={changeKey(ref)}
                         kind="update"
                         title={`${pk} = ${formatCellValue(row.primaryKeyValue)}`}
-                        sql={sqlForChange(bundle, ref) || ''}
+                        sql={sqlForChange(bundle, ref, dialect) || ''}
                         mode={mode}
                         busy={busy}
                         applying={applyingKey === changeKey(ref)}
@@ -339,7 +351,7 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
                         key={changeKey(ref)}
                         kind="delete"
                         title={`${pk} = ${formatCellValue(row.primaryKeyValue)}`}
-                        sql={sqlForChange(bundle, ref) || ''}
+                        sql={sqlForChange(bundle, ref, dialect) || ''}
                         mode={mode}
                         busy={busy}
                         applying={applyingKey === changeKey(ref)}
@@ -365,10 +377,14 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
                   tableId={bundle.tableId}
                   action={bundle.tableAction}
                   sql={
-                    sqlForChange(bundle, {
-                      kind: bundle.tableAction,
-                      tableId: bundle.tableId,
-                    }) || ''
+                    sqlForChange(
+                      bundle,
+                      {
+                        kind: bundle.tableAction,
+                        tableId: bundle.tableId,
+                      },
+                      dialect,
+                    ) || ''
                   }
                   mode={mode}
                   busy={busy}

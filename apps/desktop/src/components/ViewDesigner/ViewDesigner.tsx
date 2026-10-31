@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Check, Code, Eye, Trash2 } from "lucide-react";
 import { ErrorNotice } from "../ui/ErrorNotice";
 import type { DatabaseDialect, TableSchema } from "../../types";
+import { dialectModule } from "@db/database";
 import { objectDdlFor } from "../../lib/ddl/registry";
 import { planScript, type ViewDraft } from "../../lib/ddl/types";
 import { stagedFromPlan, viewChangeKey, type StagedSchemaChange } from "../../lib/schemaQueue";
@@ -80,6 +81,7 @@ export const ViewDesigner: React.FC<ViewDesignerProps> = ({
   onDelete,
 }) => {
   const ddl = objectDdlFor(dialect);
+  const caps = dialectModule(dialect)?.capabilities;
   const creating = !view;
   const initial = (): ViewDraft | null =>
     ddl ? (view ? ddl.viewDraftFrom(view) : ddl.emptyViewDraft(defaultSchema)) : null;
@@ -275,21 +277,25 @@ export const ViewDesigner: React.FC<ViewDesignerProps> = ({
         <div className="flex flex-wrap gap-x-6 gap-y-2">
           {creating ? (
             <>
-              <CheckRow
-                checked={draft.materialized}
-                disabled={busy}
-                label="MATERIALIZED"
-                hint="Store the result; refresh it with REFRESH MATERIALIZED VIEW."
-                onChange={(materialized) => set({ materialized })}
-              />
-              {draft.materialized && (
-                <CheckRow
-                  checked={draft.withData}
-                  disabled={busy}
-                  label="WITH DATA"
-                  hint="Populate now. Off creates it empty (WITH NO DATA)."
-                  onChange={(withData) => set({ withData })}
-                />
+              {caps?.materializedViews !== false && (
+                <>
+                  <CheckRow
+                    checked={draft.materialized}
+                    disabled={busy}
+                    label="MATERIALIZED"
+                    hint="Store the result; refresh it with REFRESH MATERIALIZED VIEW."
+                    onChange={(materialized) => set({ materialized })}
+                  />
+                  {draft.materialized && (
+                    <CheckRow
+                      checked={draft.withData}
+                      disabled={busy}
+                      label="WITH DATA"
+                      hint="Populate now. Off creates it empty (WITH NO DATA)."
+                      onChange={(withData) => set({ withData })}
+                    />
+                  )}
+                </>
               )}
             </>
           ) : (
@@ -305,6 +311,7 @@ export const ViewDesigner: React.FC<ViewDesignerProps> = ({
           )}
         </div>
 
+        {caps?.materializedViews !== false && (
         <div className="max-w-3xl">
           <label className={labelClass} htmlFor="view-comment">
             Comment
@@ -319,6 +326,17 @@ export const ViewDesigner: React.FC<ViewDesignerProps> = ({
             className={inputClass}
           />
         </div>
+        )}
+
+        {caps?.materializedViews === false && creating && (
+          <CheckRow
+            checked={Boolean(draft.checkOption)}
+            disabled={busy}
+            label="WITH CHECK OPTION"
+            hint="Reject inserts and updates that the view itself would not return."
+            onChange={(checkOption) => set({ checkOption })}
+          />
+        )}
 
         <div>
           <span className={labelClass}>Definition (SELECT)</span>

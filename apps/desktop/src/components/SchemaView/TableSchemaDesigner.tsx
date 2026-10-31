@@ -17,7 +17,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { tableStatParts } from "../../lib/format";
-import { buildTableDdlPreview } from "../../lib/schemaChange";
+import { tableDdlFor } from "../../lib/ddl/registry";
+import { dialectModule } from "@db/database";
 import { objectDdlFor } from "../../lib/ddl/registry";
 import {
   describeIndex,
@@ -104,7 +105,13 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
   // Indexes can be managed on tables and materialized views, but the schema
   // doesn't tell the two kinds of view apart, so views stay read-only here.
   const indexesReadOnly = Boolean(table.isView) || disabled || !objectDdl;
-  const insights = useMemo(() => indexInsights(table), [table]);
+  const insights = useMemo(
+    () =>
+      indexInsights(table, {
+        invalidIndexes: dialectModule(dialect)?.capabilities.invalidIndexes !== false,
+      }),
+    [table, dialect],
+  );
 
   useEffect(() => {
     if (!newIndexRequested) return;
@@ -465,7 +472,7 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
         {activeTab === "ddl" && (
           <div className="font-mono text-xs">
             <pre className="p-4 bg-card border border-border rounded-xl text-foreground overflow-x-auto leading-relaxed">
-              {buildTableDdlPreview(table)}
+              {tableDdlFor(dialect)?.buildTableDdlPreview(table)}
             </pre>
           </div>
         )}
@@ -473,6 +480,7 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
 
       <AddColumnDrawer
         isOpen={addOpen}
+        dialect={dialect}
         table={table}
         tables={tables}
         types={types}
@@ -488,7 +496,7 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
             parent: `${table.schema}.${table.name}`,
             title: `Add column ${columnName} to ${table.name}`,
             sql,
-            transactional: true,
+            transactional: dialectModule(dialect)?.capabilities.transactionalDdl !== false,
             warnings: [],
           });
           return {};
@@ -496,6 +504,7 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
       />
       <EditColumnModal
         isOpen={editColumn != null}
+        dialect={dialect}
         table={table}
         tables={tables}
         types={types}
@@ -513,7 +522,7 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
             parent: `${table.schema}.${table.name}`,
             title: `Edit column ${editColumn.name} on ${table.name}`,
             sql,
-            transactional: true,
+            transactional: dialectModule(dialect)?.capabilities.transactionalDdl !== false,
             warnings: [],
           });
           return {};
@@ -542,6 +551,7 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
       />
       <DeleteColumnModal
         isOpen={deleteColumn != null}
+        dialect={dialect}
         table={table}
         column={deleteColumn}
         disabled={disabled}
@@ -557,7 +567,7 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
             parent: `${table.schema}.${table.name}`,
             title: `Delete column ${deleteColumn.name} from ${table.name}`,
             sql,
-            transactional: true,
+            transactional: dialectModule(dialect)?.capabilities.transactionalDdl !== false,
             warnings: [],
           });
           return {};

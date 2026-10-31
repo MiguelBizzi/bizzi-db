@@ -3,6 +3,9 @@ name = "db-core"
 version.workspace = true
 edition.workspace = true
 
+[features]
+conformance = []
+
 [dependencies]
 async-trait.workspace = true
 serde.workspace = true

@@ -51,6 +51,7 @@ describe('connectionFormFromProfile', () => {
   test('pre-fills every visible field and leaves secrets blank', () => {
     const form = connectionFormFromProfile(profile());
     expect(form).toEqual({
+      dialect: 'PostgreSQL',
       name: 'Prod DB',
       host: 'db.example.com',
       port: 6543,

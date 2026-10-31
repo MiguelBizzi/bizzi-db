@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import { columnTypesFor } from '@db/database';
 import type { ColumnDefinition, TableSchema } from '../types';
 import {
-  alterWarnings,
   buildAddColumnSql,
   buildAlterColumnSql,
   buildCreateTableSql,
@@ -10,6 +9,9 @@ import {
   buildDropTableSql,
   buildTableDdlPreview,
   buildTruncateTableSql,
+} from './ddl/postgres/tableDdl';
+import {
+  alterWarnings,
   canConfirmDelete,
   draftFromColumn,
   emptyColumnDraft,

@@ -13,7 +13,7 @@ Thanks for helping. This guide takes you from a fresh clone to a pull request. B
 
 ```sh
 bun install
-bun run db:up   # local PostgreSQL on 127.0.0.1:5433 (user postgres, password postgres)
+bun run db:up   # Postgres on 127.0.0.1:5433 (postgres/postgres) and MySQL 8.4 on 127.0.0.1:3307 (root/mysql)
 bun run dev     # launch the desktop app
 ```
 

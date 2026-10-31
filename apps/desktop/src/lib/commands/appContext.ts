@@ -12,6 +12,8 @@ export interface AppContextInput {
   closedTabCount: number;
   /** Named open flags of modals and drawers; any `true` makes `modalOpen` true. */
   modals: Record<string, boolean>;
+  /** When false, New Function is disabled. Omitted means the engine has routines. */
+  routines?: boolean;
 }
 
 /** The app-level part of the command context (pure). Local scopes and focus are merged later. */
@@ -26,5 +28,6 @@ export function deriveCommandContext(input: AppContextInput): CommandContext {
     pendingCount: input.pendingCount,
     connectionOpen: Boolean(input.currentDbId),
     modalOpen: Object.values(input.modals).some(Boolean),
+    capabilities: { routines: input.routines !== false },
   };
 }

@@ -19,6 +19,7 @@ describe('parseConnectionString', () => {
       ok: true,
       empty: false,
       value: {
+        dialect: 'PostgreSQL',
         host: 'db.example.com',
         port: 6543,
         username: 'user',
@@ -35,6 +36,7 @@ describe('parseConnectionString', () => {
       ok: true,
       empty: false,
       value: {
+        dialect: 'PostgreSQL',
         host: 'localhost',
         port: 5432,
         username: 'alice',
@@ -53,6 +55,7 @@ describe('parseConnectionString', () => {
       ok: true,
       empty: false,
       value: {
+        dialect: 'PostgreSQL',
         host: '::1',
         port: 5432,
         username: 'user',
@@ -71,6 +74,7 @@ describe('parseConnectionString', () => {
       ok: true,
       empty: false,
       value: {
+        dialect: 'PostgreSQL',
         host: 'db.example.com',
         port: 5432,
         username: 'app_user',
@@ -142,6 +146,7 @@ describe('parseConnectionString', () => {
       ok: true,
       empty: false,
       value: {
+        dialect: 'PostgreSQL',
         host: '/var/run/postgresql',
         port: 5432,
         username: '',
@@ -152,11 +157,27 @@ describe('parseConnectionString', () => {
     });
   });
 
+  test('parses a mysql URI and leaves the database optional', () => {
+    const result = parseConnectionString('mysql://root:mysql@127.0.0.1:3307/shop');
+    expect(result).toEqual({
+      ok: true,
+      empty: false,
+      value: {
+        dialect: 'MySQL',
+        host: '127.0.0.1',
+        port: 3307,
+        username: 'root',
+        password: 'mysql',
+        database: 'shop',
+        sslMode: 'disabled',
+      },
+    });
+    expect(parseConnectionString('mysql://root@localhost').ok).toBe(true);
+  });
+
   test('rejects unsupported engines with an actionable message', () => {
     const cases = [
-      ['mysql://root@localhost/app', 'MySQL'],
-      ['mysql2://root@localhost/app', 'MySQL'],
-      ['mariadb://root@localhost/app', 'MySQL'],
+      ['mariadb://root@localhost/app', 'MariaDB'],
       ['sqlite:///tmp/app.db', 'SQLite'],
       ['mongodb://localhost:27017/app', 'MongoDB'],
       ['mongodb+srv://cluster.example.com/app', 'MongoDB'],

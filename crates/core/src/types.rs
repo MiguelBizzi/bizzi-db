@@ -204,6 +204,9 @@ pub struct RoutineParameter {
 #[serde(rename_all = "camelCase")]
 pub struct RoutineDefinition {
     pub id: String,
+    /// Engine-defined key for `routine_source`. Postgres stores the numeric oid;
+    /// other engines store their own identity. The field name stays `oid` so
+    /// saved workspace tabs keep loading.
     pub oid: String,
     pub schema: String,
     pub name: String,

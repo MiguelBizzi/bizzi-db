@@ -62,14 +62,24 @@ export function schemaChangeScript(change: StagedSchemaChange): string {
  * transactional schema change in one transaction, then each change that
  * can't run in a transaction on its own.
  */
-export function applyAllScripts(rowStatements: string, queue: StagedSchemaChange[]): string[] {
+export function applyAllScripts(
+  rowStatements: string,
+  queue: StagedSchemaChange[],
+  options?: { transactionalDdl?: boolean },
+): string[] {
+  const ddlInTransaction = options?.transactionalDdl !== false;
   const inTransaction = [
     rowStatements.trim(),
-    ...queue.filter((change) => change.transactional).map((change) => change.sql.trim()),
+    ...queue
+      .filter((change) => change.transactional && ddlInTransaction)
+      .map((change) => change.sql.trim()),
   ].filter(Boolean);
   const scripts = inTransaction.length > 0 ? [`BEGIN;\n${inTransaction.join('\n')}\nCOMMIT;`] : [];
   for (const change of queue) {
-    if (!change.transactional) scripts.push(change.sql.trim());
+    if (!change.transactional || !ddlInTransaction) {
+      const sql = change.sql.trim();
+      if (sql) scripts.push(sql);
+    }
   }
   return scripts;
 }

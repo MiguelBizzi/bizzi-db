@@ -61,6 +61,7 @@ describe('EMPTY_CONTEXT', () => {
       sqlSelectionPresent: false,
       sqlResultPresent: false,
       closedTabCount: 0,
+      capabilities: { routines: true },
     });
   });
 });

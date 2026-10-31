@@ -29,9 +29,12 @@ pub struct QueryError {
     pub category: QueryErrorCategory,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub severity: Option<String>,
-    /// SQLSTATE for Postgres.
+    /// SQLSTATE. Engines that have one put it here, including MySQL.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<String>,
+    /// Vendor error number when the engine has one besides the SQLSTATE (MySQL errno).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vendor_code: Option<i32>,
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
@@ -55,6 +58,7 @@ impl QueryError {
             category,
             severity: None,
             code: None,
+            vendor_code: None,
             message: message.into(),
             detail: None,
             hint: None,

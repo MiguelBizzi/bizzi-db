@@ -7,6 +7,7 @@ fn pg_config() -> ConnectConfig {
         .and_then(|value| value.parse().ok())
         .unwrap_or(5433);
     ConnectConfig {
+        dialect: db_core::DatabaseDialect::PostgreSQL,
         host: std::env::var("TEST_PG_HOST").unwrap_or_else(|_| "127.0.0.1".into()),
         port,
         database: std::env::var("TEST_PG_DB").unwrap_or_else(|_| "postgres".into()),
@@ -762,4 +763,26 @@ async fn introspect_view_definitions() {
     assert!(matview.view_sql.is_some());
     let plain = table("orders");
     assert_eq!(plain.view_sql, None);
+}
+
+#[tokio::test]
+#[ignore = "requires local Postgres (bun run db:up / TEST_PG=1)"]
+async fn session_matches_the_shared_conformance_suite() {
+    let session = connect().await;
+    db_core::conformance::assert_session(
+        session.as_ref(),
+        &db_core::conformance::ConformanceSeed {
+            schema: "shop",
+            table: "users",
+            text_column: "email",
+            text_like: "user",
+            min_rows: 1_200,
+            syntax_sql: "SELEC 1",
+            reference_sql: "SELECT * FROM shop.table_that_does_not_exist_zz",
+            constraint_sql: "INSERT INTO shop.organizations (id, name, slug) VALUES (1, 'x', 'x')",
+            dml_sql: "UPDATE shop.users SET full_name = full_name WHERE id = (SELECT MIN(id) FROM shop.users)",
+        },
+    )
+    .await
+    .expect("postgres conformance");
 }

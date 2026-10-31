@@ -1,9 +1,7 @@
-import { DIALECTS } from '@db/database';
-import type { ColumnDefinition, FilterClause, TableSchema } from '../types';
+import type { ColumnDefinition, DatabaseDialect, FilterClause, TableSchema } from '../types';
 import { sqlLiteral as typedSqlLiteral } from './dataExport';
+import { ident, moduleFor, qualify } from './dialectQuote';
 import { filterFromCell } from './tableCellActions';
-
-const quoteIdent = DIALECTS.PostgreSQL.quoteIdent;
 
 export const FK_LOOKUP_PAGE = 20;
 
@@ -20,9 +18,6 @@ const LABEL_HINTS = [
   'code',
 ];
 
-function qualifyTable(schema: string, name: string): string {
-  return schema ? `${quoteIdent(schema)}.${quoteIdent(name)}` : quoteIdent(name);
-}
 
 function sqlLiteral(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
@@ -89,23 +84,31 @@ export function buildLookupSql(
   targetColumn: string,
   query: string,
   offset: number,
-  limit = FK_LOOKUP_PAGE
+  limit = FK_LOOKUP_PAGE,
+  dialect: DatabaseDialect = 'PostgreSQL',
 ): string {
   const columns = lookupColumns(table, targetColumn);
-  const qualified = qualifyTable(table.schema, table.name);
-  const selectList = columns.map(quoteIdent).join(', ');
+  const qualified = qualify(dialect, table.schema, table.name);
+  const selectList = columns.map((column) => ident(dialect, column)).join(', ');
   const fetch = Math.max(1, limit) + 1;
   const start = Math.max(0, offset);
-  const order = quoteIdent(targetColumn);
+  const order = ident(dialect, targetColumn);
   const trimmed = query.trim();
   if (!trimmed) {
     return `SELECT ${selectList} FROM ${qualified} ORDER BY ${order} LIMIT ${fetch} OFFSET ${start};`;
   }
   const pattern = sqlLiteral(ilikePattern(trimmed));
   const where = columns
-    .map((column) => `CAST(${quoteIdent(column)} AS text) ILIKE ${pattern} ESCAPE '\\'`)
+    .map((column) => likePredicate(dialect, ident(dialect, column), pattern))
     .join(' OR ');
   return `SELECT ${selectList} FROM ${qualified} WHERE ${where} ORDER BY ${order} LIMIT ${fetch} OFFSET ${start};`;
+}
+
+function likePredicate(dialect: DatabaseDialect, column: string, pattern: string): string {
+  if (moduleFor(dialect).capabilities.ilike) {
+    return `CAST(${column} AS text) ILIKE ${pattern} ESCAPE '\\'`;
+  }
+  return `LOWER(CAST(${column} AS CHAR)) LIKE LOWER(${pattern})`;
 }
 
 export function rowKeyValue(row: Record<string, unknown>, targetColumn: string): string {
@@ -128,10 +131,11 @@ export function rowSecondaryLabel(
 export function foreignKeyPreviewSql(
   table: TableSchema,
   targetColumn: string,
-  value: unknown
+  value: unknown,
+  dialect: DatabaseDialect = 'PostgreSQL',
 ): string {
-  const qualified = qualifyTable(table.schema, table.name);
-  return `SELECT * FROM ${qualified} WHERE ${quoteIdent(targetColumn)} = ${typedSqlLiteral(value)} LIMIT 1;`;
+  const qualified = qualify(dialect, table.schema, table.name);
+  return `SELECT * FROM ${qualified} WHERE ${ident(dialect, targetColumn)} = ${typedSqlLiteral(value, dialect)} LIMIT 1;`;
 }
 
 export function columnsForForeignRow(

@@ -299,6 +299,46 @@ fn dollar_tag_len(chars: &[char]) -> Option<usize> {
     None
 }
 
+/// Statement splitting, classification and paging for one engine.
+///
+/// The free functions in this module are the PostgreSQL implementation.
+/// `PostgresSql` forwards to them so existing callers stay source-compatible.
+pub trait SqlDialect: Send + Sync {
+    fn split_statements(&self, sql: &str) -> Vec<String>;
+    fn split_ranges(&self, sql: &str) -> Vec<SqlRange>;
+    fn classify(&self, sql: &str) -> QueryKind;
+    fn paged_select(&self, stmt: &str, limit: i64, offset: i64) -> Option<String>;
+    fn count_select(&self, stmt: &str) -> Option<String>;
+    fn quote_ident(&self, name: &str) -> String;
+    fn quote_literal(&self, value: &str) -> String;
+}
+
+pub struct PostgresSql;
+
+impl SqlDialect for PostgresSql {
+    fn split_statements(&self, sql: &str) -> Vec<String> {
+        split_sql_statements(sql)
+    }
+    fn split_ranges(&self, sql: &str) -> Vec<SqlRange> {
+        split_sql_ranges(sql)
+    }
+    fn classify(&self, sql: &str) -> QueryKind {
+        classify_sql(sql)
+    }
+    fn paged_select(&self, stmt: &str, limit: i64, offset: i64) -> Option<String> {
+        paged_select_sql(stmt, limit, offset)
+    }
+    fn count_select(&self, stmt: &str) -> Option<String> {
+        count_select_sql(stmt)
+    }
+    fn quote_ident(&self, name: &str) -> String {
+        format!("\"{}\"", name.replace('"', "\"\""))
+    }
+    fn quote_literal(&self, value: &str) -> String {
+        format!("'{}'", value.replace('\'', "''"))
+    }
+}
+
 fn strip_leading_comments(sql: &str) -> &str {
     let mut s = sql.trim_start();
     loop {

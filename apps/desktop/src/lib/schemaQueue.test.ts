@@ -64,6 +64,18 @@ describe('applyAllScripts', () => {
     ]);
   });
 
+  test('keeps DDL outside the transaction when the engine commits DDL implicitly', () => {
+    const scripts = applyAllScripts(
+      'UPDATE t SET a = 1 WHERE id = 1;',
+      [change({ sql: 'ALTER TABLE t ADD COLUMN z int;' })],
+      { transactionalDdl: false },
+    );
+    expect(scripts).toEqual([
+      'BEGIN;\nUPDATE t SET a = 1 WHERE id = 1;\nCOMMIT;',
+      'ALTER TABLE t ADD COLUMN z int;',
+    ]);
+  });
+
   test('is empty when nothing is staged', () => {
     expect(applyAllScripts('', [])).toEqual([]);
     expect(applyAllScripts('', [change({ transactional: false })])).toEqual(['DROP INDEX "shop"."idx_a";']);

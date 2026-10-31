@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from "react";
-import { columnTypesFor } from "@db/database";
+import { columnTypesFor, dialectModule } from "@db/database";
 import { Check, Plus, Table2, Trash2 } from "lucide-react";
 import { ErrorNotice } from "../ui/ErrorNotice";
 import type { DatabaseDialect, TableSchema } from "../../types";
+import { tableDdlFor } from "../../lib/ddl/registry";
 import {
-  buildCreateTableSql,
   emptyNewTableColumn,
   validateNewTable,
   type NewTableColumn,
@@ -28,14 +28,17 @@ const inputClass =
 const labelClass =
   "block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1";
 
-function initialColumns(): NewTableColumn[] {
+function initialColumns(dialect: DatabaseDialect): NewTableColumn[] {
+  const types = columnTypesFor(dialect) ?? [];
+  const typeId = types.some((type) => type.id === "bigserial") ? "bigserial" : "bigint";
   return [
     {
       ...emptyNewTableColumn(),
       name: "id",
-      typeId: "bigserial",
+      typeId,
       nullable: false,
       primaryKey: true,
+      defaultValue: typeId === "bigint" ? "AUTO_INCREMENT" : "",
     },
   ];
 }
@@ -51,13 +54,18 @@ export const CreateTableDesigner: React.FC<CreateTableDesignerProps> = ({
   const types = useMemo(() => columnTypesFor(dialect) ?? [], [dialect]);
   const schemas = useMemo(() => {
     const names = Array.from(new Set(tables.map((t) => t.schema)));
-    if (!names.includes("public")) names.unshift("public");
+    const fallback = dialectModule(dialect)?.defaultSchema ?? "public";
+    if (fallback && !names.includes(fallback)) names.unshift(fallback);
     return names;
-  }, [tables]);
+  }, [tables, dialect]);
 
   const [schema, setSchema] = useTabFormState(tabId, "schema", schemas[0] ?? "public");
   const [name, setName] = useTabFormState(tabId, "name", "");
-  const [columns, setColumns] = useTabFormState<NewTableColumn[]>(tabId, "columns", initialColumns);
+  const [columns, setColumns] = useTabFormState<NewTableColumn[]>(
+    tabId,
+    "columns",
+    initialColumns(dialect),
+  );
   const [showErrors, setShowErrors] = useTabFormState(tabId, "showErrors", false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -75,7 +83,7 @@ export const CreateTableDesigner: React.FC<CreateTableDesignerProps> = ({
   const sql = useMemo(
     () =>
       name.trim() && columns.length > 0 && columns.every((c) => c.name.trim())
-        ? buildCreateTableSql(ref, columns, types)
+        ? (tableDdlFor(dialect)?.buildCreateTableSql(ref, columns, types) ?? "")
         : "",
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [schema, name, columns, types],
@@ -100,7 +108,7 @@ export const CreateTableDesigner: React.FC<CreateTableDesignerProps> = ({
       }
       onCreated?.({ schema, name: name.trim() });
       setName("");
-      setColumns(initialColumns());
+      setColumns(initialColumns(dialect));
       setShowErrors(false);
     } catch (error: unknown) {
       setSubmitError(
@@ -267,6 +275,7 @@ export const CreateTableDesigner: React.FC<CreateTableDesignerProps> = ({
                   errors={errors}
                   disabled={readOnly || submitting}
                   showName={false}
+                  presets={dialectModule(dialect)?.defaultPresets}
                   onChange={(next) =>
                     updateColumn(index, { ...next, primaryKey: column.primaryKey })
                   }

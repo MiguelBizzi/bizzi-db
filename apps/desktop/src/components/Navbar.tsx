@@ -16,7 +16,7 @@ import {
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { handleTitlebarMouseDown } from "../lib/windowDrag";
 import { ConnectionFolder, ConnectionProfile, DatabaseSchema } from "../types";
-import { PostgresLogo } from "./icons/PostgresLogo";
+import { EngineLogo } from "./icons/EngineLogo";
 import { BrandMark } from "./icons/BrandMark";
 import {
   connectionSwitcherEntries,
@@ -112,7 +112,7 @@ function SwitcherFolderRow({
                   {profile.id === connectingId ? (
                     <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
                   ) : (
-                    <PostgresLogo className="w-4 h-4 shrink-0" />
+                    <EngineLogo dialect={profile.dialect} className="w-4 h-4 shrink-0" />
                   )}
                   <span className="truncate font-mono">{profile.name}</span>
                 </button>
@@ -289,7 +289,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {connectingId ? (
                   <Loader2 className="w-4 h-4 shrink-0 animate-spin text-primary" />
                 ) : (
-                  <PostgresLogo className="w-4 h-4 shrink-0" />
+                  <EngineLogo
+                    dialect={currentDatabase?.dialect}
+                    className="w-4 h-4 shrink-0"
+                  />
                 )}
                 <span className="max-w-[160px] truncate font-mono">
                   {connectingId
@@ -330,7 +333,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                           {entry.profile.id === connectingId ? (
                             <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
                           ) : (
-                            <PostgresLogo className="w-4 h-4 shrink-0" />
+                            <EngineLogo dialect={entry.profile.dialect} className="w-4 h-4 shrink-0" />
                           )}
                           <span className="truncate font-mono">
                             {entry.profile.name}

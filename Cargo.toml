@@ -4,6 +4,7 @@ members = [
   "apps/desktop/src-tauri",
   "crates/core",
   "crates/postgres",
+  "crates/mysql",
   "crates/storage",
 ]
 
@@ -15,6 +16,7 @@ rust-version = "1.88"
 
 [workspace.dependencies]
 async-trait = "=0.1.92"
+mysql_async = { version = "=0.37.1", default-features = false, features = ["minimal", "native-tls-tls"] }
 chrono = { version = "=0.4.45", features = ["serde"] }
 deadpool-postgres = "=0.14.2"
 keyring = "=2.3.3"

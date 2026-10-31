@@ -83,7 +83,8 @@ import {
 } from './lib/sidebarLayout';
 import { firstExecutionError } from './lib/executionResult';
 import { resolveRoutine, routineTabTitle, type RoutineTarget } from './lib/routineTabs';
-import { objectDdlFor } from './lib/ddl/registry';
+import { dialectModule } from '@db/database';
+import { objectDdlFor, tableDdlFor } from './lib/ddl/registry';
 import { planScript } from './lib/ddl/types';
 import {
   changeKey,
@@ -156,7 +157,6 @@ import {
 import { shouldConnectAfterSave } from './lib/connectionForm';
 import { toast } from './lib/toast';
 import { activeFilters } from './lib/tableFilters';
-import { buildTableDdlPreview } from './lib/schemaChange';
 import { deriveCommandContext } from './lib/commands/appContext';
 import { useAppMenu } from './lib/commands/useAppMenu';
 import { buildMenuModel } from './lib/commands/menuModel';
@@ -841,10 +841,17 @@ export default function App() {
   };
 
   const handleCopyTableSchema = (table: TableSchema) => {
-    const ddl = currentDatabase ? objectDdlFor(currentDatabase.dialect) : undefined;
+    const dialect = currentDatabase?.dialect;
+    const ddl = dialect ? objectDdlFor(dialect) : undefined;
     const viewSql = table.isView && ddl ? ddl.createView(ddl.viewDraftFrom(table)) : undefined;
     void navigator.clipboard
-      .writeText(viewSql?.ok ? planScript(viewSql) : buildTableDdlPreview(table))
+      .writeText(
+        viewSql?.ok
+          ? planScript(viewSql)
+          : dialect
+            ? (tableDdlFor(dialect)?.buildTableDdlPreview(table) ?? '')
+            : '',
+      )
       .then(() => toast.success(table.isView ? 'View definition copied' : 'Table schema copied'))
       .catch(() => toast.error('Could not copy to clipboard'));
   };
@@ -1218,10 +1225,14 @@ export default function App() {
       setPendingError('Reconnect to a database to apply changes.');
       return;
     }
-    const bundles = flattenPending(pendingByTable, currentDatabase.tables);
+    const bundles = flattenPending(
+      pendingByTable,
+      currentDatabase.tables,
+      dialectModule(currentDatabase.dialect)?.defaultSchema,
+    );
     const bundle = bundles.find((item) => item.tableId === ref.tableId);
     if (!bundle) return;
-    const sql = sqlForChange(bundle, ref);
+    const sql = sqlForChange(bundle, ref, currentDatabase.dialect);
     if (!sql) return;
     setApplyingChangeKey(changeKey(ref));
     setPendingError(null);
@@ -1262,10 +1273,16 @@ export default function App() {
       setPendingError('Reconnect to a database to apply changes.');
       return;
     }
-    const bundles = flattenPending(pendingByTable, currentDatabase.tables);
-    const rowSql = rowStatementsForAll(bundles);
+    const bundles = flattenPending(
+      pendingByTable,
+      currentDatabase.tables,
+      dialectModule(currentDatabase.dialect)?.defaultSchema,
+    );
+    const rowSql = rowStatementsForAll(bundles, currentDatabase.dialect);
     const schemaChanges = currentSchemaChanges;
-    const scripts = applyAllScripts(rowSql, schemaChanges);
+    const scripts = applyAllScripts(rowSql, schemaChanges, {
+      transactionalDdl: dialectModule(currentDatabase.dialect)?.capabilities.transactionalDdl,
+    });
     const total = countPendingChanges(pendingByTable) + schemaChanges.length;
     if (scripts.length === 0 || total === 0) return;
     const transactional = schemaChanges.filter((change) => change.transactional);
@@ -1787,7 +1804,7 @@ export default function App() {
               }
               return res.results;
             }}
-            onStatementRanges={sqlStatementRanges}
+            onStatementRanges={(sql) => sqlStatementRanges(sql, currentDatabase.id)}
             onQueryPage={(sql, limit, offset, withCount) =>
               queryPage({ connectionId: currentDatabase.id, sql, limit, offset, withCount })
             }
@@ -1970,6 +1987,7 @@ export default function App() {
         pendingCount,
         paneTabCount,
         closedTabCount: closedTabs.length,
+        routines: dialectModule(currentDatabase?.dialect ?? 'PostgreSQL')?.capabilities.routines,
         modals: {
           isCommandPaletteOpen,
           isSettingsOpen,
@@ -1996,6 +2014,7 @@ export default function App() {
       isActivityLogOpen,
       tableActionConfirm,
       routineToDrop,
+      currentDatabase?.dialect,
     ]
   );
 
@@ -2288,6 +2307,7 @@ export default function App() {
 
       <ConfirmTableActionModal
         table={tableActionConfirm?.table ?? null}
+        dialect={currentDatabase?.dialect}
         action={tableActionConfirm?.action ?? null}
         onClose={() => setTableActionConfirm(null)}
         onConfirm={handleConfirmTableAction}
@@ -2298,6 +2318,7 @@ export default function App() {
         pendingByTable={pendingByTable}
         schemaChanges={currentSchemaChanges}
         tables={currentDatabase?.tables || []}
+        dialect={currentDatabase?.dialect}
         applyingKey={applyingChangeKey}
         applyingAll={applyingAllChanges}
         statusMessage={pendingStatus}

@@ -185,6 +185,18 @@ jobs:
           --health-interval 2s
           --health-timeout 5s
           --health-retries 30
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: mysql
+          MYSQL_DATABASE: shop
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pmysql"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 40
     env:
       TEST_PG: "1"
       TEST_PG_HOST: 127.0.0.1
@@ -192,21 +204,33 @@ jobs:
       TEST_PG_USER: postgres
       TEST_PG_PASSWORD: postgres
       TEST_PG_DB: postgres
+      TEST_MYSQL: "1"
+      TEST_MYSQL_HOST: 127.0.0.1
+      TEST_MYSQL_PORT: "3307"
+      TEST_MYSQL_USER: root
+      TEST_MYSQL_PASSWORD: mysql
+      TEST_MYSQL_DB: shop
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           toolchain: stable
-      - name: Install psql
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
-      - name: Seed database
+      - name: Install database clients
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client mysql-client
+      - name: Seed PostgreSQL
         env:
           PGPASSWORD: postgres
         run: |
           for f in docker/postgres/init/*.sql; do
             psql -h 127.0.0.1 -p 5433 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$f"
           done
+      - name: Seed MySQL
+        run: |
+          for f in docker/mysql/init/*.sql; do
+            mysql -h 127.0.0.1 -P 3307 -uroot -pmysql --default-character-set=utf8mb4 < "$f"
+          done
       - run: cargo test -p db-postgres --locked -- --include-ignored
+      - run: cargo test -p db-mysql --locked -- --include-ignored
 
   # Compile check on every platform a contributor might use. Only macOS ships installers today.
   build:

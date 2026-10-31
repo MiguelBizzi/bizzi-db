@@ -262,8 +262,10 @@ export interface QueryErrorPosition {
 export interface QueryErrorInfo {
   category: QueryErrorCategory;
   severity?: string;
-  /** SQLSTATE for Postgres. */
+  /** SQLSTATE, for engines that have one. */
   code?: string;
+  /** Vendor error number when the engine has one besides the SQLSTATE (MySQL errno). */
+  vendorCode?: number;
   message: string;
   detail?: string;
   hint?: string;

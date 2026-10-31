@@ -3,11 +3,13 @@ import { OverlayPresence } from '../ui/OverlayPresence';
 import { Modal, ModalPanel } from '../ui/Modal';
 import { AlertTriangle, Trash2, X } from 'lucide-react';
 import { ErrorNotice } from '../ui/ErrorNotice';
-import type { ColumnDefinition, TableSchema } from '../../types';
-import { buildDropColumnSql, canConfirmDelete } from '../../lib/schemaChange';
+import type { ColumnDefinition, DatabaseDialect, TableSchema } from '../../types';
+import { tableDdlFor } from '../../lib/ddl/registry';
+import { canConfirmDelete } from '../../lib/schemaChange';
 
 interface DeleteColumnModalProps {
   isOpen: boolean;
+  dialect?: DatabaseDialect;
   table: TableSchema;
   column: ColumnDefinition | null;
   disabled?: boolean;
@@ -17,6 +19,7 @@ interface DeleteColumnModalProps {
 
 const DeleteColumnModalBody: React.FC<DeleteColumnModalProps> = ({
   isOpen,
+  dialect = 'PostgreSQL',
   table,
   column,
   disabled,
@@ -45,7 +48,7 @@ const DeleteColumnModalBody: React.FC<DeleteColumnModalProps> = ({
 
   if (!isOpen || !column) return null;
 
-  const sql = buildDropColumnSql(table, column.name);
+  const sql = tableDdlFor(dialect)?.buildDropColumnSql(table, column.name) ?? '';
   const matched = canConfirmDelete(typed, column.name);
 
   const handleSubmit = async (event: React.FormEvent) => {

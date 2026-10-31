@@ -16,8 +16,12 @@ export function QueryErrorCard({ result }: { result: QueryExecutionResult }) {
         <AlertCircle className="w-5 h-5 shrink-0" />
         <span>{info ? categoryLabel(info.category) : 'SQL Execution Error'}</span>
         <span className="ml-auto flex items-center gap-1.5">
-          {info?.code && (
-            <span className="text-[11px] font-normal text-red-400/80">{info.code}</span>
+          {(info?.code || info?.vendorCode != null) && (
+            <span className="text-[11px] font-normal text-red-400/80">
+              {[info?.code, info?.vendorCode != null ? String(info.vendorCode) : undefined]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
           )}
           <CopyButton text={queryErrorCopyText(result)} label="Copy error" />
         </span>

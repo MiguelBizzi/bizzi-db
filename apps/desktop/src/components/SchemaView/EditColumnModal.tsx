@@ -3,11 +3,11 @@ import { OverlayPresence } from "../ui/OverlayPresence";
 import { Modal, ModalPanel } from "../ui/Modal";
 import { AlertTriangle, Check, Pencil, X } from "lucide-react";
 import { ErrorNotice } from "../ui/ErrorNotice";
-import type { ColumnTypeDef } from "@db/database";
-import type { ColumnDefinition, TableSchema } from "../../types";
+import { dialectModule, type ColumnTypeDef } from "@db/database";
+import type { ColumnDefinition, DatabaseDialect, TableSchema } from "../../types";
+import { tableDdlFor } from "../../lib/ddl/registry";
 import {
   alterWarnings,
-  buildAlterColumnSql,
   draftFromColumn,
   validateColumnDraft,
   type ColumnDraft,
@@ -16,6 +16,7 @@ import { ColumnDraftFields } from "./ColumnDraftFields";
 
 interface EditColumnModalProps {
   isOpen: boolean;
+  dialect?: DatabaseDialect;
   table: TableSchema;
   tables: TableSchema[];
   types: ColumnTypeDef[];
@@ -27,6 +28,7 @@ interface EditColumnModalProps {
 
 const EditColumnModalBody: React.FC<EditColumnModalProps> = ({
   isOpen,
+  dialect = "PostgreSQL",
   table,
   tables,
   types,
@@ -62,8 +64,11 @@ const EditColumnModalBody: React.FC<EditColumnModalProps> = ({
   }, [isOpen, onClose]);
 
   const sql = useMemo(
-    () => (column ? buildAlterColumnSql(table, column, draft, types) : ""),
-    [table, column, draft, types],
+    () =>
+      column
+        ? (tableDdlFor(dialect)?.buildAlterColumnSql(table, column, draft, types) ?? "")
+        : "",
+    [dialect, table, column, draft, types],
   );
   const warnings = useMemo(
     () => (column ? alterWarnings(column, draft, types) : []),
@@ -161,6 +166,7 @@ const EditColumnModalBody: React.FC<EditColumnModalProps> = ({
               tables={tables}
               errors={errors}
               disabled={disabled || submitting}
+              presets={dialectModule(dialect)?.defaultPresets}
               onChange={(next) => {
                 setDraft(next);
                 setErrors({});

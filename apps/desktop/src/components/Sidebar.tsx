@@ -23,7 +23,7 @@ import { tableStatParts } from '../lib/format';
 import { explorerListMode } from '../lib/explorerList';
 import { Select } from './ui/Select';
 import { ContextMenu } from './ui/ContextMenu';
-import { PostgresLogo } from './icons/PostgresLogo';
+import { EngineLogo } from './icons/EngineLogo';
 import {
   tableManagementMenuItems,
   type TableManagementHandlers,
@@ -330,7 +330,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span>({filteredTables.length})</span>
             )}
           </span>
-          <PostgresLogo className="w-3.5 h-3.5" />
+          <EngineLogo dialect={currentDatabase.dialect} className="w-3.5 h-3.5" />
         </div>
 
         {listMode === 'skeleton' ? (

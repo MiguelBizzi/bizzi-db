@@ -1,9 +1,10 @@
 import { DIALECTS } from '@db/database';
 import type { TableSchema } from '../../../types';
-import { qualifyTable } from '../../schemaChange';
+import { qualifyTable as qualifyQuoted } from '../../schemaChange';
 import type { DdlResult, ViewDraft } from '../types';
 
 const { quoteIdent, quoteLiteral } = DIALECTS.PostgreSQL;
+const qualifyTable = (schema: string, name: string) => qualifyQuoted(schema, name, quoteIdent);
 const MAX_NAME_BYTES = 63;
 
 export function emptyViewDraft(schema: string): ViewDraft {

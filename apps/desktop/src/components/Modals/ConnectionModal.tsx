@@ -9,10 +9,10 @@ import {
   SshAuthMethod,
   SslMode,
 } from "../../types";
-import { SUPPORTED_DIALECTS } from "@db/database";
+import { dialectModule, SUPPORTED_DIALECTS } from "@db/database";
 import { ShieldCheck, X, AlertCircle, AlertTriangle, FolderOpen } from "lucide-react";
 import { Select, SelectOption } from "../ui/Select";
-import { PostgresLogo } from "../icons/PostgresLogo";
+import { EngineLogo } from "../icons/EngineLogo";
 import {
   defaultSslForHost,
   warnInsecureConnection,
@@ -22,6 +22,7 @@ import {
   connectionFormFromProfile,
   connectionFormToInput,
   connectionModalCopy,
+  applyDialectDefaults,
   defaultConnectionForm,
   firstTabWithErrors,
   type ConnectionFormField,
@@ -232,7 +233,6 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
       <ModalPanel className="w-full max-w-xl bg-popover border border-border rounded-2xl shadow-2xl flex flex-col text-popover-foreground max-h-[90vh]">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between bg-background/60 rounded-t-2xl">
           <div className="flex items-center gap-2.5 font-mono">
-            <PostgresLogo className="w-5 h-5" />
             <span className="text-sm font-bold text-foreground">
               {copy.title}
             </span>
@@ -303,18 +303,28 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
                   <label className="text-[10px] font-bold uppercase text-muted-foreground">
                     Database Engine
                   </label>
-                  <div className="grid grid-cols-1 gap-2">
-                    {SUPPORTED_DIALECTS.map((d) => (
-                      <button
-                        key={d.id}
-                        type="button"
-                        aria-label={d.label}
-                        title={d.label}
-                        className="p-2.5 rounded-xl border font-bold bg-primary/20 border-primary text-primary flex items-center justify-center gap-2"
-                      >
-                        <PostgresLogo className="w-5 h-5" />
-                      </button>
-                    ))}
+                  <div className="grid grid-cols-2 gap-2">
+                    {SUPPORTED_DIALECTS.map((d) => {
+                      const selected = form.dialect === d.id;
+                      return (
+                        <button
+                          key={d.id}
+                          type="button"
+                          aria-pressed={selected}
+                          aria-label={d.label}
+                          title={d.label}
+                          onClick={() => setForm((current) => applyDialectDefaults(current, d.id))}
+                          className={`p-2.5 rounded-xl border font-bold flex items-center justify-center gap-2 ${
+                            selected
+                              ? "bg-primary/20 border-primary text-primary"
+                              : "bg-background border-border text-foreground"
+                          }`}
+                        >
+                          <EngineLogo dialect={d.id} className="w-5 h-5" />
+                          {d.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -414,7 +424,13 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase text-muted-foreground">
                       Database Name
-                      <RequiredMark />
+                      {dialectModule(form.dialect)?.capabilities.emptyDatabaseAllowed ? (
+                        <span className="ml-1 font-normal normal-case tracking-normal text-muted-foreground">
+                          optional, sets the default schema
+                        </span>
+                      ) : (
+                        <RequiredMark />
+                      )}
                     </label>
                     <input
                       type="text"

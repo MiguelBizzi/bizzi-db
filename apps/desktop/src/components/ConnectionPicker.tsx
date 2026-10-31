@@ -14,7 +14,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { ConnectionFolder, ConnectionProfile } from '../types';
-import { PostgresLogo } from './icons/PostgresLogo';
+import { EngineLogo } from './icons/EngineLogo';
 import { ContextMenu, type ContextMenuItem } from './ui/ContextMenu';
 import {
   type ConnectionDropTarget,
@@ -327,7 +327,7 @@ export const ConnectionPicker: React.FC<ConnectionPickerProps> = ({
                 {isConnecting ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <PostgresLogo className="w-4 h-4" />
+                  <EngineLogo dialect={profile.dialect} className="w-4 h-4" />
                 )}
               </div>
               <div className="min-w-0 flex-1">
@@ -459,7 +459,7 @@ export const ConnectionPicker: React.FC<ConnectionPickerProps> = ({
             </div>
             <h2 className="text-base font-semibold">No connections yet</h2>
             <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-              Save a PostgreSQL connection to inspect schema, preview tables, and run SQL.
+              Save a PostgreSQL or MySQL connection to inspect schema, preview tables, and run SQL.
             </p>
             <button
               type="button"

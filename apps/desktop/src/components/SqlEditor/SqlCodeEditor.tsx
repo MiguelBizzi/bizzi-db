@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
-import { sql, PostgreSQL } from '@codemirror/lang-sql';
+import { dialectModule } from '@db/database';
+import { sql, MySQL, PostgreSQL } from '@codemirror/lang-sql';
 import { autocompletion, type CompletionContext } from '@codemirror/autocomplete';
 import { linter, lintGutter } from '@codemirror/lint';
 import { keymap, EditorView } from '@codemirror/view';
@@ -11,7 +12,10 @@ import { sqlDiagnostics } from '../../lib/sqlDiagnostics';
 import { sqlHighlightStyle } from '../../lib/sqlSyntaxTheme';
 import { sqlEditorTheme } from './editorTheme';
 import { BASIC_SETUP_WITHOUT_KEYMAPS, EDITOR_KEYMAP, editorShortcuts } from '../../lib/editorKeymap';
+import type { DatabaseDialect } from '../../types';
 import type { RunMode, RunSelection } from '../../lib/runTarget';
+
+const CODEMIRROR_DIALECT = { PostgreSQL, MySQL } as const;
 
 export interface SqlCodeEditorHandle {
   insertAtCursor: (text: string) => void;
@@ -33,6 +37,7 @@ function runRequest(view: EditorView, mode: RunMode): SqlRunRequest {
 interface SqlCodeEditorProps {
   value: string;
   tables: SqlSchemaTable[];
+  dialect?: DatabaseDialect;
   onChange: (value: string) => void;
   /** Fires when the editor gains or loses a non-blank selection. */
   onSelectionChange?: (hasSelection: boolean) => void;
@@ -43,13 +48,19 @@ interface SqlCodeEditorProps {
 }
 
 export const SqlCodeEditor = forwardRef<SqlCodeEditorHandle, SqlCodeEditorProps>(
-  function SqlCodeEditor({ value, tables, onChange, onSelectionChange, onViewReady, onRunKey }, ref) {
+  function SqlCodeEditor(
+    { value, tables, dialect = 'PostgreSQL', onChange, onSelectionChange, onViewReady, onRunKey },
+    ref,
+  ) {
     const viewRef = useRef<EditorView | null>(null);
     const onSelectionChangeRef = useRef(onSelectionChange);
     const onViewReadyRef = useRef(onViewReady);
     const onRunKeyRef = useRef(onRunKey);
     const hasSelectionRef = useRef(false);
     const tablesRef = useRef(tables);
+    const dialectRef = useRef(dialect);
+    dialectRef.current = dialect;
+    const meta = dialectModule(dialect);
     onSelectionChangeRef.current = onSelectionChange;
     onViewReadyRef.current = onViewReady;
     onRunKeyRef.current = onRunKey;
@@ -79,11 +90,14 @@ export const SqlCodeEditor = forwardRef<SqlCodeEditorHandle, SqlCodeEditorProps>
 
     const extensions = useMemo(
       () => [
-        sql({ dialect: PostgreSQL }),
+        sql({ dialect: CODEMIRROR_DIALECT[meta?.editorDialect ?? 'PostgreSQL'] }),
         syntaxHighlighting(sqlHighlightStyle),
         lintGutter(),
         linter((view) =>
-          sqlDiagnostics(view.state.doc.toString()).map((diag) => ({
+          sqlDiagnostics(view.state.doc.toString(), {
+            dollarQuotes: meta?.capabilities.dollarQuotes,
+            hashComments: meta?.capabilities.hashComments,
+          }).map((diag) => ({
             from: diag.from,
             to: Math.min(diag.to, view.state.doc.length),
             severity: diag.severity,
@@ -97,7 +111,8 @@ export const SqlCodeEditor = forwardRef<SqlCodeEditorHandle, SqlCodeEditorProps>
               const items = sqlCompletions(
                 context.state.doc.toString(),
                 context.pos,
-                tablesRef.current
+                tablesRef.current,
+                dialectRef.current,
               );
               const word = context.matchBefore(/[\w."]*$/);
               if (!word && !context.explicit) return null;
@@ -136,7 +151,7 @@ export const SqlCodeEditor = forwardRef<SqlCodeEditorHandle, SqlCodeEditorProps>
         keymap.of(EDITOR_KEYMAP),
         sqlEditorTheme,
       ],
-      []
+      [dialect, meta]
     );
 
     return (

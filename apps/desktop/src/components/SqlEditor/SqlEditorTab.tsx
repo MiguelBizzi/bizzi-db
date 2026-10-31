@@ -3,6 +3,7 @@ import { AnimatePresence } from 'motion/react';
 import type { SqlRange } from '@db/shared';
 import { Modal, ModalPanel } from '../ui/Modal';
 import { Popover } from '../ui/Popover';
+import { dialectModule } from '@db/database';
 import { format } from 'sql-formatter';
 import { toggleComment } from '@codemirror/commands';
 import type { EditorView } from '@codemirror/view';
@@ -368,7 +369,7 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
   const handleFormatQuery = () => {
     try {
       const formatted = format(sql, {
-        language: currentDatabase.dialect === 'MySQL' ? 'mysql' : 'postgresql',
+        language: dialectModule(currentDatabase.dialect)?.formatterLanguage ?? 'postgresql',
       });
       setSql(formatted);
     } catch {
@@ -720,6 +721,7 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
             <SqlCodeEditor
               ref={editorRef}
               value={sql}
+              dialect={currentDatabase.dialect}
               tables={currentDatabase.tables}
               onChange={setSql}
               onRunKey={runFromMenu}

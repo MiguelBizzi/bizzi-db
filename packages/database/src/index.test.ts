@@ -21,10 +21,12 @@ describe('quoteSqlIdent', () => {
 });
 
 describe('dialectMeta', () => {
-  test('returns PostgreSQL and undefined for unsupported dialects', () => {
+  test('returns PostgreSQL and MySQL, and undefined for other dialects', () => {
     expect(dialectMeta('PostgreSQL')?.defaultPort).toBe(5432);
-    expect(dialectMeta('MySQL')).toBeUndefined();
-    expect(SUPPORTED_DIALECTS).toHaveLength(1);
+    expect(dialectMeta('MySQL')?.defaultPort).toBe(3306);
+    expect(dialectMeta('MySQL')?.capabilities.transactionalDdl).toBe(false);
+    expect(dialectMeta('SQLite')).toBeUndefined();
+    expect(SUPPORTED_DIALECTS.map((d) => d.id)).toEqual(['PostgreSQL', 'MySQL']);
   });
 });
 
@@ -42,7 +44,7 @@ describe('columnTypesFor', () => {
   });
 
   test('returns undefined for dialects without a catalog', () => {
-    expect(columnTypesFor('MySQL')).toBeUndefined();
+    expect(columnTypesFor('MySQL')?.some((type) => type.id === 'varchar')).toBe(true);
     expect(columnTypesFor('SQLite')).toBeUndefined();
     expect(columnTypesFor('ClickHouse')).toBeUndefined();
     expect(columnTypesFor('DuckDB')).toBeUndefined();

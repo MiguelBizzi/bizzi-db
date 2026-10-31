@@ -54,11 +54,15 @@ function coveringIndex(index: IndexDefinition, others: IndexDefinition[]): Index
   });
 }
 
-export function indexInsights(table: TableSchema): Map<string, IndexInsight[]> {
+export function indexInsights(
+  table: TableSchema,
+  options?: { invalidIndexes?: boolean },
+): Map<string, IndexInsight[]> {
+  const invalidIndexes = options?.invalidIndexes !== false;
   const result = new Map<string, IndexInsight[]>();
   for (const index of table.indexes) {
     const insights: IndexInsight[] = [];
-    if (index.isValid === false) {
+    if (invalidIndexes && index.isValid === false) {
       insights.push({
         kind: 'invalid',
         label: 'Invalid',
