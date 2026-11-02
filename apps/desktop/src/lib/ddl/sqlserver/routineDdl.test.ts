@@ -34,6 +34,16 @@ describe('sqlserver routine ddl', () => {
     expect(plan.statements[0]).toContain('AS\nBEGIN\nSET @id = 1\nEND');
   });
 
+  test('emits OUTPUT for an inout parameter', () => {
+    const plan = planCreateRoutine(
+      draft({ parameters: [{ name: 'id', dataType: 'int', mode: 'inout', default: '' }] }),
+      true,
+    );
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.statements[0]).toContain('@id int OUTPUT');
+  });
+
   test('emits a scalar function', () => {
     const plan = planCreateRoutine(
       draft({

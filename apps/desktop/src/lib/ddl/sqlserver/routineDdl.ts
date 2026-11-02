@@ -32,7 +32,7 @@ export function routineDraftFrom(routine: RoutineDefinition, body: string): Rout
     ...emptyRoutineDraft(routine.schema, routine.kind),
     name: routine.name,
     parameters: routine.parameters.map((param) => ({
-      mode: param.mode === 'out' || param.mode === 'inout' ? 'out' : 'in',
+      mode: param.mode === 'inout' ? 'inout' : param.mode === 'out' ? 'out' : 'in',
       name: param.name.replace(/^@/, ''),
       dataType: param.dataType,
       default: param.default ?? '',
@@ -62,7 +62,10 @@ export function validateRoutine(draft: RoutineDraft): string[] {
 function paramSql(draft: RoutineDraft): string {
   return draft.parameters
     .map((param) => {
-      const output = draft.kind === 'procedure' && param.mode === 'out' ? ' OUTPUT' : '';
+      const output =
+        draft.kind === 'procedure' && (param.mode === 'out' || param.mode === 'inout')
+          ? ' OUTPUT'
+          : '';
       const fallback = param.default.trim() ? ` = ${param.default.trim()}` : '';
       return `@${param.name.trim().replace(/^@/, '')} ${param.dataType.trim()}${fallback}${output}`;
     })

@@ -909,6 +909,30 @@ mod tests {
         }
     }
 
+    #[test]
+    fn sql_server_profile_round_trips_and_the_ipc_name_still_loads() {
+        let db = Storage::open_in_memory().unwrap();
+        let mut profile = sample_profile("ss");
+        profile.dialect = DatabaseDialect::SQLServer;
+        profile.port = 1433;
+        profile.database = "shop".into();
+        db.upsert_connection(&profile).unwrap();
+        assert_eq!(
+            db.list_connections().unwrap()[0].dialect,
+            DatabaseDialect::SQLServer
+        );
+        db.conn
+            .execute(
+                "UPDATE connections SET dialect = 'SQLServer' WHERE id = 'ss'",
+                [],
+            )
+            .unwrap();
+        assert_eq!(
+            db.list_connections().unwrap()[0].dialect,
+            DatabaseDialect::SQLServer
+        );
+    }
+
     fn sample_history(id: &str, timestamp: &str) -> ActivityLogItem {
         ActivityLogItem {
             id: id.into(),

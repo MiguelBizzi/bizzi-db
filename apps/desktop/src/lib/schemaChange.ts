@@ -32,6 +32,7 @@ export interface ForeignKeyDraft {
   targetTable: string;
   targetColumn: string;
   onDelete: string;
+  onUpdate?: string;
 }
 
 export interface ColumnDraft {
@@ -202,6 +203,7 @@ export function draftFromColumn(column: ColumnDefinition, types: ColumnTypeDef[]
           targetTable: fk.targetTable,
           targetColumn: fk.targetColumn,
           onDelete: fk.onDelete ?? '',
+          onUpdate: fk.onUpdate ?? '',
         }
       : null,
   };

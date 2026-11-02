@@ -12,6 +12,18 @@ export const UPCOMING: UpcomingEntry | null = {
     {
       "kind": "new",
       "text": "Paste a `sqlserver://` or `mssql://` address to fill the connection form. Identity, computed, and rowversion columns stay read-only in the grid, and a SQL export splits inserts into batches of 1000 rows."
+    },
+    {
+      "kind": "fixed",
+      "text": "Applying several pending changes on SQL Server keeps each procedure or view in its own batch. An index change that only updates included columns or options is saved, and renaming an index while changing its keys drops the current name."
+    },
+    {
+      "kind": "fixed",
+      "text": "A query SQL Server cannot page on the server returns one page instead of every row. A failed script no longer leaves the next statement unable to insert an identity value. Foreign key search treats `%` and `_` as ordinary characters, and a foreign key keeps its ON UPDATE action."
+    },
+    {
+      "kind": "fixed",
+      "text": "A host written as `HOST\\INSTANCE` is rejected with an explanation. SQL Server named instances are not supported."
     }
   ]
 };

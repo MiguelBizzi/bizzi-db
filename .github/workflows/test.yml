@@ -170,7 +170,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.desktop == 'true'
     timeout-minutes: 30
-    runs-on: ubuntu-latest
+    # packages-microsoft-prod.deb is published per Ubuntu release. Pin the image
+    # the SQL Server client install is known to match.
+    runs-on: ubuntu-22.04
     services:
       postgres:
         image: postgres:16-alpine

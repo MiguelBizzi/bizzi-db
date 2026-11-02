@@ -961,10 +961,9 @@ export default function App() {
     if (!tableActionConfirm) return;
     const { table, action } = tableActionConfirm;
     if (table.isView) {
-      const result =
-        currentDatabase &&
-        objectDdlFor(currentDatabase.dialect)?.dropView(table);
-      if (action === "drop" && result?.ok) {
+      const dialect = currentDatabase?.dialect;
+      const result = dialect && objectDdlFor(dialect)?.dropView(table);
+      if (action === "drop" && result?.ok && dialect) {
         stageSchema(
           stagedFromPlan(result, {
             key: viewChangeKey(table),
@@ -974,7 +973,7 @@ export default function App() {
             name: table.name,
             title: `Delete ${table.isMaterialized ? "materialized view" : "view"} ${table.name}`,
             effects: { closeTableId: table.id },
-          }),
+          }, dialect),
         );
       }
       setTableActionConfirm(null);

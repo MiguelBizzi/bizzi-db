@@ -38,9 +38,33 @@ fn tagged(kind: &str, data: &ColumnData<'_>) -> Json {
 
 fn money_json(data: &ColumnData<'_>) -> Json {
     match data {
-        ColumnData::F64(Some(value)) => Json::String(format!("{value:.4}")),
+        ColumnData::F64(Some(value)) => Json::String(format_money(*value)),
+        ColumnData::F32(Some(value)) => Json::String(format_money(f64::from(*value))),
         ColumnData::F64(None) | ColumnData::F32(None) => Json::Null,
         other => value_json(other),
+    }
+}
+
+/// Tiberius decodes `money` as `f64`. Rounding to the 1/10000 currency unit
+/// keeps a large value from printing the binary fraction (`….6250`).
+fn format_money(value: f64) -> String {
+    if !value.is_finite() {
+        return "0.0000".into();
+    }
+    let scaled = (value * 10_000.0).round();
+    if !scaled.is_finite() || scaled.abs() > i64::MAX as f64 {
+        return format!("{value:.4}");
+    }
+    let units = scaled as i64;
+    let negative = units < 0;
+    let digits = units.unsigned_abs();
+    let whole = digits / 10_000;
+    let fraction = digits % 10_000;
+    let text = format!("{whole}.{fraction:04}");
+    if negative {
+        format!("-{text}")
+    } else {
+        text
     }
 }
 
@@ -243,6 +267,16 @@ mod tests {
             )))),
             Json::String("<a/>".into())
         );
+    }
+
+    #[test]
+    fn money_uses_the_nearest_currency_unit() {
+        assert_eq!(format_money(10.5), "10.5000");
+        assert_eq!(format_money(-0.0001), "-0.0001");
+        let units: i64 = 9_223_372_036_854_775_807;
+        let value = units as f64 / 10_000.0;
+        assert_eq!(format_money(value), "922337203685477.5807");
+        assert_ne!(format!("{value:.4}"), format_money(value));
     }
 
     #[test]

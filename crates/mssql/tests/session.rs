@@ -185,6 +185,25 @@ async fn pages_the_large_events_table() {
 
 #[tokio::test]
 #[ignore = "requires local SQL Server (bun run db:up)"]
+async fn a_paging_wrapper_error_still_returns_one_page() {
+    let _guard = schema_lock().await;
+    let session = connect(None).await;
+    let page = session
+        .query_page(
+            "SELECT n FROM (VALUES (1),(2),(3),(4),(5)) AS v(n) OPTION (FAST 1)",
+            2,
+            0,
+            false,
+        )
+        .await
+        .expect("page");
+    assert!(page.error.is_none(), "{:?}", page.error);
+    assert_eq!(page.page_size, Some(2));
+    assert_eq!(row_count(&page), 2);
+}
+
+#[tokio::test]
+#[ignore = "requires local SQL Server (bun run db:up)"]
 async fn introspection_sees_the_seed_and_not_the_other_database() {
     let _guard = schema_lock().await;
     let session = connect(None).await;
@@ -225,6 +244,23 @@ async fn introspection_sees_the_seed_and_not_the_other_database() {
         .indexes
         .iter()
         .any(|index| index.name == "ix_users_active"));
+    let shipments = schema
+        .tables
+        .iter()
+        .find(|table| table.schema == "sales" && table.name == "shipments")
+        .expect("shipments");
+    let order_id = shipments
+        .columns
+        .iter()
+        .find(|column| column.name == "order_id")
+        .expect("order_id");
+    assert_eq!(
+        order_id
+            .foreign_key
+            .as_ref()
+            .and_then(|fk| fk.on_update.as_deref()),
+        Some("CASCADE")
+    );
 
     let kinds: Vec<_> = schema
         .routines
@@ -251,4 +287,54 @@ async fn introspection_sees_the_seed_and_not_the_other_database() {
     let analytics = other.introspect().await.expect("analytics");
     assert!(analytics.tables.iter().any(|table| table.name == "reports"));
     assert!(!analytics.tables.iter().any(|table| table.name == "users"));
+}
+
+#[tokio::test]
+#[ignore = "requires local SQL Server (bun run db:up)"]
+async fn a_failed_script_does_not_leave_identity_insert_on_the_pool() {
+    let _guard = schema_lock().await;
+    let session = connect(None).await;
+    let failed = session
+        .execute(
+            "SET IDENTITY_INSERT dbo.users ON; INSERT INTO dbo.users (id, organization_id, email, full_name) VALUES (1, 1, N'not-an-email', N'x');",
+            None,
+        )
+        .await
+        .expect("execute");
+    assert!(failed.iter().any(|result| result.error.is_some()));
+
+    let next = session
+        .execute(
+            "SET IDENTITY_INSERT sales.shipments ON; SET IDENTITY_INSERT sales.shipments OFF; SELECT 1 AS ok;",
+            None,
+        )
+        .await
+        .expect("next");
+    assert!(next.iter().all(|result| result.error.is_none()), "{next:?}");
+}
+
+#[tokio::test]
+#[ignore = "requires local SQL Server (bun run db:up)"]
+async fn reset_clears_xact_abort() {
+    let _guard = schema_lock().await;
+    let session = connect(None).await;
+    session
+        .execute("SET XACT_ABORT ON; SELECT 1 AS n;", None)
+        .await
+        .expect("set");
+    let options = session
+        .execute(
+            "SELECT CASE WHEN (16384 & @@OPTIONS) = 16384 THEN 1 ELSE 0 END AS xact_abort",
+            None,
+        )
+        .await
+        .expect("options");
+    assert!(options[0].error.is_none(), "{:?}", options[0].error);
+    let value = options[0]
+        .rows
+        .as_ref()
+        .and_then(|rows| rows.first())
+        .and_then(|row| row.get("xact_abort"))
+        .and_then(|value| value.as_i64());
+    assert_eq!(value, Some(0));
 }

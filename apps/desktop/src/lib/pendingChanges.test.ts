@@ -157,6 +157,23 @@ describe('sqlForInsert', () => {
       sqlForInsert(odd, { tempId: 't1', data: { name: "O'Brien", active: true, n: 3 } }, 'PostgreSQL')
     ).toBe(`INSERT INTO "shop"."we""ird" ("name", "active", "n") VALUES ('O''Brien', TRUE, 3);`);
   });
+
+  test('wraps an explicit identity value in IDENTITY_INSERT', () => {
+    const users = bundle({
+      schema: 'dbo',
+      tableName: 'users',
+      table: table('users', {
+        schema: 'dbo',
+        columns: [
+          { name: 'id', type: 'int', isPrimary: true, identity: { seed: 1, increment: 1 } },
+          { name: 'email', type: 'nvarchar' },
+        ],
+      }),
+    });
+    expect(sqlForInsert(users, { tempId: 't1', data: { id: 7, email: 'a@b' } }, 'SQLServer')).toBe(
+      "SET IDENTITY_INSERT [dbo].[users] ON;\nINSERT INTO [dbo].[users] ([id], [email]) VALUES (7, N'a@b');\nSET IDENTITY_INSERT [dbo].[users] OFF;",
+    );
+  });
 });
 
 describe('sqlForUpdateRow / sqlForDelete', () => {
@@ -172,6 +189,29 @@ describe('sqlForUpdateRow / sqlForDelete', () => {
     expect(
       sqlForDelete(users, { rowId: 1, primaryKeyValue: 1, rowData: { id: 1 } }, 'PostgreSQL')
     ).toBe('DELETE FROM "public"."users" WHERE "id" = 1;');
+  });
+
+  test('quotes an object value as a national literal on SQL Server', () => {
+    const users = bundle({ schema: 'dbo', tableName: 'users' });
+    expect(
+      sqlForUpdateRow(
+        users,
+        {
+          rowId: '1',
+          primaryKeyValue: 1,
+          cells: [
+            {
+              rowId: 1,
+              primaryKeyValue: 1,
+              columnName: 'meta',
+              oldValue: null,
+              newValue: { a: "O'Brien" },
+            },
+          ],
+        },
+        'SQLServer',
+      ),
+    ).toBe(`UPDATE [dbo].[users] SET [meta] = N'{"a":"O''Brien"}' WHERE [id] = 1;`);
   });
 
   test('emits DEFAULT instead of a quoted literal for the sentinel', () => {

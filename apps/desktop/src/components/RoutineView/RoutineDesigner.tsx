@@ -188,7 +188,7 @@ export const RoutineDesigner: React.FC<RoutineDesignerProps> = ({
                   ? `Rename ${routine.kind} ${routine.name} to ${target.schema}.${target.name}`
                   : `Edit ${routine.kind} ${routine.name}`,
             effects: { retargetRoutine: { fromId: routine.id, ...target } },
-          }),
+          }, dialect),
         );
         setDraft(null);
         return;

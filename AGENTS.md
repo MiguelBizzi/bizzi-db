@@ -12,7 +12,7 @@ Read this file before changing code. The same constraints are enforced by `.clau
 - Local persistence: `db-storage` (rusqlite + keyring).
 - Shared TS packages: `@db/shared` (DTOs), `@db/database` (dialect modules), `@db/core` (IPC wrappers), `@db/storage` (saved-query IPC).
 - Marketing site: `apps/web`. It is not the product.
-- Tooling: Bun 1.3 workspaces, Turborepo, Rust 1.88, Cargo workspace. Versions in the root `package.json`, `[workspace.package]` in `Cargo.toml`, and `apps/desktop/src-tauri/tauri.conf.json` move together (currently 0.1.26).
+- Tooling: Bun 1.3 workspaces, Turborepo, Rust 1.88, Cargo workspace. Versions in the root `package.json`, `[workspace.package]` in `Cargo.toml`, and `apps/desktop/src-tauri/tauri.conf.json` move together (currently 0.1.27).
 - Tests: `bun test` for TypeScript, `cargo test` for Rust. No Cypress, Playwright, or Tauri window drivers.
 
 ## Directory map
@@ -82,7 +82,7 @@ Autocomplete: `lib/sqlContext.ts` decides what token is legal at the caret. `lib
 
 PostgreSQL, MySQL, and SQL Server are the registered adapters. `docs/adding-a-database.md` is the checklist: one crate, one `DialectModule` with `lib/ddl/<engine>/`, one registry entry on each side, one seed, and one live test file. The SQL Server parity matrix is `docs/superpowers/specs/2026-11-02-sql-server-design.md`.
 
-MySQL treats the database field as an optional default schema and lists every user database. Other engines require a database name. Postgres DDL is transactional; MySQL DDL commits implicitly.
+MySQL treats the database field as an optional default schema and lists every user database. Other engines require a database name. Postgres DDL is transactional. MySQL DDL commits implicitly. SQL Server DDL is transactional when the script sets `XACT_ABORT` and splits batches on `GO`.
 
 ## Commands, menus, shortcuts
 

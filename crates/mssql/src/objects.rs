@@ -142,7 +142,7 @@ pub async fn schema_fingerprint(client: &mut SqlClient) -> Result<String, Adapte
              JOIN sys.columns col ON col.object_id = ic.object_id AND col.column_id = ic.column_id
              WHERE i.type > 0 AND o.type IN ('U', 'V') AND {USER_SCHEMA}
              UNION ALL
-             SELECT CONCAT(N'f|', fk.name, N'|', OBJECT_SCHEMA_NAME(fk.parent_object_id), N'|', OBJECT_NAME(fk.parent_object_id), N'|', COL_NAME(fkc.parent_object_id, fkc.parent_column_id), N'|', OBJECT_SCHEMA_NAME(fk.referenced_object_id), N'|', OBJECT_NAME(fk.referenced_object_id), N'|', COL_NAME(fkc.referenced_object_id, fkc.referenced_column_id), N'|', fk.delete_referential_action_desc)
+             SELECT CONCAT(N'f|', fk.name, N'|', OBJECT_SCHEMA_NAME(fk.parent_object_id), N'|', OBJECT_NAME(fk.parent_object_id), N'|', COL_NAME(fkc.parent_object_id, fkc.parent_column_id), N'|', OBJECT_SCHEMA_NAME(fk.referenced_object_id), N'|', OBJECT_NAME(fk.referenced_object_id), N'|', COL_NAME(fkc.referenced_object_id, fkc.referenced_column_id), N'|', fk.delete_referential_action_desc, N'|', fk.update_referential_action_desc)
              FROM sys.foreign_keys fk
              JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
              UNION ALL
@@ -445,7 +445,7 @@ async fn attach_foreign_keys(
 ) -> Result<(), AdapterError> {
     let rows = fetch(
         client,
-        "SELECT fk.parent_object_id, COL_NAME(fkc.parent_object_id, fkc.parent_column_id), OBJECT_SCHEMA_NAME(fk.referenced_object_id), OBJECT_NAME(fk.referenced_object_id), COL_NAME(fkc.referenced_object_id, fkc.referenced_column_id), fk.delete_referential_action_desc, fk.name
+        "SELECT fk.parent_object_id, COL_NAME(fkc.parent_object_id, fkc.parent_column_id), OBJECT_SCHEMA_NAME(fk.referenced_object_id), OBJECT_NAME(fk.referenced_object_id), COL_NAME(fkc.referenced_object_id, fkc.referenced_column_id), fk.delete_referential_action_desc, fk.update_referential_action_desc, fk.name
          FROM sys.foreign_keys fk
          JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
          ORDER BY fk.object_id, fkc.constraint_column_id",
@@ -461,7 +461,8 @@ async fn attach_foreign_keys(
             target_column: text(&row, 4),
             target_schema: cell(&row, 2).map(str::to_string),
             on_delete: cell(&row, 5).map(referential_action),
-            name: cell(&row, 6).map(str::to_string),
+            on_update: cell(&row, 6).map(referential_action),
+            name: cell(&row, 7).map(str::to_string),
         };
         for definition in &mut table.columns {
             if definition.name == column && definition.foreign_key.is_none() {

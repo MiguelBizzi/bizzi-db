@@ -289,7 +289,7 @@ export const DIALECTS: Record<'PostgreSQL' | 'MySQL' | 'SQLServer', DialectMeta>
     },
     limitClause: (limit, offset) => `OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`,
     caseInsensitiveLike: (column, pattern) =>
-      `LOWER(CAST(${column} AS NVARCHAR(MAX))) LIKE LOWER(${pattern})`,
+      `LOWER(CAST(${column} AS NVARCHAR(MAX))) LIKE LOWER(${pattern}) ESCAPE '\\'`,
     emptyEditorSql: 'SELECT TOP (50) name FROM sys.tables;',
     requiresSchemaOnCreate: false,
     currentTimestamp: 'SYSUTCDATETIME()',

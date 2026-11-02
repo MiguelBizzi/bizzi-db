@@ -171,7 +171,7 @@ function sqlLiteral(dialect: DatabaseDialect, value: unknown): string {
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   if (typeof value === 'bigint') return String(value);
   if (typeof value === 'object') {
-    return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+    return moduleFor(dialect).quoteLiteral(JSON.stringify(value));
   }
   return stringLiteral(dialect, String(value));
 }
@@ -194,7 +194,14 @@ export function sqlForInsert(
   }
   const cols = entries.map(([column]) => ident(dialect, column)).join(', ');
   const vals = entries.map(([, value]) => sqlLiteral(dialect, value)).join(', ');
-  return `INSERT INTO ${qualified} (${cols}) VALUES (${vals});`;
+  const sql = `INSERT INTO ${qualified} (${cols}) VALUES (${vals});`;
+  const explicitIdentity =
+    moduleFor(dialect).capabilities.identityColumns &&
+    bundle.table?.columns.some(
+      (column) => column.identity && entries.some(([name]) => name === column.name),
+    );
+  if (!explicitIdentity) return sql;
+  return `SET IDENTITY_INSERT ${qualified} ON;\n${sql}\nSET IDENTITY_INSERT ${qualified} OFF;`;
 }
 
 export function sqlForUpdateRow(

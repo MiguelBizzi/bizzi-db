@@ -693,6 +693,7 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
                     Some(target_schema)
                 },
                 on_delete: on_delete_from_confdeltype(confdeltype.trim()),
+                on_update: None,
                 name: None,
             },
         );

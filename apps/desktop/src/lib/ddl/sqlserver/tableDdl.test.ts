@@ -111,6 +111,38 @@ describe('sqlserver table ddl', () => {
     expect(sql).toContain('DROP INDEX [users_email] ON [dbo].[users]');
   });
 
+  test('keeps ON UPDATE when a foreign key is recreated', () => {
+    const sql = buildAlterColumnSql(
+      table,
+      column({
+        name: 'organization_id',
+        type: 'int',
+        foreignKey: {
+          targetSchema: 'dbo',
+          targetTable: 'organizations',
+          targetColumn: 'id',
+          onDelete: 'NO ACTION',
+          name: 'users_organization_id_fkey',
+        },
+      }),
+      draft({
+        name: 'organization_id',
+        typeId: 'int',
+        foreignKey: {
+          targetSchema: 'dbo',
+          targetTable: 'organizations',
+          targetColumn: 'id',
+          onDelete: 'CASCADE',
+          onUpdate: 'CASCADE',
+        },
+      }),
+      types,
+    );
+    expect(sql).toContain(
+      'FOREIGN KEY ([organization_id]) REFERENCES [dbo].[organizations] ([id]) ON DELETE CASCADE ON UPDATE CASCADE',
+    );
+  });
+
   test('truncate and drop are schema-qualified', () => {
     expect(buildTruncateTableSql(table)).toBe('TRUNCATE TABLE [dbo].[users];');
     expect(buildDropTableSql(table)).toBe('DROP TABLE [dbo].[users];');

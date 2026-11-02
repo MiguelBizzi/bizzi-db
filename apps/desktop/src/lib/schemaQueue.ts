@@ -5,7 +5,7 @@
  */
 
 import type { DatabaseDialect } from '../types';
-import { wrapTransaction } from './dialectQuote';
+import { moduleFor, wrapTransaction } from './dialectQuote';
 
 export type SchemaObjectKind = 'column' | 'index' | 'table' | 'view' | 'function' | 'procedure';
 
@@ -52,7 +52,12 @@ export function removeSchemaChange(queue: StagedSchemaChange[], key: string): St
 }
 
 function statementCount(sql: string): number {
-  return sql.split(/;\s*(?:\n|$)/).filter((part) => part.trim()).length;
+  // GO is a client batch separator, so a script can hold several statements
+  // without a semicolon between them.
+  return sql.split(/^\s*GO\s*$/im).reduce(
+    (count, batch) => count + batch.split(/;\s*(?:\n|$)/).filter((part) => part.trim()).length,
+    0,
+  );
 }
 
 export function schemaChangeScript(change: StagedSchemaChange, dialect: DatabaseDialect): string {
@@ -79,7 +84,7 @@ export function applyAllScripts(
   ].filter(Boolean);
   const scripts =
     inTransaction.length > 0
-      ? [wrapTransaction(options.dialect, inTransaction.join('\n'))]
+      ? [wrapTransaction(options.dialect, inTransaction.join(moduleFor(options.dialect).scriptSeparator))]
       : [];
   for (const change of queue) {
     if (!change.transactional || !ddlInTransaction) {
@@ -92,11 +97,12 @@ export function applyAllScripts(
 
 export function stagedFromPlan(
   plan: { statements: string[]; transactional: boolean; warnings: string[] },
-  meta: Omit<StagedSchemaChange, 'sql' | 'transactional' | 'warnings'>
+  meta: Omit<StagedSchemaChange, 'sql' | 'transactional' | 'warnings'>,
+  dialect: DatabaseDialect,
 ): StagedSchemaChange {
   return {
     ...meta,
-    sql: plan.statements.join('\n'),
+    sql: plan.statements.join(moduleFor(dialect).scriptSeparator),
     transactional: plan.transactional,
     warnings: plan.warnings,
   };

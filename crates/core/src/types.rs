@@ -77,6 +77,9 @@ pub struct ForeignKeyRef {
     pub target_schema: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub on_delete: Option<String>,
+    /// `ON UPDATE` action, such as `CASCADE`. Distinct from a column's `ON UPDATE` expression.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_update: Option<String>,
     /// Constraint name when the engine reports one. MySQL needs it to drop the key.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,

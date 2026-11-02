@@ -82,6 +82,10 @@ pub fn database_required(dialect: DatabaseDialect) -> bool {
 }
 
 pub fn dialect_from_label(label: &str) -> Result<DatabaseDialect, String> {
+    // Stored profiles use "SQL Server". The IPC enum name is "SQLServer".
+    if label.eq_ignore_ascii_case("SQLServer") {
+        return Ok(DatabaseDialect::SQLServer);
+    }
     ENGINES
         .iter()
         .find(|spec| spec.label == label)
@@ -109,6 +113,14 @@ mod tests {
             assert_ne!(label, "Unknown");
             assert_eq!(dialect_from_label(label).unwrap(), dialect);
         }
+        assert_eq!(
+            dialect_from_label("SQLServer").unwrap(),
+            DatabaseDialect::SQLServer
+        );
+        assert_eq!(
+            dialect_from_label("sqlserver").unwrap(),
+            DatabaseDialect::SQLServer
+        );
         assert!(dialect_from_label("Oracle").is_err());
         assert!(dialect_is_supported(DatabaseDialect::PostgreSQL));
         assert!(dialect_is_supported(DatabaseDialect::MySQL));

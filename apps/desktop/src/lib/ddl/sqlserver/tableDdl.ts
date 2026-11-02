@@ -55,14 +55,16 @@ function fkEqual(
     (current.targetSchema ?? '') === (draft.targetSchema ?? '') &&
     current.targetTable === draft.targetTable &&
     current.targetColumn === draft.targetColumn &&
-    (current.onDelete ?? '') === (draft.onDelete ?? '')
+    (current.onDelete ?? '') === (draft.onDelete ?? '') &&
+    (current.onUpdate ?? '') === (draft.onUpdate ?? '')
   );
 }
 
 function referencesClause(fk: ForeignKeyDraft): string {
   const target = qualify(fk.targetSchema, fk.targetTable);
   const onDelete = fk.onDelete.trim() ? ` ON DELETE ${fk.onDelete.trim()}` : '';
-  return ` REFERENCES ${target} (${quoteIdent(fk.targetColumn)})${onDelete}`;
+  const onUpdate = fk.onUpdate?.trim() ? ` ON UPDATE ${fk.onUpdate.trim()}` : '';
+  return ` REFERENCES ${target} (${quoteIdent(fk.targetColumn)})${onDelete}${onUpdate}`;
 }
 
 export function buildAddColumnSql(table: TableRef, draft: ColumnDraft, types: ColumnTypeDef[]): string {

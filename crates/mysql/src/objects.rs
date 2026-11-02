@@ -155,6 +155,7 @@ pub async fn introspect(
                 target_table: cell(row, 4).unwrap_or_default(),
                 target_column: cell(row, 5).unwrap_or_default(),
                 on_delete: cell(row, 6),
+                on_update: None,
                 name: cell(row, 7).filter(|value| !value.is_empty()),
             });
         }

@@ -67,7 +67,7 @@ const DropIndexModalBody: React.FC<DropIndexModalProps> = ({
         name: index.name,
         parent: `${table.schema}.${table.name}`,
         title: `Delete index ${index.name}`,
-      }),
+      }, dialect),
     );
     onClose();
   };

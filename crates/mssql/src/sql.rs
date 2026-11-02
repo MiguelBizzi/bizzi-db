@@ -61,8 +61,18 @@ impl SqlDialect for TSqlSql {
         let (limit, offset) = (limit.max(0), offset.max(0));
         let fetch = format!("OFFSET {offset} ROWS FETCH NEXT {limit} ROWS ONLY");
         // `ORDER BY NULL` is a syntax error; a subquery is the documented constant.
-        if trailing_order(&body).is_some() {
+        if let Some(order_at) = trailing_order(&body) {
+            if let Some(option_at) = trailing_option(&body) {
+                if option_at > order_at {
+                    let head = cut_at(&body, option_at);
+                    let option: String = body.chars().skip(option_at).collect();
+                    return Some(format!("{head} {fetch} {}", option.trim()));
+                }
+            }
             return Some(format!("{body} {fetch}"));
+        }
+        if trailing_option(&body).is_some() {
+            return None;
         }
         if first_word(&body) == "WITH" {
             return Some(format!("{body} ORDER BY (SELECT NULL) {fetch}"));
@@ -141,14 +151,27 @@ fn trailing_order(sql: &str) -> Option<usize> {
         if word == "ORDER" && words.get(index + 1).is_some_and(|(next, _)| next == "BY") {
             order_at = Some(*at);
         }
-        if matches!(
-            word.as_str(),
-            "UNION" | "EXCEPT" | "INTERSECT" | "FOR" | "OPTION"
-        ) {
+        if matches!(word.as_str(), "UNION" | "EXCEPT" | "INTERSECT" | "FOR") {
             order_at = None;
         }
     }
     order_at
+}
+
+/// A depth-0 `OPTION` clause. It cannot be wrapped in a derived table, and a
+/// fetch clause has to be inserted before it.
+fn trailing_option(sql: &str) -> Option<usize> {
+    let words = depth0_words(sql);
+    let mut option_at = None;
+    for (word, at) in &words {
+        if matches!(word.as_str(), "UNION" | "EXCEPT" | "INTERSECT" | "FOR") {
+            option_at = None;
+        }
+        if word == "OPTION" {
+            option_at = Some(*at);
+        }
+    }
+    option_at
 }
 
 fn cut_at(sql: &str, char_index: usize) -> String {
@@ -791,6 +814,17 @@ mod tests {
         assert!(TSqlSql
             .paged_select("INSERT INTO t VALUES (1)", 10, 0)
             .is_none());
+        assert_eq!(
+            TSqlSql
+                .paged_select("SELECT a FROM t ORDER BY a OPTION (FAST 1)", 10, 5)
+                .as_deref(),
+            Some(
+                "SELECT a FROM t ORDER BY a OFFSET 5 ROWS FETCH NEXT 10 ROWS ONLY OPTION (FAST 1)"
+            )
+        );
+        assert!(TSqlSql
+            .paged_select("SELECT a FROM t OPTION (FAST 1)", 10, 0)
+            .is_none());
     }
 
     #[test]
@@ -808,6 +842,12 @@ mod tests {
             Some("WITH c AS (SELECT 1 AS n) SELECT COUNT(*) FROM (SELECT n FROM c) AS [_page]")
         );
         assert!(TSqlSql.count_select("SELECT TOP 1 a FROM t").is_none());
+        assert_eq!(
+            TSqlSql
+                .count_select("SELECT a FROM t ORDER BY a OPTION (FAST 1)")
+                .as_deref(),
+            Some("SELECT COUNT(*) FROM (SELECT a FROM t) AS [_page]")
+        );
     }
 
     #[test]

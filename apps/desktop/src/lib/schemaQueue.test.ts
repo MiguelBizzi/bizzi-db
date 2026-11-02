@@ -49,6 +49,13 @@ describe('schemaChangeScript', () => {
       schemaChangeScript(change({ sql: 'CREATE INDEX CONCURRENTLY b ON t (x);\nDROP INDEX CONCURRENTLY a;', transactional: false }), 'PostgreSQL')
     ).toBe('CREATE INDEX CONCURRENTLY b ON t (x);\nDROP INDEX CONCURRENTLY a;');
   });
+
+  test('wraps SQL Server batches separated by GO', () => {
+    const sql = 'CREATE OR ALTER VIEW [dbo].[v] AS\nSELECT 1\nGO\nCREATE OR ALTER VIEW [dbo].[w] AS\nSELECT 2';
+    expect(schemaChangeScript(change({ sql }), 'SQLServer')).toBe(
+      `SET XACT_ABORT ON;\nBEGIN TRANSACTION;\nGO\n${sql}\nGO\nCOMMIT TRANSACTION;`,
+    );
+  });
 });
 
 describe('applyAllScripts', () => {
@@ -80,16 +87,38 @@ describe('applyAllScripts', () => {
     expect(applyAllScripts('', [], { dialect: 'PostgreSQL' })).toEqual([]);
     expect(applyAllScripts('', [change({ transactional: false })], { dialect: 'PostgreSQL' })).toEqual(['DROP INDEX "shop"."idx_a";']);
   });
+
+  test('keeps each SQL Server batch first in its own batch inside the transaction', () => {
+    const procedure = 'CREATE OR ALTER PROCEDURE [dbo].[p]\nAS\nBEGIN\nSELECT 1\nEND';
+    const scripts = applyAllScripts('INSERT INTO [dbo].[t] ([id]) VALUES (1);', [change({ sql: procedure })], {
+      dialect: 'SQLServer',
+    });
+    expect(scripts).toEqual([
+      `SET XACT_ABORT ON;\nBEGIN TRANSACTION;\nGO\nINSERT INTO [dbo].[t] ([id]) VALUES (1);\nGO\n${procedure}\nGO\nCOMMIT TRANSACTION;`,
+    ]);
+  });
 });
 
 describe('stagedFromPlan', () => {
   test('joins statements without BEGIN/COMMIT and keeps the plan flags', () => {
     const staged = stagedFromPlan(
       { statements: ['DROP INDEX a;', 'CREATE INDEX a ON t (x);'], transactional: true, warnings: ['w'] },
-      { key: 'k', objectKind: 'index', action: 'recreate', schema: 's', name: 'a', title: 'Rebuild a' }
+      { key: 'k', objectKind: 'index', action: 'recreate', schema: 's', name: 'a', title: 'Rebuild a' },
+      'PostgreSQL',
     );
     expect(staged.sql).toBe('DROP INDEX a;\nCREATE INDEX a ON t (x);');
     expect(staged.transactional).toBe(true);
     expect(staged.warnings).toEqual(['w']);
+  });
+
+  test('separates SQL Server statements with GO so a module stays first in its batch', () => {
+    const rename = "EXEC sp_rename N'[dbo].[a]', N'b', N'OBJECT';";
+    const create = 'CREATE OR ALTER PROCEDURE [dbo].[b]\nAS\nBEGIN\nSELECT 1\nEND';
+    const staged = stagedFromPlan(
+      { statements: [rename, create], transactional: true, warnings: [] },
+      { key: 'k', objectKind: 'procedure', action: 'alter', schema: 'dbo', name: 'b', title: 'Edit b' },
+      'SQLServer',
+    );
+    expect(staged.sql).toBe(`${rename}\nGO\n${create}`);
   });
 });

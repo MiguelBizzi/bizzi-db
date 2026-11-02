@@ -216,7 +216,7 @@ const IndexDrawerBody: React.FC<IndexDrawerProps> = ({
                 : effective.name.trim() !== index.name
                   ? `Rename index ${index.name} to ${effective.name.trim()}`
                   : `Alter index ${index.name}`,
-          }),
+          }, dialect),
         );
         onClose();
         return;

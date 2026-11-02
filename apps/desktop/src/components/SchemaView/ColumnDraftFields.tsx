@@ -239,6 +239,7 @@ export function ColumnDraftFields({
                 targetTable: option.targetTable,
                 targetColumn: option.targetColumn,
                 onDelete: draft.foreignKey?.onDelete ?? '',
+                onUpdate: draft.foreignKey?.onUpdate ?? '',
               },
             });
           }}

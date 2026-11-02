@@ -57,8 +57,18 @@ export function createView(draft: ViewDraft): DdlResult {
 export function planViewChange(view: TableSchema, draft: ViewDraft): DdlResult {
   const errors = validateView(draft);
   if (errors.length > 0) return { ok: false, reason: errors[0] };
+  if (draft.schema.trim() !== view.schema) {
+    // sp_rename stays in the current schema.
+    return {
+      ok: true,
+      mode: 'recreate',
+      statements: [`DROP VIEW ${qualify(view.schema, view.name)};`, createStatement(draft)],
+      transactional: true,
+      warnings: [],
+    };
+  }
   const statements: string[] = [];
-  const renamed = draft.name.trim() !== view.name || draft.schema.trim() !== view.schema;
+  const renamed = draft.name.trim() !== view.name;
   if (renamed && clean(draft.definition) === clean(view.viewSql ?? '')) {
     const old = `${quoteIdent(view.schema)}.${quoteIdent(view.name)}`;
     statements.push(

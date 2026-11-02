@@ -137,20 +137,23 @@ export function planIndexChange(original: IndexDefinition, draft: IndexDraft, ct
   const errors = validateIndex(draft, ctx, original);
   if (errors.length > 0) return { ok: false, reason: errors[0] };
   const statements: string[] = [];
-  if (draft.name.trim() !== original.name) {
-    const old = `${quoteIdent(ctx.table.schema)}.${quoteIdent(ctx.table.name)}.${quoteIdent(original.name)}`;
-    statements.push(`EXEC sp_rename ${quoteLiteral(old)}, ${quoteLiteral(draft.name.trim())}, N'INDEX';`);
-  }
+  const renamed = draft.name.trim() !== original.name;
   const before = indexDraftFrom(original);
   const sameShape =
     before.method === draft.method.toLowerCase() &&
     before.unique === draft.unique &&
     before.predicate === draft.predicate &&
     before.keys.length === draft.keys.length &&
-    before.keys.every((key, i) => key.value === draft.keys[i].value && key.descending === draft.keys[i].descending);
+    before.keys.every((key, i) => key.value === draft.keys[i].value && key.descending === draft.keys[i].descending) &&
+    sameStrings(before.include, draft.include) &&
+    sameParams(before.storageParams, draft.storageParams);
   if (!sameShape) {
+    // Drop the name that exists. Renaming first would make this DROP miss.
     statements.push(dropSql(original, ctx.table));
     statements.push(buildCreateIndexSql(ctx.table, { ...draft, concurrently: false }));
+  } else if (renamed) {
+    const old = `${quoteIdent(ctx.table.schema)}.${quoteIdent(ctx.table.name)}.${quoteIdent(original.name)}`;
+    statements.push(`EXEC sp_rename ${quoteLiteral(old)}, ${quoteLiteral(draft.name.trim())}, N'INDEX';`);
   }
   if (statements.length === 0) {
     return { ok: true, mode: 'none', statements: [], transactional: true, warnings: [] };
@@ -162,6 +165,21 @@ export function planIndexChange(original: IndexDefinition, draft: IndexDraft, ct
     transactional: !draft.concurrently,
     warnings: draft.concurrently ? [ONLINE_WARNING] : [],
   };
+}
+
+function sameStrings(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, i) => value === right[i]);
+}
+
+function sameParams(
+  left: { name: string; value: string }[],
+  right: { name: string; value: string }[],
+): boolean {
+  const norm = (params: { name: string; value: string }[]) =>
+    params.map((param) => `${param.name}=${param.value}`).sort();
+  const a = norm(left);
+  const b = norm(right);
+  return a.length === b.length && a.every((value, i) => value === b[i]);
 }
 
 function dropSql(index: IndexDefinition, table: TableSchema): string {

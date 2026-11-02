@@ -23,9 +23,6 @@ use crate::objects::{self, introspect, schema_fingerprint};
 use crate::sql::TSqlSql;
 use crate::values::row_object;
 
-/// A derived table cannot repeat a column name.
-const DUPLICATE_COLUMN: i32 = 8156;
-
 pub struct MssqlAdapter;
 
 pub struct MssqlSession {
@@ -87,11 +84,21 @@ impl CheckedOut {
 
     /// A pooled connection must not keep an open transaction, a `USE`, or a
     /// `SET` option from the script that just ran.
-    async fn release(mut self) {
+    async fn release(self) {
+        self.finish(true).await;
+    }
+
+    /// `SET IDENTITY_INSERT` survives `ROLLBACK` and names a table, so a failed
+    /// script is dropped instead of returned to the pool.
+    async fn discard(self) {
+        self.finish(false).await;
+    }
+
+    async fn finish(mut self, reuse: bool) {
         let Some(mut client) = self.client.take() else {
             return;
         };
-        if reset(&mut client, &self.pool.reset_sql).await {
+        if reuse && reset(&mut client, &self.pool.reset_sql).await {
             self.pool.idle.lock().await.push(client);
         }
     }
@@ -143,7 +150,7 @@ fn reset_sql(database: &str) -> String {
         sql.push_str(&format!("USE {};\n", TSqlSql.quote_ident(database)));
     }
     sql.push_str(
-        "SET ANSI_NULLS ON;\nSET QUOTED_IDENTIFIER ON;\nSET ANSI_PADDING ON;\nSET ANSI_WARNINGS ON;\nSET CONCAT_NULL_YIELDS_NULL ON;\nSET ARITHABORT ON;\nSET NUMERIC_ROUNDABORT OFF;",
+        "SET XACT_ABORT OFF;\nSET ANSI_NULLS ON;\nSET QUOTED_IDENTIFIER ON;\nSET ANSI_PADDING ON;\nSET ANSI_WARNINGS ON;\nSET CONCAT_NULL_YIELDS_NULL ON;\nSET ARITHABORT ON;\nSET NUMERIC_ROUNDABORT OFF;",
     );
     sql
 }
@@ -251,6 +258,7 @@ impl Session for MssqlSession {
             }
         };
         let mut results = Vec::with_capacity(statements.len());
+        let mut failed = false;
         for stmt in statements {
             let page = page_size.map(|limit| PageRequest {
                 limit,
@@ -258,14 +266,18 @@ impl Session for MssqlSession {
                 with_count: true,
             });
             let result = run_statement(conn.client(), &stmt, page).await;
-            let failed = result.error.is_some();
+            failed = result.error.is_some();
             results.push(result);
             if failed {
                 let _ = rollback(conn.client()).await;
                 break;
             }
         }
-        conn.release().await;
+        if failed {
+            conn.discard().await;
+        } else {
+            conn.release().await;
+        }
         Ok(results)
     }
 
@@ -408,7 +420,7 @@ async fn run_statement(
                         }
                         return result;
                     }
-                    Err(err) if err.vendor_code == Some(DUPLICATE_COLUMN) => {
+                    Err(_) => {
                         return stream_page(
                             client,
                             stmt,
@@ -420,7 +432,6 @@ async fn run_statement(
                         )
                         .await;
                     }
-                    Err(_) => {}
                 }
             } else {
                 return stream_page(
@@ -704,6 +715,7 @@ mod tests {
     fn reset_returns_to_the_connection_database() {
         let sql = reset_sql("shop");
         assert!(sql.contains("IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION"));
+        assert!(sql.contains("SET XACT_ABORT OFF"));
         assert!(sql.contains("USE [shop]"));
         assert!(reset_sql("a]b").contains("USE [a]]b]"));
     }

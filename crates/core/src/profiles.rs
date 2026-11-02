@@ -1,8 +1,8 @@
 use crate::adapter::{ConnectConfig, SshTunnelAuth, SshTunnelConfig};
 use crate::sql::SqlDialect;
 use crate::types::{
-    ActivityLogItem, ConnectionProfile, ConnectionStatus, DatabaseSchema, HistoryStatus,
-    QueryExecutionResult, SaveConnectionInput, SshAuthMethod,
+    ActivityLogItem, ConnectionProfile, ConnectionStatus, DatabaseDialect, DatabaseSchema,
+    HistoryStatus, QueryExecutionResult, SaveConnectionInput, SshAuthMethod,
 };
 
 pub use crate::engines::{database_required, dialect_is_supported, dialect_label};
@@ -28,6 +28,9 @@ pub fn validate_save_input(
 ) -> Result<(), String> {
     if input.host.trim().is_empty() {
         return Err("Host is required".into());
+    }
+    if input.dialect == DatabaseDialect::SQLServer && input.host.contains('\\') {
+        return Err("SQL Server named instances are not supported. Use a host and a port.".into());
     }
     if input.port == 0 {
         return Err("Port must be between 1 and 65535".into());
@@ -427,6 +430,14 @@ mod tests {
         mysql.database.clear();
         mysql.port = 3306;
         assert!(validate_save_input(&mysql, false).is_ok());
+
+        let mut named = ok.clone();
+        named.dialect = DatabaseDialect::SQLServer;
+        named.host = r"localhost\SQLEXPRESS".into();
+        assert_eq!(
+            validate_save_input(&named, false).unwrap_err(),
+            "SQL Server named instances are not supported. Use a host and a port."
+        );
     }
 
     #[test]

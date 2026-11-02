@@ -146,7 +146,7 @@ export const ViewDesigner: React.FC<ViewDesignerProps> = ({
                 ? `Rename ${noun} ${view.name} to ${toId}`
                 : `Edit ${noun} ${view.name}`,
           effects: toId !== view.id ? { retargetTable: { fromId: view.id, toId } } : undefined,
-        }),
+        }, dialect),
       );
       return;
     }

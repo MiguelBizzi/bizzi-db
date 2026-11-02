@@ -179,6 +179,13 @@ describe('buildLookupSql', () => {
     expect(sql).toContain("LOWER(CAST(`id` AS CHAR)) LIKE LOWER('%O''Brien\\\\%%')");
   });
 
+  test('SQL Server search escapes LIKE wildcards', () => {
+    const sql = buildLookupSql(users, 'id', "O'Brien%", 0, 20, 'SQLServer');
+    expect(sql).toContain(
+      "LOWER(CAST([id] AS NVARCHAR(MAX))) LIKE LOWER(N'%O''Brien\\%%') ESCAPE '\\'",
+    );
+  });
+
   test('ILIKE-searches label columns and escapes wildcards', () => {
     expect(buildLookupSql(users, 'id', "O'Brien%", 20, 20, 'PostgreSQL')).toBe(
       `SELECT "id", "name", "email" FROM "public"."users" WHERE CAST("id" AS text) ILIKE '%O''Brien\\%%' ESCAPE '\\' OR CAST("name" AS text) ILIKE '%O''Brien\\%%' ESCAPE '\\' OR CAST("email" AS text) ILIKE '%O''Brien\\%%' ESCAPE '\\' ORDER BY "id" LIMIT 21 OFFSET 20;`

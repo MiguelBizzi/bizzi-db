@@ -36,6 +36,7 @@ export interface ColumnDefinition {
     targetColumn: string;
     targetSchema?: string;
     onDelete?: string;
+    onUpdate?: string;
     /** Constraint name. MySQL uses it to drop the key. */
     name?: string;
   };

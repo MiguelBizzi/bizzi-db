@@ -61,7 +61,7 @@ const DropRoutineModalBody: React.FC<DropRoutineModalProps> = ({
         name: `${routine.name}(${routine.identityArguments})`,
         title: `Delete ${noun} ${routine.name}`,
         effects: { closeRoutineId: routine.id },
-      }),
+      }, dialect),
     );
     onClose();
   };
