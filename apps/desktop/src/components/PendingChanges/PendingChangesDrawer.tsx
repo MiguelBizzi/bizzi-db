@@ -68,7 +68,7 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
   pendingByTable,
   schemaChanges,
   tables,
-  dialect = 'PostgreSQL',
+  dialect,
   applyingKey,
   applyingAll,
   statusMessage,
@@ -89,18 +89,18 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
   const [armed, setArmed] = useState<string | null>(initialArmed);
 
   const bundles = useMemo(
-    () => flattenPending(pendingByTable, tables, dialectModule(dialect)?.defaultSchema),
+    () => flattenPending(pendingByTable, tables, dialect ? dialectModule(dialect)?.defaultSchema : undefined),
     [pendingByTable, tables, dialect]
   );
   const total = countPendingChanges(pendingByTable) + schemaChanges.length;
-  const transactionalDdl = dialectModule(dialect)?.capabilities.transactionalDdl !== false;
-  const allSql = useMemo(
-    () =>
-      applyAllScripts(rowStatementsForAll(bundles, dialect), schemaChanges, {
-        transactionalDdl,
-      }).join('\n\n'),
-    [bundles, schemaChanges, dialect, transactionalDdl]
-  );
+  const transactionalDdl = dialect ? dialectModule(dialect)?.capabilities.transactionalDdl !== false : true;
+  const allSql = useMemo(() => {
+    if (!dialect) return '';
+    return applyAllScripts(rowStatementsForAll(bundles, dialect), schemaChanges, {
+      transactionalDdl,
+      dialect,
+    }).join('\n\n');
+  }, [bundles, schemaChanges, dialect, transactionalDdl]);
   const busy = applyingAll || applyingKey !== null;
 
   useEffect(() => {
@@ -243,7 +243,7 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
                     kind={kind}
                     badge={change.action === 'add' ? 'add' : change.action}
                     title={change.title}
-                    sql={schemaChangeScript(change)}
+                    sql={dialect ? schemaChangeScript(change, dialect) : ''}
                     mode={mode}
                     busy={busy}
                     applying={applyingKey === key}
@@ -283,7 +283,7 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
                         key={changeKey(ref)}
                         kind="insert"
                         title="New row"
-                        sql={sqlForChange(bundle, ref, dialect) || ''}
+                        sql={(dialect && sqlForChange(bundle, ref, dialect)) || ''}
                         mode={mode}
                         busy={busy}
                         applying={applyingKey === changeKey(ref)}
@@ -317,7 +317,7 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
                         key={changeKey(ref)}
                         kind="update"
                         title={`${pk} = ${formatCellValue(row.primaryKeyValue)}`}
-                        sql={sqlForChange(bundle, ref, dialect) || ''}
+                        sql={(dialect && sqlForChange(bundle, ref, dialect)) || ''}
                         mode={mode}
                         busy={busy}
                         applying={applyingKey === changeKey(ref)}
@@ -351,7 +351,7 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
                         key={changeKey(ref)}
                         kind="delete"
                         title={`${pk} = ${formatCellValue(row.primaryKeyValue)}`}
-                        sql={sqlForChange(bundle, ref, dialect) || ''}
+                        sql={(dialect && sqlForChange(bundle, ref, dialect)) || ''}
                         mode={mode}
                         busy={busy}
                         applying={applyingKey === changeKey(ref)}
@@ -377,14 +377,16 @@ const PendingChangesDrawerBody: React.FC<PendingChangesDrawerProps> = ({
                   tableId={bundle.tableId}
                   action={bundle.tableAction}
                   sql={
-                    sqlForChange(
-                      bundle,
-                      {
-                        kind: bundle.tableAction,
-                        tableId: bundle.tableId,
-                      },
-                      dialect,
-                    ) || ''
+                    (dialect &&
+                      sqlForChange(
+                        bundle,
+                        {
+                          kind: bundle.tableAction,
+                          tableId: bundle.tableId,
+                        },
+                        dialect,
+                      )) ||
+                    ''
                   }
                   mode={mode}
                   busy={busy}

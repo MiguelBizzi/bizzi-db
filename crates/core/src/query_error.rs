@@ -19,7 +19,9 @@ pub enum QueryErrorCategory {
 pub struct QueryErrorPosition {
     pub offset: u32,
     pub line: u32,
-    pub column: u32,
+    /// Absent when the engine reports a line but not a column.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub column: Option<u32>,
 }
 
 /// A query failure as the database reported it, independent of the engine.
@@ -29,7 +31,7 @@ pub struct QueryError {
     pub category: QueryErrorCategory,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub severity: Option<String>,
-    /// SQLSTATE. Engines that have one put it here, including MySQL.
+    /// SQLSTATE, when the engine has one. TDS errors leave this empty and use `vendor_code`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<String>,
     /// Vendor error number when the engine has one besides the SQLSTATE (MySQL errno).

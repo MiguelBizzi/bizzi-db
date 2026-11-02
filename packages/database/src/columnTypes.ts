@@ -121,8 +121,39 @@ const MYSQL_COLUMN_TYPES: ColumnTypeDef[] = [
   { id: 'custom', label: 'Custom…', sqlName: '', family: 'other', params: 'custom' },
 ];
 
+const SQLSERVER_COLUMN_TYPES: ColumnTypeDef[] = [
+  { id: 'int', label: 'int', sqlName: 'int', family: 'integer', params: 'none' },
+  { id: 'bigint', label: 'bigint', sqlName: 'bigint', family: 'integer', params: 'none' },
+  { id: 'smallint', label: 'smallint', sqlName: 'smallint', family: 'integer', params: 'none' },
+  { id: 'tinyint', label: 'tinyint', sqlName: 'tinyint', family: 'integer', params: 'none' },
+  { id: 'bit', label: 'bit', sqlName: 'bit', family: 'bool', params: 'none' },
+  { id: 'decimal', label: 'decimal', sqlName: 'decimal', family: 'decimal', params: 'precisionScale', defaultPrecision: 18, defaultScale: 2 },
+  { id: 'numeric', label: 'numeric', sqlName: 'numeric', family: 'decimal', params: 'precisionScale', defaultPrecision: 18, defaultScale: 2 },
+  { id: 'money', label: 'money', sqlName: 'money', family: 'decimal', params: 'none' },
+  { id: 'float', label: 'float', sqlName: 'float', family: 'decimal', params: 'none' },
+  { id: 'real', label: 'real', sqlName: 'real', family: 'decimal', params: 'none' },
+  { id: 'nvarchar', label: 'nvarchar', sqlName: 'nvarchar', family: 'text', params: 'length', defaultLength: 50, maxLength: 4000 },
+  { id: 'nvarchar(max)', label: 'nvarchar(max)', sqlName: 'nvarchar(max)', family: 'text', params: 'none' },
+  { id: 'varchar', label: 'varchar', sqlName: 'varchar', family: 'text', params: 'length', defaultLength: 50, maxLength: 8000 },
+  { id: 'varchar(max)', label: 'varchar(max)', sqlName: 'varchar(max)', family: 'text', params: 'none' },
+  { id: 'datetime2', label: 'datetime2', sqlName: 'datetime2', family: 'temporal', params: 'length', minLength: 0, maxLength: 7 },
+  { id: 'date', label: 'date', sqlName: 'date', family: 'temporal', params: 'none' },
+  { id: 'time', label: 'time', sqlName: 'time', family: 'temporal', params: 'length', minLength: 0, maxLength: 7 },
+  { id: 'datetimeoffset', label: 'datetimeoffset', sqlName: 'datetimeoffset', family: 'temporal', params: 'length', minLength: 0, maxLength: 7 },
+  { id: 'uniqueidentifier', label: 'uniqueidentifier', sqlName: 'uniqueidentifier', family: 'uuid', params: 'none' },
+  { id: 'varbinary', label: 'varbinary', sqlName: 'varbinary', family: 'binary', params: 'length', defaultLength: 50, maxLength: 8000 },
+  { id: 'varbinary(max)', label: 'varbinary(max)', sqlName: 'varbinary(max)', family: 'binary', params: 'none' },
+  { id: 'xml', label: 'xml', sqlName: 'xml', family: 'other', params: 'none' },
+  { id: 'rowversion', label: 'rowversion', sqlName: 'rowversion', family: 'binary', params: 'none' },
+  { id: 'custom', label: 'Custom…', sqlName: '', family: 'other', params: 'custom' },
+];
+
+const COLUMN_TYPES: Partial<Record<DatabaseDialect, ColumnTypeDef[]>> = {
+  PostgreSQL: POSTGRES_COLUMN_TYPES,
+  MySQL: MYSQL_COLUMN_TYPES,
+  SQLServer: SQLSERVER_COLUMN_TYPES,
+};
+
 export function columnTypesFor(dialect: DatabaseDialect): ColumnTypeDef[] | undefined {
-  if (dialect === 'PostgreSQL') return POSTGRES_COLUMN_TYPES;
-  if (dialect === 'MySQL') return MYSQL_COLUMN_TYPES;
-  return undefined;
+  return COLUMN_TYPES[dialect];
 }

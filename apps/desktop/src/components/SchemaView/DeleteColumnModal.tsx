@@ -9,7 +9,7 @@ import { canConfirmDelete } from '../../lib/schemaChange';
 
 interface DeleteColumnModalProps {
   isOpen: boolean;
-  dialect?: DatabaseDialect;
+  dialect: DatabaseDialect;
   table: TableSchema;
   column: ColumnDefinition | null;
   disabled?: boolean;
@@ -19,7 +19,7 @@ interface DeleteColumnModalProps {
 
 const DeleteColumnModalBody: React.FC<DeleteColumnModalProps> = ({
   isOpen,
-  dialect = 'PostgreSQL',
+  dialect,
   table,
   column,
   disabled,

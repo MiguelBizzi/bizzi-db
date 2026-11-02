@@ -144,7 +144,7 @@ describe('flattenPending / countPendingChanges', () => {
 describe('sqlForInsert', () => {
   test('emits DEFAULT VALUES when every field is null', () => {
     expect(
-      sqlForInsert(bundle(), { tempId: 't1', data: { id: null, name: undefined } })
+      sqlForInsert(bundle(), { tempId: 't1', data: { id: null, name: undefined } }, 'PostgreSQL')
     ).toBe('INSERT INTO "public"."users" DEFAULT VALUES;');
   });
 
@@ -154,7 +154,7 @@ describe('sqlForInsert', () => {
       schema: 'shop',
     });
     expect(
-      sqlForInsert(odd, { tempId: 't1', data: { name: "O'Brien", active: true, n: 3 } })
+      sqlForInsert(odd, { tempId: 't1', data: { name: "O'Brien", active: true, n: 3 } }, 'PostgreSQL')
     ).toBe(`INSERT INTO "shop"."we""ird" ("name", "active", "n") VALUES ('O''Brien', TRUE, 3);`);
   });
 });
@@ -167,10 +167,10 @@ describe('sqlForUpdateRow / sqlForDelete', () => {
         rowId: '1',
         primaryKeyValue: 1,
         cells: [{ rowId: 1, primaryKeyValue: 1, columnName: 'name', oldValue: 'A', newValue: "O'Brien" }],
-      })
+      }, 'PostgreSQL')
     ).toBe(`UPDATE "public"."users" SET "name" = 'O''Brien' WHERE "id" = 1;`);
     expect(
-      sqlForDelete(users, { rowId: 1, primaryKeyValue: 1, rowData: { id: 1 } })
+      sqlForDelete(users, { rowId: 1, primaryKeyValue: 1, rowData: { id: 1 } }, 'PostgreSQL')
     ).toBe('DELETE FROM "public"."users" WHERE "id" = 1;');
   });
 
@@ -189,7 +189,7 @@ describe('sqlForUpdateRow / sqlForDelete', () => {
             newValue: SET_COLUMN_DEFAULT,
           },
         ],
-      })
+      }, 'PostgreSQL')
     ).toBe('UPDATE "public"."users" SET "role" = DEFAULT WHERE "id" = 1;');
   });
 });
@@ -207,12 +207,12 @@ describe('sqlForChange / sqlForAll', () => {
       ],
       deletes: [{ rowId: 3, primaryKeyValue: 3, rowData: {} }],
     });
-    expect(sqlForChange(users, { kind: 'insert', tableId: users.tableId, tempId: 'missing' })).toBeNull();
-    expect(sqlForChange(users, { kind: 'insert', tableId: users.tableId, tempId: 't1' })).toContain(
+    expect(sqlForChange(users, { kind: 'insert', tableId: users.tableId, tempId: 'missing' }, 'PostgreSQL')).toBeNull();
+    expect(sqlForChange(users, { kind: 'insert', tableId: users.tableId, tempId: 't1' }, 'PostgreSQL')).toContain(
       'INSERT INTO'
     );
-    expect(sqlForBundle(users).split('\n')).toHaveLength(3);
-    expect(sqlForAll([users])).toBe(
+    expect(sqlForBundle(users, 'PostgreSQL').split('\n')).toHaveLength(3);
+    expect(sqlForAll([users], 'PostgreSQL')).toBe(
       [
         'BEGIN;',
         `INSERT INTO "public"."users" ("name") VALUES ('Ada');`,
@@ -221,7 +221,7 @@ describe('sqlForChange / sqlForAll', () => {
         'COMMIT;',
       ].join('\n')
     );
-    expect(sqlForAll([])).toBe('');
+    expect(sqlForAll([], 'PostgreSQL')).toBe('');
   });
 });
 
@@ -302,17 +302,17 @@ describe('tableAction pending', () => {
     );
     expect(found.tableAction).toBe('truncate');
     expect(
-      sqlForChange(found, { kind: 'truncate', tableId: users.id })
+      sqlForChange(found, { kind: 'truncate', tableId: users.id }, 'PostgreSQL')
     ).toBe('TRUNCATE TABLE "public"."users";');
     expect(
-      sqlForChange(found, { kind: 'drop', tableId: users.id })
+      sqlForChange(found, { kind: 'drop', tableId: users.id }, 'PostgreSQL')
     ).toBeNull();
 
     const dropBundle = bundle({ tableAction: 'drop', schema: 'shop', tableName: 'we"ird' });
-    expect(sqlForChange(dropBundle, { kind: 'drop', tableId: dropBundle.tableId })).toBe(
+    expect(sqlForChange(dropBundle, { kind: 'drop', tableId: dropBundle.tableId }, 'PostgreSQL')).toBe(
       'DROP TABLE "shop"."we""ird";'
     );
-    expect(sqlForBundle(dropBundle)).toBe('DROP TABLE "shop"."we""ird";');
+    expect(sqlForBundle(dropBundle, 'PostgreSQL')).toBe('DROP TABLE "shop"."we""ird";');
   });
 
   test('removeChange clears tableAction', () => {

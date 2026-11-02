@@ -369,6 +369,7 @@ pub(crate) fn routine_from_row(row: &tokio_postgres::Row) -> Option<RoutineDefin
         comment: comment.filter(|c| !c.is_empty()),
         owner: row.get(17),
         data_access: None,
+        execute_as: None,
     })
 }
 

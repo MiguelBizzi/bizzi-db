@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Popover } from '../ui/Popover';
 import { ChevronDown, LoaderCircle, Search } from 'lucide-react';
-import type { TableSchema } from '../../types';
+import type { DatabaseDialect, TableSchema } from '../../types';
 import {
   buildLookupSql,
   FK_LOOKUP_PAGE,
@@ -21,6 +21,7 @@ interface ForeignKeyPickerProps {
   placeholder?: string;
   targetColumn: string;
   referencedTable: TableSchema;
+  dialect: DatabaseDialect;
   onChange: (value: string) => void;
   onLookup: FkLookupFn;
 }
@@ -32,6 +33,7 @@ export function ForeignKeyPicker({
   placeholder,
   targetColumn,
   referencedTable,
+  dialect,
   onChange,
   onLookup,
 }: ForeignKeyPickerProps) {
@@ -87,7 +89,7 @@ export function ForeignKeyPicker({
     setLoading(true);
     setError(null);
     try {
-      const sql = buildLookupSql(referencedTable, targetColumn, query, offset);
+      const sql = buildLookupSql(referencedTable, targetColumn, query, offset, FK_LOOKUP_PAGE, dialect);
       const result = await onLookup(sql);
       if (requestId !== requestRef.current) return;
       if (result.error) {

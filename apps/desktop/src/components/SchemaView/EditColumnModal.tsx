@@ -16,7 +16,7 @@ import { ColumnDraftFields } from "./ColumnDraftFields";
 
 interface EditColumnModalProps {
   isOpen: boolean;
-  dialect?: DatabaseDialect;
+  dialect: DatabaseDialect;
   table: TableSchema;
   tables: TableSchema[];
   types: ColumnTypeDef[];
@@ -28,7 +28,7 @@ interface EditColumnModalProps {
 
 const EditColumnModalBody: React.FC<EditColumnModalProps> = ({
   isOpen,
-  dialect = "PostgreSQL",
+  dialect,
   table,
   tables,
   types,

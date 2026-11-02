@@ -1,3 +1,4 @@
+import { SUPPORTED_DIALECTS } from '@db/database';
 import type { DatabaseDialect, SslMode } from '../types';
 import {
   defaultConnectionForm,
@@ -23,8 +24,6 @@ export type ParseConnectionStringResult =
 const GENERIC_PARSE_ERROR =
   'Could not parse connection string. Please check the format.';
 
-const DEFAULT_PORT = 5432;
-
 const UNSUPPORTED_SCHEMES: Record<string, string> = {
   mariadb: 'MariaDB',
   sqlite: 'SQLite',
@@ -33,9 +32,6 @@ const UNSUPPORTED_SCHEMES: Record<string, string> = {
   clickhouse: 'ClickHouse',
   duckdb: 'DuckDB',
 };
-
-const POSTGRES_SCHEMES = new Set(['postgres', 'postgresql', 'jdbc:postgresql']);
-const MYSQL_SCHEMES = new Set(['mysql', 'mysql2', 'jdbc:mysql']);
 
 export function parseConnectionString(raw: string): ParseConnectionStringResult {
   const trimmed = raw.trim();
@@ -50,18 +46,15 @@ export function parseConnectionString(raw: string): ParseConnectionStringResult 
   if (unsupported) {
     return {
       ok: false,
-      error: `${unsupported} is not supported yet. Choose PostgreSQL or fill in the form manually.`,
+      error: `${unsupported} is not supported yet. Choose a supported database or fill in the form manually.`,
     };
   }
 
-  const dialect: DatabaseDialect = MYSQL_SCHEMES.has(scheme)
-    ? 'MySQL'
-    : POSTGRES_SCHEMES.has(scheme)
-      ? 'PostgreSQL'
-      : 'PostgreSQL';
-  if (!POSTGRES_SCHEMES.has(scheme) && !MYSQL_SCHEMES.has(scheme)) {
+  const meta = dialectForScheme(scheme);
+  if (!meta) {
     return { ok: false, error: GENERIC_PARSE_ERROR };
   }
+  const dialect: DatabaseDialect = meta.id;
 
   const normalized = trimmed.toLowerCase().startsWith('jdbc:')
     ? trimmed.slice('jdbc:'.length)
@@ -80,13 +73,13 @@ export function parseConnectionString(raw: string): ParseConnectionStringResult 
     return { ok: false, error: GENERIC_PARSE_ERROR };
   }
 
-  const port = url.port ? Number(url.port) : dialect === 'MySQL' ? 3306 : DEFAULT_PORT;
+  const port = url.port ? Number(url.port) : meta.defaultPort;
   if (!Number.isFinite(port) || port < 1 || port > 65535) {
     return { ok: false, error: GENERIC_PARSE_ERROR };
   }
 
   const pathDatabase = url.pathname.replace(/^\/+/, '').split('/')[0] ?? '';
-  const database = params.get('dbname')?.trim() || pathDatabase;
+  const database = params.get('dbname')?.trim() || params.get('database')?.trim() || pathDatabase;
   const username = params.get('user') ?? decodeComponent(url.username);
   const password = params.get('password') ?? decodeComponent(url.password);
 
@@ -122,6 +115,11 @@ export function applyParsedConnection(
     sslMode: parsed.sslMode,
     name: replaceName ? `${parsed.database} @ ${parsed.host}` : form.name,
   };
+}
+
+function dialectForScheme(scheme: string) {
+  const bare = scheme.startsWith('jdbc:') ? scheme.slice('jdbc:'.length) : scheme;
+  return SUPPORTED_DIALECTS.find((engine) => engine.uriSchemes.includes(bare));
 }
 
 function unwrapIpv6Host(host: string): string {

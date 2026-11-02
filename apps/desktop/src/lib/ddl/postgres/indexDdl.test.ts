@@ -11,6 +11,10 @@ import {
   validateIndex,
 } from './indexDdl';
 
+function script(plan: DdlPlan): string {
+  return planScript(plan, 'PostgreSQL');
+}
+
 function table(overrides: Partial<TableSchema> = {}): TableSchema {
   return {
     id: 'shop.orders',
@@ -69,13 +73,13 @@ function plan(result: ReturnType<typeof createIndex>): DdlPlan {
 
 describe('createIndex', () => {
   test('quotes names and writes the method explicitly', () => {
-    expect(planScript(plan(createIndex(draft(), ctx())))).toBe(
+    expect(script(plan(createIndex(draft(), ctx())))).toBe(
       'CREATE INDEX "idx_orders_user" ON "shop"."orders" USING btree ("user_id");'
     );
   });
 
   test('writes every PostgreSQL option in grammar order', () => {
-    const sql = planScript(
+    const sql = script(
       plan(
         createIndex(
           draft({
@@ -278,7 +282,7 @@ describe('planIndexChange', () => {
       planIndexChange(original, { ...base(), include: ['total'] }, ctx(t))
     );
     expect(result.mode).toBe('recreate');
-    expect(planScript(result)).toBe(
+    expect(script(result)).toBe(
       'BEGIN;\n' +
         'DROP INDEX "shop"."idx_orders_user";\n' +
         'CREATE INDEX "idx_orders_user" ON "shop"."orders" USING btree ("user_id") INCLUDE ("total") WITH (fillfactor = 70);\n' +
@@ -323,7 +327,7 @@ describe('planIndexChange', () => {
 
 describe('dropIndex', () => {
   test('drops without CASCADE, optionally concurrently', () => {
-    expect(planScript(plan(dropIndex(index(), table(), { concurrently: false })))).toBe(
+    expect(script(plan(dropIndex(index(), table(), { concurrently: false })))).toBe(
       'DROP INDEX "shop"."idx_orders_user";'
     );
     const concurrent = plan(dropIndex(index(), table(), { concurrently: true }));

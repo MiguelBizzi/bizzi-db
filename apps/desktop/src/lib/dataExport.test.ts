@@ -50,7 +50,7 @@ describe('formatExport', () => {
   });
 
   test('sql emits a multi-row INSERT with typed literals', () => {
-    const sql = formatExport(sample, 'sql');
+    const sql = formatExport(sample, 'sql', 'PostgreSQL');
     expect(sql).toBe(
       [
         'INSERT INTO "public"."users" ("id", "name", "active", "note") VALUES',
@@ -58,6 +58,21 @@ describe('formatExport', () => {
         "  (2, 'O''Brien, Jr', FALSE, 'line\nbreak');",
       ].join('\n')
     );
+  });
+
+  test('sql server chunks inserts at 1000 rows and can set identity insert', () => {
+    const rows = Array.from({ length: 1001 }, (_, index) => ({ id: index }));
+    const sql = formatExport(
+      { columns: ['id'], rows, tableName: 'orders', schema: 'dbo', identityInsert: true },
+      'sql',
+      'SQLServer',
+    );
+    const inserts = sql.split('INSERT INTO').length - 1;
+    expect(inserts).toBe(2);
+    expect(sql.startsWith('SET IDENTITY_INSERT [dbo].[orders] ON;')).toBe(true);
+    expect(sql.endsWith('SET IDENTITY_INSERT [dbo].[orders] OFF;')).toBe(true);
+    expect(sql).toContain('(0)');
+    expect(sql).toContain('(1000)');
   });
 
   test('empty rows still emit headers for csv and an empty json array', () => {
@@ -69,11 +84,11 @@ describe('formatExport', () => {
 
 describe('sqlLiteral', () => {
   test('quotes strings and json, leaves numbers and null', () => {
-    expect(sqlLiteral(null)).toBe('NULL');
-    expect(sqlLiteral(42)).toBe('42');
-    expect(sqlLiteral(true)).toBe('TRUE');
-    expect(sqlLiteral("it's")).toBe("'it''s'");
-    expect(sqlLiteral({ a: 1 })).toBe(`'{"a":1}'`);
+    expect(sqlLiteral(null, 'PostgreSQL')).toBe('NULL');
+    expect(sqlLiteral(42, 'PostgreSQL')).toBe('42');
+    expect(sqlLiteral(true, 'PostgreSQL')).toBe('TRUE');
+    expect(sqlLiteral("it's", 'PostgreSQL')).toBe("'it''s'");
+    expect(sqlLiteral({ a: 1 }, 'PostgreSQL')).toBe(`'{"a":1}'`);
   });
 });
 

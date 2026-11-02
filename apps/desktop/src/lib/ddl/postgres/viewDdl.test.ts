@@ -10,6 +10,10 @@ import {
   viewDraftFrom,
 } from './viewDdl';
 
+function script(plan: DdlPlan): string {
+  return planScript(plan, 'PostgreSQL');
+}
+
 function view(overrides: Partial<TableSchema> = {}): TableSchema {
   return {
     id: 'shop.v_paid',
@@ -35,7 +39,7 @@ function plan(result: DdlResult): DdlPlan {
 
 describe('createView', () => {
   test('creates a view with a comment, trimming the trailing semicolon', () => {
-    const sql = planScript(
+    const sql = script(
       plan(
         createView({
           ...emptyViewDraft('shop'),

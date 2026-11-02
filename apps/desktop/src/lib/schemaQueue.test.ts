@@ -41,12 +41,12 @@ describe('stageSchemaChange', () => {
 
 describe('schemaChangeScript', () => {
   test('wraps multi-statement transactional changes in a transaction', () => {
-    expect(schemaChangeScript(change())).toBe('DROP INDEX "shop"."idx_a";');
-    expect(schemaChangeScript(change({ sql: 'DROP INDEX a;\nCREATE INDEX a ON t (x);' }))).toBe(
+    expect(schemaChangeScript(change(), 'PostgreSQL')).toBe('DROP INDEX "shop"."idx_a";');
+    expect(schemaChangeScript(change({ sql: 'DROP INDEX a;\nCREATE INDEX a ON t (x);' }), 'PostgreSQL')).toBe(
       'BEGIN;\nDROP INDEX a;\nCREATE INDEX a ON t (x);\nCOMMIT;'
     );
     expect(
-      schemaChangeScript(change({ sql: 'CREATE INDEX CONCURRENTLY b ON t (x);\nDROP INDEX CONCURRENTLY a;', transactional: false }))
+      schemaChangeScript(change({ sql: 'CREATE INDEX CONCURRENTLY b ON t (x);\nDROP INDEX CONCURRENTLY a;', transactional: false }), 'PostgreSQL')
     ).toBe('CREATE INDEX CONCURRENTLY b ON t (x);\nDROP INDEX CONCURRENTLY a;');
   });
 });
@@ -57,7 +57,7 @@ describe('applyAllScripts', () => {
       change(),
       change({ key: 'c', sql: 'CREATE INDEX CONCURRENTLY n ON t (x);', transactional: false }),
       change({ key: 'd', sql: 'ALTER TABLE t DROP COLUMN z;' }),
-    ]);
+    ], { dialect: 'PostgreSQL' });
     expect(scripts).toEqual([
       'BEGIN;\nUPDATE t SET a = 1 WHERE id = 1;\nDROP INDEX "shop"."idx_a";\nALTER TABLE t DROP COLUMN z;\nCOMMIT;',
       'CREATE INDEX CONCURRENTLY n ON t (x);',
@@ -68,7 +68,7 @@ describe('applyAllScripts', () => {
     const scripts = applyAllScripts(
       'UPDATE t SET a = 1 WHERE id = 1;',
       [change({ sql: 'ALTER TABLE t ADD COLUMN z int;' })],
-      { transactionalDdl: false },
+      { transactionalDdl: false, dialect: 'PostgreSQL' },
     );
     expect(scripts).toEqual([
       'BEGIN;\nUPDATE t SET a = 1 WHERE id = 1;\nCOMMIT;',
@@ -77,8 +77,8 @@ describe('applyAllScripts', () => {
   });
 
   test('is empty when nothing is staged', () => {
-    expect(applyAllScripts('', [])).toEqual([]);
-    expect(applyAllScripts('', [change({ transactional: false })])).toEqual(['DROP INDEX "shop"."idx_a";']);
+    expect(applyAllScripts('', [], { dialect: 'PostgreSQL' })).toEqual([]);
+    expect(applyAllScripts('', [change({ transactional: false })], { dialect: 'PostgreSQL' })).toEqual(['DROP INDEX "shop"."idx_a";']);
   });
 });
 

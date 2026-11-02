@@ -20,6 +20,7 @@ import {
   writeClipboard,
 } from '../../lib/dataExport';
 import { exportReveal } from '@db/core';
+import type { DatabaseDialect } from '../../types';
 import { invokeErrorMessage } from '../../lib/invokeError';
 import { dismissToast, toast } from '../../lib/toast';
 
@@ -38,6 +39,8 @@ interface DataExportMenuProps {
   rows: Record<string, unknown>[];
   tableName?: string;
   schema?: string;
+  identityInsert?: boolean;
+  dialect: DatabaseDialect;
   disabled?: boolean;
   disabledReason?: string;
   /**
@@ -66,6 +69,8 @@ export function DataExportMenu({
   rows,
   tableName,
   schema,
+  identityInsert,
+  dialect,
   disabled = false,
   disabledReason,
   loadAllRows,
@@ -75,7 +80,7 @@ export function DataExportMenu({
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState<'copy' | 'export' | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-  const input: DataExportInput = { columns, rows, tableName, schema };
+  const input: DataExportInput = { columns, rows, tableName, schema, identityInsert };
   const empty = columns.length === 0 || rows.length === 0;
   const idle = disabled || empty;
   const idleReason = disabled
@@ -116,13 +121,13 @@ export function DataExportMenu({
     data.catch(() => {});
     try {
       if (kind === 'copy') {
-        await writeClipboard(data.then((input) => formatExport(input, format)));
+        await writeClipboard(data.then((input) => formatExport(input, format, dialect)));
       } else {
         const rowsToSave = await data;
         const saving = toast.loading('Choose where to save…');
         let savedPath: string | null;
         try {
-          savedPath = await saveExport(rowsToSave, format);
+          savedPath = await saveExport(rowsToSave, format, dialect);
         } finally {
           dismissToast(saving);
         }

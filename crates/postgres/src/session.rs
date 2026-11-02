@@ -758,6 +758,10 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
                 foreign_key: fks.get(&key).cloned(),
                 generated: None,
                 on_update: None,
+                identity: None,
+                default_constraint: None,
+                persisted: None,
+                collation: None,
             });
     }
 

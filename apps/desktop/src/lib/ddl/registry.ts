@@ -1,4 +1,5 @@
-import type { DatabaseDialect } from '../../types';
+import type { DatabaseDialect, TableSchema } from '../../types';
+import { buildInsertSql, type InsertFieldState } from '../insertRow';
 import * as mysqlIndexes from './mysql/indexDdl';
 import * as mysqlRoutines from './mysql/routineDdl';
 import * as mysqlTables from './mysql/tableDdl';
@@ -7,6 +8,11 @@ import * as postgresIndexes from './postgres/indexDdl';
 import * as postgresRoutines from './postgres/routineDdl';
 import * as postgresTables from './postgres/tableDdl';
 import * as postgresViews from './postgres/viewDdl';
+import * as sqlServerIndexes from './sqlserver/indexDdl';
+import * as sqlServerRoutines from './sqlserver/routineDdl';
+import * as sqlServerTables from './sqlserver/tableDdl';
+import { buildSqlServerInsertSql } from './sqlserver/rowDml';
+import * as sqlServerViews from './sqlserver/viewDdl';
 import type { ObjectDdl } from './types';
 
 export interface TableDdl {
@@ -83,14 +89,68 @@ const MYSQL: ObjectDdl = {
   dropView: mysqlViews.dropView,
 };
 
+const SQLSERVER_TABLES: TableDdl = {
+  buildAddColumnSql: sqlServerTables.buildAddColumnSql,
+  buildAlterColumnSql: sqlServerTables.buildAlterColumnSql,
+  buildCreateTableSql: sqlServerTables.buildCreateTableSql,
+  buildDropColumnSql: sqlServerTables.buildDropColumnSql,
+  buildDropTableSql: sqlServerTables.buildDropTableSql,
+  buildTruncateTableSql: sqlServerTables.buildTruncateTableSql,
+  buildTableDdlPreview: sqlServerTables.buildTableDdlPreview,
+};
+
+const SQLSERVER: ObjectDdl = {
+  emptyIndexDraft: sqlServerIndexes.emptyIndexDraft,
+  indexDraftFrom: sqlServerIndexes.indexDraftFrom,
+  suggestIndexName: sqlServerIndexes.suggestIndexName,
+  validateIndex: sqlServerIndexes.validateIndex,
+  createIndex: sqlServerIndexes.createIndex,
+  planIndexChange: sqlServerIndexes.planIndexChange,
+  dropIndex: sqlServerIndexes.dropIndex,
+  emptyRoutineDraft: sqlServerRoutines.emptyRoutineDraft,
+  routineDraftFrom: sqlServerRoutines.routineDraftFrom,
+  validateRoutine: sqlServerRoutines.validateRoutine,
+  createRoutine: sqlServerRoutines.createRoutine,
+  planRoutineChange: sqlServerRoutines.planRoutineChange,
+  dropRoutine: sqlServerRoutines.dropRoutine,
+  emptyViewDraft: sqlServerViews.emptyViewDraft,
+  viewDraftFrom: sqlServerViews.viewDraftFrom,
+  validateView: sqlServerViews.validateView,
+  createView: sqlServerViews.createView,
+  planViewChange: sqlServerViews.planViewChange,
+  dropView: sqlServerViews.dropView,
+};
+
+const OBJECT_DDL: Partial<Record<DatabaseDialect, ObjectDdl>> = {
+  PostgreSQL: POSTGRES,
+  MySQL: MYSQL,
+  SQLServer: SQLSERVER,
+};
+
+const TABLE_DDL: Partial<Record<DatabaseDialect, TableDdl>> = {
+  PostgreSQL: POSTGRES_TABLES,
+  MySQL: MYSQL_TABLES,
+  SQLServer: SQLSERVER_TABLES,
+};
+
+const INSERT_SQL: Partial<
+  Record<DatabaseDialect, (table: TableSchema, fields: Record<string, InsertFieldState>) => string>
+> = {
+  SQLServer: buildSqlServerInsertSql,
+};
+
+export function insertSqlFor(
+  table: TableSchema,
+  fields: Record<string, InsertFieldState>,
+  dialect: DatabaseDialect,
+): string {
+  return INSERT_SQL[dialect]?.(table, fields) ?? buildInsertSql(table, fields, dialect);
+}
+
 export function objectDdlFor(dialect: DatabaseDialect): ObjectDdl | undefined {
-  if (dialect === 'PostgreSQL') return POSTGRES;
-  if (dialect === 'MySQL') return MYSQL;
-  return undefined;
+  return OBJECT_DDL[dialect];
 }
 
 export function tableDdlFor(dialect: DatabaseDialect): TableDdl | undefined {
-  if (dialect === 'PostgreSQL') return POSTGRES_TABLES;
-  if (dialect === 'MySQL') return MYSQL_TABLES;
-  return undefined;
+  return TABLE_DDL[dialect];
 }

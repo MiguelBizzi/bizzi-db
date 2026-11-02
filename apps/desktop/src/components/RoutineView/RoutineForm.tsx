@@ -1,6 +1,7 @@
 import { useId } from "react";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import type { RoutineCapabilities } from "@db/database";
+import type { DatabaseDialect } from "../../types";
 import {
   emptyParameterDraft,
   type ReturnDraft,
@@ -27,6 +28,7 @@ const MODE_LABEL: Record<RoutineParameterDraft["mode"], string> = {
 
 interface RoutineFormProps {
   draft: RoutineDraft;
+  dialect: DatabaseDialect;
   caps: RoutineCapabilities;
   schemas: string[];
   languages: string[];
@@ -67,6 +69,7 @@ function TypeInput({
 
 export function RoutineForm({
   draft,
+  dialect,
   caps,
   schemas,
   languages,
@@ -530,6 +533,7 @@ export function RoutineForm({
         <div className="rounded-xl border border-border bg-card overflow-hidden min-h-[16rem] [&_.cm-editor]:min-h-[16rem]">
           <SqlCodeViewer
             value={draft.body}
+            dialect={dialect}
             aria-label="Routine body"
             onChange={disabled ? undefined : (body) => set({ body })}
           />

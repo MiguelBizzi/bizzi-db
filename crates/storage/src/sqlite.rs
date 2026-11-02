@@ -1,9 +1,9 @@
 use std::path::Path;
 
 use db_core::{
-    ActivityLogItem, AppSettings, ConnectionFolder, ConnectionProfile, ConnectionStatus,
-    DatabaseDialect, Environment, HistoryQueryType, HistoryStatus, SavedQuery, SshAuthMethod,
-    SslMode, WorkspaceState,
+    dialect_from_label, dialect_label, ActivityLogItem, AppSettings, ConnectionFolder,
+    ConnectionProfile, ConnectionStatus, DatabaseDialect, Environment, HistoryQueryType,
+    HistoryStatus, SavedQuery, SshAuthMethod, SslMode, WorkspaceState,
 };
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
@@ -681,23 +681,13 @@ fn restrict_unix_mode(path: &Path, mode: u32) -> Result<(), StorageError> {
 }
 
 fn dialect_str(d: DatabaseDialect) -> &'static str {
-    match d {
-        DatabaseDialect::PostgreSQL => "PostgreSQL",
-        DatabaseDialect::MySQL => "MySQL",
-        DatabaseDialect::SQLite => "SQLite",
-        DatabaseDialect::ClickHouse => "ClickHouse",
-        DatabaseDialect::DuckDB => "DuckDB",
-    }
+    dialect_label(d)
 }
 
-fn parse_dialect(s: &str) -> DatabaseDialect {
-    match s {
-        "MySQL" => DatabaseDialect::MySQL,
-        "SQLite" => DatabaseDialect::SQLite,
-        "ClickHouse" => DatabaseDialect::ClickHouse,
-        "DuckDB" => DatabaseDialect::DuckDB,
-        _ => DatabaseDialect::PostgreSQL,
-    }
+fn parse_dialect(s: &str) -> rusqlite::Result<DatabaseDialect> {
+    dialect_from_label(s).map_err(|message| {
+        rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, message.into())
+    })
 }
 
 fn env_str(e: Environment) -> &'static str {
@@ -793,7 +783,7 @@ fn map_connection(row: &Row<'_>) -> rusqlite::Result<ConnectionProfile> {
     Ok(ConnectionProfile {
         id: row.get(0)?,
         name: row.get(1)?,
-        dialect: parse_dialect(&row.get::<_, String>(2)?),
+        dialect: parse_dialect(&row.get::<_, String>(2)?)?,
         host: row.get(3)?,
         port: row.get::<_, i64>(4)? as u16,
         database: row.get(5)?,

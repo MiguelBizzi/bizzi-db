@@ -156,7 +156,7 @@ const IndexDrawerBody: React.FC<IndexDrawerProps> = ({
   const nndSupported = versionAtLeast(serverVersionNum, caps.nullsNotDistinctMinVersion);
   const paramSpecs = storageParamsFor(method, serverVersionNum);
   const plan = result?.ok ? result : null;
-  const sql = plan ? planScript(plan) : "";
+  const sql = plan ? planScript(plan, dialect) : "";
   const canSubmit = Boolean(plan && plan.statements.length > 0) && !submitting && !disabled;
   const busy = disabled || submitting;
   const columnOptions = table.columns.map((column) => ({

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { dialectModule } from '@db/database';
-import { sql, MySQL, PostgreSQL } from '@codemirror/lang-sql';
+import { sql, MSSQL, MySQL, PostgreSQL } from '@codemirror/lang-sql';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { syntaxHighlighting } from '@codemirror/language';
@@ -10,11 +10,11 @@ import { BASIC_SETUP_WITHOUT_KEYMAPS, EDITOR_KEYMAP } from '../../lib/editorKeym
 import type { DatabaseDialect } from '../../types';
 import { sqlEditorTheme } from './editorTheme';
 
-const CODEMIRROR_DIALECT = { PostgreSQL, MySQL } as const;
+const CODEMIRROR_DIALECT = { PostgreSQL, MySQL, MSSQL } as const;
 
 interface SqlCodeViewerProps {
   value: string;
-  dialect?: DatabaseDialect;
+  dialect: DatabaseDialect;
   /** Makes the code editable: plain editing, no autocomplete, lint or run keys. */
   onChange?: (value: string) => void;
   lineNumbers?: boolean;
@@ -24,7 +24,7 @@ interface SqlCodeViewerProps {
 
 export function SqlCodeViewer({
   value,
-  dialect = 'PostgreSQL',
+  dialect,
   onChange,
   lineNumbers = true,
   className,
@@ -34,8 +34,10 @@ export function SqlCodeViewer({
   const extensions = useMemo(
     () => [
       sql({
-        dialect:
-          CODEMIRROR_DIALECT[dialectModule(dialect)?.editorDialect ?? 'PostgreSQL'],
+        dialect: (() => {
+          const meta = dialectModule(dialect);
+          return meta ? CODEMIRROR_DIALECT[meta.editorDialect] : PostgreSQL;
+        })(),
       }),
       syntaxHighlighting(sqlHighlightStyle),
       sqlEditorTheme,

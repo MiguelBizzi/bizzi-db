@@ -4,6 +4,9 @@
  * reviewed alongside row changes.
  */
 
+import type { DatabaseDialect } from '../types';
+import { wrapTransaction } from './dialectQuote';
+
 export type SchemaObjectKind = 'column' | 'index' | 'table' | 'view' | 'function' | 'procedure';
 
 export type SchemaChangeAction = 'add' | 'alter' | 'replace' | 'recreate' | 'drop';
@@ -52,9 +55,9 @@ function statementCount(sql: string): number {
   return sql.split(/;\s*(?:\n|$)/).filter((part) => part.trim()).length;
 }
 
-export function schemaChangeScript(change: StagedSchemaChange): string {
+export function schemaChangeScript(change: StagedSchemaChange, dialect: DatabaseDialect): string {
   const sql = change.sql.trim();
-  return change.transactional && statementCount(sql) > 1 ? `BEGIN;\n${sql}\nCOMMIT;` : sql;
+  return change.transactional && statementCount(sql) > 1 ? wrapTransaction(dialect, sql) : sql;
 }
 
 /**
@@ -65,16 +68,19 @@ export function schemaChangeScript(change: StagedSchemaChange): string {
 export function applyAllScripts(
   rowStatements: string,
   queue: StagedSchemaChange[],
-  options?: { transactionalDdl?: boolean },
+  options: { transactionalDdl?: boolean; dialect: DatabaseDialect },
 ): string[] {
-  const ddlInTransaction = options?.transactionalDdl !== false;
+  const ddlInTransaction = options.transactionalDdl !== false;
   const inTransaction = [
     rowStatements.trim(),
     ...queue
       .filter((change) => change.transactional && ddlInTransaction)
       .map((change) => change.sql.trim()),
   ].filter(Boolean);
-  const scripts = inTransaction.length > 0 ? [`BEGIN;\n${inTransaction.join('\n')}\nCOMMIT;`] : [];
+  const scripts =
+    inTransaction.length > 0
+      ? [wrapTransaction(options.dialect, inTransaction.join('\n'))]
+      : [];
   for (const change of queue) {
     if (!change.transactional || !ddlInTransaction) {
       const sql = change.sql.trim();

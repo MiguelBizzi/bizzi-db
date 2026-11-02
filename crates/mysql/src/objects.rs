@@ -341,6 +341,7 @@ pub async fn introspect(
             comment: cell(row, 7).filter(|c| !c.is_empty()),
             owner: None,
             data_access: cell(row, 5).filter(|value| !value.is_empty()),
+            execute_as: None,
         });
     }
 
@@ -480,6 +481,10 @@ fn column_from(row: &[Option<String>]) -> ColumnDefinition {
         foreign_key: None,
         generated: generated_expression(&extra, cell(row, 9)),
         on_update: on_update_clause(&extra),
+        identity: None,
+        default_constraint: None,
+        persisted: None,
+        collation: None,
     }
     .with_auto_increment(&extra)
 }

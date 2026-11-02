@@ -1,6 +1,6 @@
 import type { ColumnDefinition, DatabaseDialect, FilterClause, TableSchema } from '../types';
 import { sqlLiteral as typedSqlLiteral } from './dataExport';
-import { ident, moduleFor, qualify } from './dialectQuote';
+import { ident, moduleFor, pagedSql, qualify } from './dialectQuote';
 import { filterFromCell } from './tableCellActions';
 
 export const FK_LOOKUP_PAGE = 20;
@@ -85,7 +85,7 @@ export function buildLookupSql(
   query: string,
   offset: number,
   limit = FK_LOOKUP_PAGE,
-  dialect: DatabaseDialect = 'PostgreSQL',
+  dialect: DatabaseDialect,
 ): string {
   const columns = lookupColumns(table, targetColumn);
   const qualified = qualify(dialect, table.schema, table.name);
@@ -95,20 +95,13 @@ export function buildLookupSql(
   const order = ident(dialect, targetColumn);
   const trimmed = query.trim();
   if (!trimmed) {
-    return `SELECT ${selectList} FROM ${qualified} ORDER BY ${order} LIMIT ${fetch} OFFSET ${start};`;
+    return `${pagedSql(dialect, `SELECT ${selectList} FROM ${qualified} ORDER BY ${order}`, fetch, start)};`;
   }
   const pattern = sqlLiteral(dialect, ilikePattern(trimmed));
   const where = columns
-    .map((column) => likePredicate(dialect, ident(dialect, column), pattern))
+    .map((column) => moduleFor(dialect).caseInsensitiveLike(ident(dialect, column), pattern))
     .join(' OR ');
-  return `SELECT ${selectList} FROM ${qualified} WHERE ${where} ORDER BY ${order} LIMIT ${fetch} OFFSET ${start};`;
-}
-
-function likePredicate(dialect: DatabaseDialect, column: string, pattern: string): string {
-  if (moduleFor(dialect).capabilities.ilike) {
-    return `CAST(${column} AS text) ILIKE ${pattern} ESCAPE '\\'`;
-  }
-  return `LOWER(CAST(${column} AS CHAR)) LIKE LOWER(${pattern})`;
+  return `${pagedSql(dialect, `SELECT ${selectList} FROM ${qualified} WHERE ${where} ORDER BY ${order}`, fetch, start)};`;
 }
 
 export function rowKeyValue(row: Record<string, unknown>, targetColumn: string): string {
@@ -132,10 +125,10 @@ export function foreignKeyPreviewSql(
   table: TableSchema,
   targetColumn: string,
   value: unknown,
-  dialect: DatabaseDialect = 'PostgreSQL',
+  dialect: DatabaseDialect,
 ): string {
   const qualified = qualify(dialect, table.schema, table.name);
-  return `SELECT * FROM ${qualified} WHERE ${ident(dialect, targetColumn)} = ${typedSqlLiteral(value, dialect)} LIMIT 1;`;
+  return `${pagedSql(dialect, `SELECT * FROM ${qualified} WHERE ${ident(dialect, targetColumn)} = ${typedSqlLiteral(value, dialect)}`, 1, 0)};`;
 }
 
 export function columnsForForeignRow(

@@ -129,10 +129,10 @@ export function parseFilterExpression(text: string, columns: string[]): FilterPa
   }
 }
 
-export function serializeFilterExpression(filters: FilterClause[]): string {
+export function serializeFilterExpression(filters: FilterClause[], dialect: DatabaseDialect): string {
   return filters
     .filter((filter) => filter.enabled && isCompleteClause(filter))
-    .map(formatClause)
+    .map((filter) => formatClause(filter, dialect))
     .join(' AND ');
 }
 
@@ -180,7 +180,8 @@ export function filterExpressionCompletions(
   text: string,
   cursor: number,
   columns: ColumnDefinition[],
-  valueHints: Record<string, string[]> = {}
+  dialect: DatabaseDialect,
+  valueHints: Record<string, string[]> = {},
 ): FilterCompletion[] {
   const at = Math.max(0, Math.min(cursor, text.length));
   const prefix = text.slice(0, at);
@@ -188,7 +189,7 @@ export function filterExpressionCompletions(
   if (!tokens) return [];
   const names = columns.map((column) => column.name);
   const { needle, from, to, expect, column } = completionState(prefix, tokens, names);
-  const items = suggestionsFor(expect, columns, valueHints, column);
+  const items = suggestionsFor(expect, columns, valueHints, dialect, column);
   return items.filter((item) => matchesNeedle(item, needle)).map((item) => ({ ...item, from, to }));
 }
 
@@ -234,8 +235,8 @@ function isCompleteClause(filter: FilterClause): boolean {
   return filterNeedsValue(filter.operator) && Boolean(filter.value);
 }
 
-function formatClause(filter: FilterClause): string {
-  const column = formatColumn(filter.column);
+function formatClause(filter: FilterClause, dialect: DatabaseDialect): string {
+  const column = formatColumn(filter.column, dialect);
   if (filter.operator === 'IS NULL' || filter.operator === 'IS NOT NULL') {
     return `${column} ${filter.operator}`;
   }
@@ -250,7 +251,7 @@ function formatClause(filter: FilterClause): string {
   return `${column} ${filter.operator} ${formatValue(filter.operator, filter.value)}`;
 }
 
-function formatColumn(name: string, dialect: DatabaseDialect = 'PostgreSQL'): string {
+function formatColumn(name: string, dialect: DatabaseDialect): string {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) || KEYWORDS.has(name.toUpperCase())) {
     return ident(dialect, name);
   }
@@ -798,12 +799,13 @@ function suggestionsFor(
   expect: ExpectKind,
   columns: ColumnDefinition[],
   valueHints: Record<string, string[]>,
-  column?: string
+  dialect: DatabaseDialect,
+  column?: string,
 ): Omit<FilterCompletion, 'from' | 'to'>[] {
   if (expect === 'column') {
     return columns.map((item) => ({
       label: item.name,
-      apply: `${formatColumn(item.name)} `,
+      apply: `${formatColumn(item.name, dialect)} `,
       type: 'column' as const,
     }));
   }

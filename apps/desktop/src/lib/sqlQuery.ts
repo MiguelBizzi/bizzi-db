@@ -1,24 +1,21 @@
 import type { DatabaseDialect } from '../types';
-import { moduleFor, qualify } from './dialectQuote';
+import { moduleFor, pagedSql, qualify } from './dialectQuote';
 
 export function qualifyTableSql(
   schema: string | undefined,
   name: string,
-  dialect: DatabaseDialect = 'PostgreSQL',
+  dialect: DatabaseDialect,
 ): string {
   return qualify(dialect, schema ?? '', name);
 }
 
 export function defaultQuerySql(
-  table?: { schema: string; name: string },
-  dialect: DatabaseDialect = 'PostgreSQL',
+  table: { schema: string; name: string } | undefined,
+  dialect: DatabaseDialect,
 ): string {
-  if (!table?.name) {
-    return moduleFor(dialect).capabilities.backtickIdents
-      ? 'SELECT 1;'
-      : 'SELECT * FROM pg_catalog.pg_tables LIMIT 50;';
-  }
-  return `SELECT * FROM ${qualifyTableSql(table.schema, table.name, dialect)} LIMIT 50;`;
+  const meta = moduleFor(dialect);
+  if (!table?.name) return meta.emptyEditorSql;
+  return `${pagedSql(dialect, `SELECT * FROM ${qualifyTableSql(table.schema, table.name, dialect)}`, 50, 0)};`;
 }
 
 export function nextUntitledQueryTitle(existingTitles: string[]): string {

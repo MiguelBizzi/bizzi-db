@@ -1,6 +1,14 @@
+import type { ComponentType } from 'react';
 import type { DatabaseDialect } from '../../types';
 import { MySqlLogo } from './MySqlLogo';
 import { PostgresLogo } from './PostgresLogo';
+import { SqlServerLogo } from './SqlServerLogo';
+
+const LOGOS: Partial<Record<DatabaseDialect, ComponentType<{ className?: string }>>> = {
+  PostgreSQL: PostgresLogo,
+  MySQL: MySqlLogo,
+  SQLServer: SqlServerLogo,
+};
 
 export function EngineLogo({
   dialect,
@@ -9,6 +17,6 @@ export function EngineLogo({
   dialect?: DatabaseDialect;
   className?: string;
 }) {
-  if (dialect === 'MySQL') return <MySqlLogo className={className} />;
-  return <PostgresLogo className={className} />;
+  const Logo = (dialect && LOGOS[dialect]) || PostgresLogo;
+  return <Logo className={className} />;
 }

@@ -921,13 +921,14 @@ export default function App() {
       type: "sql_editor",
       title: title?.trim() || nextUntitledQueryTitle(existingTitles),
       databaseId: currentDatabase.id,
-      sqlContent: initialSql || defaultQuerySql(currentDatabase.tables[0]),
+      sqlContent: initialSql || defaultQuerySql(currentDatabase.tables[0], currentDatabase.dialect),
     });
   };
 
   const handleOpenTableSql = (table: TableSchema) => {
+    if (!currentDatabase) return;
     handleOpenNewQueryTab(
-      defaultQuerySql(table),
+      defaultQuerySql(table, currentDatabase.dialect),
       activePaneId,
       `Query · ${table.name}`,
     );
@@ -942,8 +943,8 @@ export default function App() {
         : undefined;
     void navigator.clipboard
       .writeText(
-        viewSql?.ok
-          ? planScript(viewSql)
+        viewSql?.ok && dialect
+          ? planScript(viewSql, dialect)
           : dialect
             ? (tableDdlFor(dialect)?.buildTableDdlPreview(table) ?? "")
             : "",
@@ -1432,6 +1433,7 @@ export default function App() {
     const scripts = applyAllScripts(rowSql, schemaChanges, {
       transactionalDdl: dialectModule(currentDatabase.dialect)?.capabilities
         .transactionalDdl,
+      dialect: currentDatabase.dialect,
     });
     const total = countPendingChanges(pendingByTable) + schemaChanges.length;
     if (scripts.length === 0 || total === 0) return;
@@ -1596,7 +1598,7 @@ export default function App() {
     try {
       const res = await queryExecute({
         connectionId: currentDatabase.id,
-        sql: schemaChangeScript(change),
+        sql: schemaChangeScript(change, currentDatabase.dialect),
       });
       const error = firstExecutionError(res.results);
       if (error) {

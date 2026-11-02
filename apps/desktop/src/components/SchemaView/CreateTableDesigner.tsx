@@ -17,7 +17,7 @@ import { useTabFormState } from "../../lib/tabFormState";
 interface CreateTableDesignerProps {
   tabId?: string;
   tables: TableSchema[];
-  dialect?: DatabaseDialect;
+  dialect: DatabaseDialect;
   disabled?: boolean;
   onExecute: (sql: string) => Promise<{ error?: string }>;
   onCreated?: (table: { schema: string; name: string }) => void;
@@ -46,7 +46,7 @@ function initialColumns(dialect: DatabaseDialect): NewTableColumn[] {
 export const CreateTableDesigner: React.FC<CreateTableDesignerProps> = ({
   tabId,
   tables,
-  dialect = "PostgreSQL",
+  dialect,
   disabled,
   onExecute,
   onCreated,
@@ -59,7 +59,7 @@ export const CreateTableDesigner: React.FC<CreateTableDesignerProps> = ({
     return names;
   }, [tables, dialect]);
 
-  const requireSchema = dialect === "MySQL";
+  const requireSchema = Boolean(dialectModule(dialect)?.requiresSchemaOnCreate);
   const [schema, setSchema] = useTabFormState(
     tabId,
     "schema",

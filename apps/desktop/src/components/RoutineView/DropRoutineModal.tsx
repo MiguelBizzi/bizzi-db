@@ -45,7 +45,7 @@ const DropRoutineModalBody: React.FC<DropRoutineModalProps> = ({
   if (!isOpen || !routine || !ddl) return null;
 
   const result = ddl.dropRoutine(routine);
-  const sql = result.ok ? planScript(result) : "";
+  const sql = result.ok ? planScript(result, dialect) : "";
   const matched = canConfirmDelete(typed, routine.name);
   const noun = routine.kind === "procedure" ? "procedure" : "function";
 

@@ -1,34 +1,11 @@
 use crate::adapter::{ConnectConfig, SshTunnelAuth, SshTunnelConfig};
 use crate::sql::SqlDialect;
 use crate::types::{
-    ActivityLogItem, ConnectionProfile, ConnectionStatus, DatabaseDialect, DatabaseSchema,
-    HistoryStatus, QueryExecutionResult, SaveConnectionInput, SshAuthMethod,
+    ActivityLogItem, ConnectionProfile, ConnectionStatus, DatabaseSchema, HistoryStatus,
+    QueryExecutionResult, SaveConnectionInput, SshAuthMethod,
 };
 
-pub fn dialect_label(dialect: DatabaseDialect) -> &'static str {
-    match dialect {
-        DatabaseDialect::PostgreSQL => "PostgreSQL",
-        DatabaseDialect::MySQL => "MySQL",
-        DatabaseDialect::SQLite => "SQLite",
-        DatabaseDialect::ClickHouse => "ClickHouse",
-        DatabaseDialect::DuckDB => "DuckDB",
-    }
-}
-
-/// Engines with a registered adapter. The enum stays wider so an old profile
-/// still loads; saving or connecting one of the others is refused.
-pub fn dialect_is_supported(dialect: DatabaseDialect) -> bool {
-    matches!(
-        dialect,
-        DatabaseDialect::PostgreSQL | DatabaseDialect::MySQL
-    )
-}
-
-/// MySQL treats the database field as an optional default schema and lists
-/// every user database on the server. Other engines need a database name.
-pub fn database_required(dialect: DatabaseDialect) -> bool {
-    !matches!(dialect, DatabaseDialect::MySQL)
-}
+pub use crate::engines::{database_required, dialect_is_supported, dialect_label};
 
 pub const MIN_POOL_SIZE: u32 = 1;
 pub const MAX_POOL_SIZE: u32 = 32;

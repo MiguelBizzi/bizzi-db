@@ -4,6 +4,7 @@ import { ErrorNotice } from "../ui/ErrorNotice";
 import type { DatabaseDialect, TableSchema } from "../../types";
 import { dialectModule } from "@db/database";
 import { objectDdlFor } from "../../lib/ddl/registry";
+import { qualify } from "../../lib/dialectQuote";
 import { planScript, type ViewDraft } from "../../lib/ddl/types";
 import { stagedFromPlan, viewChangeKey, type StagedSchemaChange } from "../../lib/schemaQueue";
 import { toast } from "../../lib/toast";
@@ -108,7 +109,7 @@ export const ViewDesigner: React.FC<ViewDesignerProps> = ({
     return view ? ddl.planViewChange(view, draft) : ddl.createView(draft);
   }, [ddl, draft, view]);
   const plan = result?.ok ? result : null;
-  const sql = plan ? planScript(plan) : "";
+  const sql = plan ? planScript(plan, dialect) : "";
 
   if (!ddl || !draft) {
     return (
@@ -192,7 +193,12 @@ export const ViewDesigner: React.FC<ViewDesignerProps> = ({
             <>
               <button
                 type="button"
-                onClick={() => onOpenSql(`SELECT * FROM ${view.schema}.${view.name} LIMIT 100;`, `Query · ${view.name}`)}
+                onClick={() =>
+                  onOpenSql(
+                    `SELECT * FROM ${qualify(dialect, view.schema, view.name)} ${dialectModule(dialect)?.limitClause(100, 0) ?? ""};`,
+                    `Query · ${view.name}`,
+                  )
+                }
                 className="pressable flex items-center gap-1.5 px-3 py-2 rounded-lg bg-background hover:bg-accent text-muted-foreground border border-border text-xs font-medium transition-colors"
               >
                 <Code className="w-3.5 h-3.5" />
@@ -343,6 +349,7 @@ export const ViewDesigner: React.FC<ViewDesignerProps> = ({
           <div className="rounded-xl border border-border bg-card overflow-hidden min-h-[16rem] [&_.cm-editor]:min-h-[16rem]">
             <SqlCodeViewer
               value={draft.definition}
+              dialect={dialect}
               aria-label="View definition"
               onChange={busy ? undefined : (definition) => set({ definition })}
             />
@@ -361,7 +368,7 @@ export const ViewDesigner: React.FC<ViewDesignerProps> = ({
           {result && !result.ok ? (
             <p className="field-message text-[11px] font-mono text-rose-300">{result.reason}</p>
           ) : sql ? (
-            <SqlCodeViewer value={sql} lineNumbers={false} aria-label="SQL preview" />
+            <SqlCodeViewer value={sql} dialect={dialect} lineNumbers={false} aria-label="SQL preview" />
           ) : (
             <p className="text-[11px] font-mono text-muted-foreground">No changes to apply.</p>
           )}

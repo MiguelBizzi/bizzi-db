@@ -15,7 +15,7 @@ import { ColumnDraftFields } from "./ColumnDraftFields";
 
 interface AddColumnDrawerProps {
   isOpen: boolean;
-  dialect?: DatabaseDialect;
+  dialect: DatabaseDialect;
   table: TableSchema;
   tables: TableSchema[];
   types: ColumnTypeDef[];
@@ -26,7 +26,7 @@ interface AddColumnDrawerProps {
 
 const AddColumnDrawerBody: React.FC<AddColumnDrawerProps> = ({
   isOpen,
-  dialect = "PostgreSQL",
+  dialect,
   table,
   tables,
   types,
