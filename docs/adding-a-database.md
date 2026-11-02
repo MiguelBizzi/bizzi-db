@@ -1,32 +1,35 @@
 # Adding a database engine
 
-MySQL is the pattern. PostgreSQL is the other implementation of the same seams. An engine is finished when every box below is checked and the parity row in [the multi-database spec](superpowers/specs/2026-10-30-multi-database-design.md) says what you implemented and what you left out on purpose.
+PostgreSQL, MySQL, and SQL Server are the pattern. A fourth engine is one crate, one dialect module with its `lib/ddl/<engine>/`, one registry entry on each side, one seed, and one live test file. It is finished when the contract tests pass and the parity spec says what you implemented and what you left out.
 
-## 1. Rust adapter
+## 1. Register it in two places
 
-- New crate `crates/<engine>` depending on `db-core`.
-- Implement `Adapter` (`test_connection`, `connect`) and `Session` (`introspect`, `schema_fingerprint`, `execute`, `query_page`, `preview`, `routine_source`).
-- Implement `SqlDialect` for the engine's comments, quotes, and statement terminator. Re-export the type from the crate.
-- Map driver errors onto `QueryError`. Put the SQLSTATE in `code` and the vendor number in `vendor_code` when the engine has one.
-- Quote identifiers and bind values in anything the app builds (filters, preview). Do not rewrite SQL the user typed.
-- Register the adapter and the `SqlDialect` in `adapter_for` / `sql_dialect_for` in `apps/desktop/src-tauri/src/lib.rs`.
-- Teach `dialect_is_supported` in `crates/core/src/profiles.rs` about the engine, and whether an empty database name is allowed.
+Rust metadata lives in `crates/core/src/engines.rs` (`EngineSpec`: label, whether a database name is required, default port, `supported`). The desktop process registers the `Adapter` and `SqlDialect` trait objects in `REGISTERED_ENGINES` in `apps/desktop/src-tauri/src/lib.rs`. `db-core` cannot hold the adapters, because the engine crates depend on it. `every_supported_engine_is_registered_once` fails when the two lists disagree.
 
-## 2. Frontend module
+Unknown dialect strings are errors. There is no silent fallback to PostgreSQL.
 
-- Add a `DialectModule` in `packages/database` (quoting, default port and user, URI schemes, column types, object capabilities, capability flags, CodeMirror dialect, formatter language).
-- Add `lib/ddl/<engine>/` with `TableDdl`, `RowDml`, and `ObjectDdl`. Register them in `lib/ddl/registry.ts`.
-- Hide controls whose capability flag is false. Do not emit another engine's syntax under a different name.
-- Gate menu commands that the engine cannot run via `CommandContext.capabilities`.
+The TypeScript side is the `DIALECTS` record in `packages/database`. `objectDdlFor`, `tableDdlFor`, and `dialectMeta` read from it. `apps/desktop/src/lib/ddl/registry.ts` registers `TableDdl` and `ObjectDdl`.
 
-## 3. Seed and tests
+## 2. Implement the contract
 
-- Service in `docker-compose.yml` and scripts in `docker/<engine>/init`, documented next to the MySQL seed notes.
-- Live tests in `crates/<engine>/tests`, ignored by default, calling `db_core::conformance::assert_session` plus anything only this engine does.
-- Unit tests for the splitter, filters, and error mapping that do not need the server.
-- A job or step in `.github/workflows/test.yml` that boots the service, loads the seed, and runs the ignored tests.
-- `docker/` is already a desktop path in `.github/scripts/changed-areas.sh`, so a seed-only change still runs the desktop pipeline.
+- Crate `crates/<engine>` implementing `Adapter`, `Session`, and `SqlDialect`. Re-export the dialect type.
+- Map driver errors onto `QueryError`. `code` is the SQLSTATE when the engine has one; `vendor_code` is the engine's number. `QueryErrorPosition.column` may be absent.
+- Quote identifiers and bind values in SQL the app builds. Do not rewrite SQL the user typed.
+- A `DialectModule`: quoting, transaction wrapper, page clause, case-insensitive match, default port and user, URI schemes, empty editor SQL, column types, object capabilities, and the capability flags. New flags are booleans on every engine, because `engineContract.test.ts` checks each one.
+- `lib/ddl/<engine>/` for table, index, routine, view, and row SQL. `planScript` joins statements with the module's `scriptSeparator` and wraps a multi-statement plan in the module's transaction.
+- Pass `dialect` into every helper that emits SQL. A default of PostgreSQL is rejected by `dialectBoundary.test.ts`.
 
-## 4. Say what you did not build
+## 3. Pass the contract tests
 
-Add a row to the parity matrix in the spec. A missing feature needs a one-line reason (the engine has no such object, or the product does not do it for PostgreSQL either).
+- `packages/database/src/engineContract.test.ts` — every supported dialect fills the shared hooks and capability flags.
+- `apps/desktop/src/lib/ddl/engineContract.test.ts` — every supported dialect has table and object builders.
+- `apps/desktop/src/lib/dialectBoundary.test.ts` — engine syntax and engine-name branches stay inside dialect modules.
+- `crates/core` — every registered engine round-trips through `dialect_str` / `parse_dialect`.
+- Unit tests for the splitter, paging, filters, values, and error mapping, with no server.
+- Ignored live tests in `crates/<engine>/tests` calling `db_core::conformance::assert_session`, plus the cases only this engine has. `bun run test:all` runs them.
+
+## 4. Seed, CI, and the parity note
+
+- A service in `docker-compose.yml` and idempotent scripts in `docker/<engine>/init`, documented in `docker/README.md`.
+- A step in `.github/workflows/test.yml` that boots the service, loads the seed, and runs `cargo test -p db-<engine> -- --include-ignored`.
+- A spec under `docs/superpowers/specs/` with a capability table and a parity matrix. A missing feature needs a one-line reason.

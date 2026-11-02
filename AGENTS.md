@@ -1,6 +1,6 @@
 # Bizzi DB — guide for coding agents
 
-Bizzi DB is a local desktop client for PostgreSQL and MySQL. There is no application server and no account. The React UI talks to Rust over Tauri IPC. Connections, query history, and saved SQL live in a local SQLite file. Passwords live in the OS keychain or a user-only secrets file, never in SQLite.
+Bizzi DB is a local desktop client for PostgreSQL, MySQL, and SQL Server. There is no application server and no account. The React UI talks to Rust over Tauri IPC. Connections, query history, and saved SQL live in a local SQLite file. Passwords live in the OS keychain or a user-only secrets file, never in SQLite.
 
 Read this file before changing code. The same constraints are enforced by `.claude/rules/` (Claude) and `.cursor/rules/` (Cursor; those files are symlinks of the Claude rules).
 
@@ -33,7 +33,7 @@ crates/core/src/                  Adapter, Session, SqlDialect, profiles, QueryE
 crates/postgres/src/              Postgres session, catalog, filters, values, errors
 crates/mysql/src/                 MySQL session, catalog, filters, values, DELIMITER splitter
 crates/storage/src/               workspace.sqlite and secrets
-docker/                           Postgres 16 and MySQL 8.4 seeds
+docker/                           Postgres 16, MySQL 8.4, and SQL Server 2022 seeds
 apps/web/                         landing page
 docs/adding-a-database.md         checklist for a new engine
 ```
@@ -43,7 +43,7 @@ docs/adding-a-database.md         checklist for a new engine
 1. A component or `App.tsx` calls a function in `@db/core` or `@db/storage`.
 2. That function `invoke`s a Tauri command. The command name must also appear in `permissions/app.toml` or the webview gets "not allowed".
 3. `apps/desktop/src-tauri/src/lib.rs` loads the profile, opens an SSH tunnel when configured, and stores `Arc<dyn Session>` in `AppState.sessions`.
-4. `adapter_for` returns `PostgresAdapter` or `MysqlAdapter`. Anything else is refused. `sql_dialect_for` returns `PostgresSql` or `MySqlSql` for splitting and paging.
+4. `adapter_for` returns `PostgresAdapter`, `MysqlAdapter`, or `MssqlAdapter`. Anything else is refused. `sql_dialect_for` returns `PostgresSql`, `MySqlSql`, or `TSqlSql` for splitting and paging.
 5. The session runs catalog SQL or the user's SQL. Constructed SQL (filters, preview, DDL) quotes identifiers and escapes literals in that engine's crate or in `lib/ddl`. SQL the user typed is sent as written.
 
 `query_execute` is intentionally unrestricted. Do not allowlist, rewrite, or block statements there.
@@ -80,7 +80,7 @@ Autocomplete: `lib/sqlContext.ts` decides what token is legal at the caret. `lib
 
 ## Engines today
 
-PostgreSQL and MySQL are the only registered adapters. `docs/adding-a-database.md` is the checklist: a `crates/<engine>` session, a `DialectModule`, `lib/ddl/<engine>/`, a docker seed, ignored live tests, and a parity row in `docs/superpowers/specs/2026-10-30-multi-database-design.md`.
+PostgreSQL, MySQL, and SQL Server are the registered adapters. `docs/adding-a-database.md` is the checklist: one crate, one `DialectModule` with `lib/ddl/<engine>/`, one registry entry on each side, one seed, and one live test file. The SQL Server parity matrix is `docs/superpowers/specs/2026-11-02-sql-server-design.md`.
 
 MySQL treats the database field as an optional default schema and lists every user database. Other engines require a database name. Postgres DDL is transactional; MySQL DDL commits implicitly.
 
@@ -119,6 +119,7 @@ Platform menu differences live in `lib/commands/platformAdapter.ts` and `menuHos
 bun install
 bun run db:up     # Postgres 127.0.0.1:5433 postgres/postgres
                   # MySQL 8.4 127.0.0.1:3307 root/mysql, database shop
+# SQL Server 2022 127.0.0.1:1434 sa/Mssql_dev_1, database shop
 bun run dev       # desktop
 bun run dev:web   # landing page
 bun run test      # TS tests + cargo test --workspace --exclude db-desktop
