@@ -114,19 +114,22 @@ describe('content', () => {
     }
   });
 
-  test('describes Postgres, MySQL, Rust, and Tauri', () => {
+  test('describes Postgres, MySQL, SQL Server, Rust, and Tauri', () => {
     const copy = publishedCopy();
     expect(copy).toContain('postgres');
     expect(copy).toContain('mysql');
+    expect(copy).toContain('sql server');
     expect(copy).toContain('rust');
     expect(copy).toContain('tauri');
   });
 
-  test('lists PostgreSQL and MySQL as supported databases', () => {
-    expect(DATABASES.map((db) => db.id)).toEqual(['postgres', 'mysql']);
+  test('lists PostgreSQL, MySQL, and SQL Server as supported databases', () => {
+    expect(DATABASES.map((db) => db.id)).toEqual(['postgres', 'mysql', 'sqlserver']);
     for (const db of DATABASES) {
       expect(db.highlights.length).toBeGreaterThan(0);
     }
+    expect(SITE_TITLE).toContain('SQL Server');
+    expect(SITE_DESCRIPTION).toContain('SQL Server');
     expect(SITE_TITLE).toContain('MySQL');
     expect(SITE_DESCRIPTION).toContain('MySQL');
   });
@@ -151,6 +154,7 @@ describe('index.html SEO', () => {
     );
     expect(html).toContain('PostgreSQL');
     expect(html).toContain('MySQL');
+    expect(html).toContain('SQL Server');
     expect(html).toContain('Tauri');
     expect(html).toContain('og:title');
     expect(html).toContain('twitter:card');

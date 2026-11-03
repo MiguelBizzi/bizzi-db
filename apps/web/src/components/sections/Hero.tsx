@@ -23,7 +23,7 @@ export function Hero() {
             {PRODUCT_NAME} v{version}
           </span>
           <span>—</span>
-          <span>Postgres · MySQL · Rust · Tauri 2</span>
+          <span>Postgres · MySQL · SQL Server · Rust · Tauri 2</span>
         </div>
 
         <div className="space-y-4 max-w-4xl mx-auto">
@@ -35,8 +35,9 @@ export function Hero() {
           </h1>
 
           <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            A calm, distraction-free workspace for PostgreSQL and MySQL. Rust runs
-            the session. Tauri keeps the shell light — fast to open, fast to query.
+            A calm, distraction-free workspace for PostgreSQL, MySQL, and SQL
+            Server. Rust runs the session. Tauri keeps the shell light — fast to
+            open, fast to query.
           </p>
         </div>
 

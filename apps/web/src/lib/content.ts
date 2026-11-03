@@ -10,7 +10,7 @@ export type Feature = {
 };
 
 export type Database = {
-  id: 'postgres' | 'mysql';
+  id: 'postgres' | 'mysql' | 'sqlserver';
   name: string;
   body: string;
   highlights: string[];
@@ -35,6 +35,16 @@ export const DATABASES: Database[] = [
       'Databases, tables, views, and routines',
       'MySQL dialect for generated DDL',
       'Interactive ERD from foreign keys',
+    ],
+  },
+  {
+    id: 'sqlserver',
+    name: 'SQL Server',
+    body: 'A native TDS session for SQL Server 2017 and newer. One database per connection; schemas, tables, views, and routines use the same grid, editor, and designer.',
+    highlights: [
+      'SQL login with the same TLS and SSH options',
+      'T-SQL DDL and GO batches in pending changes',
+      'Paste sqlserver:// or mssql:// to fill the form',
     ],
   },
 ];
@@ -73,7 +83,7 @@ export const FEATURES: Feature[] = [
   },
   {
     title: 'SQL editor',
-    body: 'CodeMirror with PostgreSQL and MySQL highlighting, schema-aware autocomplete, lint in the gutter, and sql-formatter. Results export as CSV, JSON, Markdown, or SQL.',
+    body: 'CodeMirror with PostgreSQL, MySQL, and T-SQL highlighting, schema-aware autocomplete, lint in the gutter, and sql-formatter. Results export as CSV, JSON, Markdown, or SQL.',
   },
   {
     title: 'Interactive ERD',
@@ -96,7 +106,7 @@ export const FEATURES: Feature[] = [
 export const ARCHITECTURE: Feature[] = [
   {
     title: 'Rust owns the session',
-    body: 'The tokio-postgres and mysql_async adapters, connection validation, identifier quoting, and SSH tunnel live in Rust. The UI invokes those commands; it does not talk to your database itself.',
+    body: 'The PostgreSQL, MySQL, and SQL Server adapters, connection validation, identifier quoting, and SSH tunnel live in Rust. The UI invokes those commands; it does not talk to your database itself.',
   },
   {
     title: 'Tauri 2 instead of Electron',
@@ -117,7 +127,7 @@ export const CTA = {
 export const FAQ: { q: string; a: string }[] = [
   {
     q: 'Which databases does Bizzi DB support?',
-    a: 'PostgreSQL and MySQL. Each has its own native Rust adapter, and both share the same grid, SQL editor, ERD, and schema designer. Pick the engine when you add a connection.',
+    a: 'PostgreSQL, MySQL, and SQL Server (2017 or newer, SQL login). Each has its own native Rust adapter, and all three share the same grid, SQL editor, ERD, and schema designer. Pick the engine when you add a connection.',
   },
   {
     q: 'Where are connection passwords stored?',
@@ -125,7 +135,7 @@ export const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'Does it work offline?',
-    a: 'Yes. The desktop app does not need the internet to connect to local or private PostgreSQL and MySQL servers. Checking for updates uses GitHub Releases when you ask it to.',
+    a: 'Yes. The desktop app does not need the internet to connect to local or private PostgreSQL, MySQL, and SQL Server instances. Checking for updates uses GitHub Releases when you ask it to.',
   },
   {
     q: 'Can I connect through SSH?',
