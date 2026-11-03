@@ -1,6 +1,7 @@
 import { Check } from 'lucide-react';
 import { MysqlLogo } from '../MysqlLogo';
 import { PostgresLogo } from '../PostgresLogo';
+import { SqlServerLogo } from '../SqlServerLogo';
 import {
   DATABASES,
   SHARED_CAPABILITIES,
@@ -10,11 +11,13 @@ import {
 const LOGOS: Record<Database['id'], typeof PostgresLogo> = {
   postgres: PostgresLogo,
   mysql: MysqlLogo,
+  sqlserver: SqlServerLogo,
 };
 
 const GLOW: Record<Database['id'], string> = {
   postgres: 'from-[#336791]/25',
   mysql: 'from-[#00758F]/25',
+  sqlserver: 'from-[#CC2927]/25',
 };
 
 export function Databases() {
@@ -29,12 +32,13 @@ export function Databases() {
             One workspace, every engine you run
           </h2>
           <p className="mt-4 text-base text-muted-foreground leading-relaxed">
-            Pick PostgreSQL or MySQL when you add a connection. The grid, SQL
-            editor, ERD, and schema designer work the same on both.
+            Pick PostgreSQL, MySQL, or SQL Server when you add a connection. The
+            grid, SQL editor, ERD, and schema designer work the same on all
+            three.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {DATABASES.map((db) => {
             const Logo = LOGOS[db.id];
             return (
@@ -76,7 +80,7 @@ export function Databases() {
 
         <div className="mt-8 flex flex-wrap items-center gap-2.5">
           <span className="mr-2 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            On both
+            All engines
           </span>
           {SHARED_CAPABILITIES.map((item) => (
             <span
