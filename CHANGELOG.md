@@ -4,7 +4,9 @@ All notable changes to Bizzi DB are recorded here. The format follows [Keep a Ch
 
 New entries go under `## [Unreleased]`; the release process moves them under a version heading. Write for people who use the app, not for people who read commits. See [RELEASING.md](RELEASING.md).
 
-## [Unreleased] - SQL Server
+## [0.1.28] - 2026-11-02 - SQL Server
+
+Bizzi DB now connects to SQL Server as well as PostgreSQL and MySQL.
 
 ### New
 
