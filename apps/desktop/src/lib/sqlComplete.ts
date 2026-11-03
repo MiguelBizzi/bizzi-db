@@ -22,7 +22,7 @@ interface Candidate extends SqlCompletion {
 }
 
 /** Set for the duration of `sqlCompletions`. The function is synchronous. */
-let completionDialect: DatabaseDialect = 'PostgreSQL';
+let completionDialect!: DatabaseDialect;
 
 function quoteIdent(name: string): string {
   return ident(completionDialect, name);
@@ -32,7 +32,7 @@ export function sqlCompletions(
   sql: string,
   cursor: number,
   tables: SqlSchemaTable[],
-  dialect: DatabaseDialect = 'PostgreSQL',
+  dialect: DatabaseDialect,
 ): SqlCompletion[] {
   completionDialect = dialect;
   const ctx = analyzeSql(sql, cursor);

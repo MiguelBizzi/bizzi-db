@@ -169,8 +169,10 @@ jobs:
   integration:
     needs: changes
     if: needs.changes.outputs.desktop == 'true'
-    timeout-minutes: 15
-    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # packages-microsoft-prod.deb is published per Ubuntu release. Pin the image
+    # the SQL Server client install is known to match.
+    runs-on: ubuntu-22.04
     services:
       postgres:
         image: postgres:16-alpine
@@ -197,6 +199,20 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 40
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_PID: Developer
+          MSSQL_SA_PASSWORD: Mssql_dev_1
+        ports:
+          - 1434:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Mssql_dev_1 -C -b -Q \"SELECT 1\""
+          --health-interval 10s
+          --health-timeout 10s
+          --health-retries 30
+          --health-start-period 20s
     env:
       TEST_PG: "1"
       TEST_PG_HOST: 127.0.0.1
@@ -210,13 +226,25 @@ jobs:
       TEST_MYSQL_USER: root
       TEST_MYSQL_PASSWORD: mysql
       TEST_MYSQL_DB: shop
+      TEST_MSSQL: "1"
+      TEST_MSSQL_HOST: 127.0.0.1
+      TEST_MSSQL_PORT: "1434"
+      TEST_MSSQL_USER: sa
+      TEST_MSSQL_PASSWORD: Mssql_dev_1
+      TEST_MSSQL_DB: shop
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           toolchain: stable
       - name: Install database clients
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client mysql-client
+        run: |
+          sudo apt-get update && sudo apt-get install -y postgresql-client mysql-client curl gpg
+          . /etc/os-release
+          curl -fsSL -o /tmp/packages-microsoft-prod.deb "https://packages.microsoft.com/config/ubuntu/${VERSION_ID}/packages-microsoft-prod.deb"
+          sudo dpkg -i /tmp/packages-microsoft-prod.deb
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y mssql-tools18
       - name: Seed PostgreSQL
         env:
           PGPASSWORD: postgres
@@ -229,8 +257,14 @@ jobs:
           for f in docker/mysql/init/*.sql; do
             mysql -h 127.0.0.1 -P 3307 -uroot -pmysql --default-character-set=utf8mb4 < "$f"
           done
+      - name: Seed SQL Server
+        run: |
+          for f in docker/mssql/init/*.sql; do
+            /opt/mssql-tools18/bin/sqlcmd -S 127.0.0.1,1434 -U sa -P "$TEST_MSSQL_PASSWORD" -C -I -b -i "$f"
+          done
       - run: cargo test -p db-postgres --locked -- --include-ignored
       - run: cargo test -p db-mysql --locked -- --include-ignored
+      - run: cargo test -p db-mssql --locked -- --include-ignored
 
   # Compile check on every platform a contributor might use. Only macOS ships installers today.
   build:

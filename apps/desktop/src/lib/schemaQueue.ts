@@ -4,6 +4,9 @@
  * reviewed alongside row changes.
  */
 
+import type { DatabaseDialect } from '../types';
+import { moduleFor, wrapTransaction } from './dialectQuote';
+
 export type SchemaObjectKind = 'column' | 'index' | 'table' | 'view' | 'function' | 'procedure';
 
 export type SchemaChangeAction = 'add' | 'alter' | 'replace' | 'recreate' | 'drop';
@@ -49,12 +52,17 @@ export function removeSchemaChange(queue: StagedSchemaChange[], key: string): St
 }
 
 function statementCount(sql: string): number {
-  return sql.split(/;\s*(?:\n|$)/).filter((part) => part.trim()).length;
+  // GO is a client batch separator, so a script can hold several statements
+  // without a semicolon between them.
+  return sql.split(/^\s*GO\s*$/im).reduce(
+    (count, batch) => count + batch.split(/;\s*(?:\n|$)/).filter((part) => part.trim()).length,
+    0,
+  );
 }
 
-export function schemaChangeScript(change: StagedSchemaChange): string {
+export function schemaChangeScript(change: StagedSchemaChange, dialect: DatabaseDialect): string {
   const sql = change.sql.trim();
-  return change.transactional && statementCount(sql) > 1 ? `BEGIN;\n${sql}\nCOMMIT;` : sql;
+  return change.transactional && statementCount(sql) > 1 ? wrapTransaction(dialect, sql) : sql;
 }
 
 /**
@@ -65,16 +73,19 @@ export function schemaChangeScript(change: StagedSchemaChange): string {
 export function applyAllScripts(
   rowStatements: string,
   queue: StagedSchemaChange[],
-  options?: { transactionalDdl?: boolean },
+  options: { transactionalDdl?: boolean; dialect: DatabaseDialect },
 ): string[] {
-  const ddlInTransaction = options?.transactionalDdl !== false;
+  const ddlInTransaction = options.transactionalDdl !== false;
   const inTransaction = [
     rowStatements.trim(),
     ...queue
       .filter((change) => change.transactional && ddlInTransaction)
       .map((change) => change.sql.trim()),
   ].filter(Boolean);
-  const scripts = inTransaction.length > 0 ? [`BEGIN;\n${inTransaction.join('\n')}\nCOMMIT;`] : [];
+  const scripts =
+    inTransaction.length > 0
+      ? [wrapTransaction(options.dialect, inTransaction.join(moduleFor(options.dialect).scriptSeparator))]
+      : [];
   for (const change of queue) {
     if (!change.transactional || !ddlInTransaction) {
       const sql = change.sql.trim();
@@ -86,11 +97,12 @@ export function applyAllScripts(
 
 export function stagedFromPlan(
   plan: { statements: string[]; transactional: boolean; warnings: string[] },
-  meta: Omit<StagedSchemaChange, 'sql' | 'transactional' | 'warnings'>
+  meta: Omit<StagedSchemaChange, 'sql' | 'transactional' | 'warnings'>,
+  dialect: DatabaseDialect,
 ): StagedSchemaChange {
   return {
     ...meta,
-    sql: plan.statements.join('\n'),
+    sql: plan.statements.join(moduleFor(dialect).scriptSeparator),
     transactional: plan.transactional,
     warnings: plan.warnings,
   };

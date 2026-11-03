@@ -141,7 +141,7 @@ export const RoutineDesigner: React.FC<RoutineDesignerProps> = ({
     return ddl.planRoutineChange(routine, source.source.body, draft);
   }, [draft, ddl, routine, source]);
   const plan = result?.ok ? result : null;
-  const sql = plan ? planScript(plan) : "";
+  const sql = plan ? planScript(plan, dialect) : "";
 
   const typeSuggestions = useMemo(() => {
     const names = (columnTypesFor(dialect) ?? [])
@@ -188,7 +188,7 @@ export const RoutineDesigner: React.FC<RoutineDesignerProps> = ({
                   ? `Rename ${routine.kind} ${routine.name} to ${target.schema}.${target.name}`
                   : `Edit ${routine.kind} ${routine.name}`,
             effects: { retargetRoutine: { fromId: routine.id, ...target } },
-          }),
+          }, dialect),
         );
         setDraft(null);
         return;
@@ -342,6 +342,7 @@ export const RoutineDesigner: React.FC<RoutineDesignerProps> = ({
         <form id="routine-form" onSubmit={handleApply} className="flex-1 overflow-y-auto p-4 space-y-4">
           <RoutineForm
             draft={draft}
+            dialect={dialect}
             caps={caps}
             schemas={schemas}
             languages={languages}
@@ -366,7 +367,7 @@ export const RoutineDesigner: React.FC<RoutineDesignerProps> = ({
             {result && !result.ok ? (
               <p className="field-message text-[11px] font-mono text-rose-300">{result.reason}</p>
             ) : sql ? (
-              <SqlCodeViewer value={sql} lineNumbers={false} aria-label="SQL preview" />
+              <SqlCodeViewer value={sql} dialect={dialect} lineNumbers={false} aria-label="SQL preview" />
             ) : (
               <p className="text-[11px] font-mono text-muted-foreground">No changes to apply.</p>
             )}
@@ -492,6 +493,7 @@ export const RoutineDesigner: React.FC<RoutineDesignerProps> = ({
                   {source.status === "ready" && (
                     <SqlCodeViewer
                       value={source.source.definition}
+                      dialect={dialect}
                       aria-label={`${routine.name} definition`}
                     />
                   )}

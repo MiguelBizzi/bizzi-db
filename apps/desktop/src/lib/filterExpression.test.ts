@@ -181,7 +181,7 @@ describe('parseFilterExpression without quotes', () => {
       clause({ id: 'b', column: 'name', operator: 'IN', value: 'Ada, Grace Hopper' }),
       clause({ id: 'c', column: 'role', operator: 'IS NOT NULL' }),
     ];
-    const parsed = parseFilterExpression(serializeFilterExpression(filters), columns);
+    const parsed = parseFilterExpression(serializeFilterExpression(filters, 'PostgreSQL'), columns);
     expect(parsed).toEqual({
       status: 'ok',
       clauses: filters.map(({ column, operator, value }) => ({ column, operator, value })),
@@ -197,22 +197,22 @@ describe('serializeFilterExpression', () => {
         clause({ id: 'b', column: 'revenue', operator: '>', value: '100' }),
         clause({ id: 'c', column: 'name', operator: '=', value: 'Ada', enabled: false }),
         clause({ id: 'd', column: 'role', operator: '=', value: '' }),
-      ])
+      ], 'PostgreSQL')
     ).toBe("status = 'active' AND revenue > 100");
   });
 
   test('round-trips IS NULL and IN lists', () => {
     expect(
-      serializeFilterExpression([clause({ column: 'role', operator: 'IS NULL' })])
+      serializeFilterExpression([clause({ column: 'role', operator: 'IS NULL' })], 'PostgreSQL')
     ).toBe('role IS NULL');
     expect(
-      serializeFilterExpression([clause({ column: 'name', operator: 'IN', value: 'Ada, Grace' })])
+      serializeFilterExpression([clause({ column: 'name', operator: 'IN', value: 'Ada, Grace' })], 'PostgreSQL')
     ).toBe("name IN ('Ada', 'Grace')");
   });
 
   test('quotes columns that are not simple identifiers', () => {
     expect(
-      serializeFilterExpression([clause({ column: 'order', operator: '=', value: '1' })])
+      serializeFilterExpression([clause({ column: 'order', operator: '=', value: '1' })], 'PostgreSQL')
     ).toBe("\"order\" = '1'");
   });
 });
@@ -290,46 +290,46 @@ describe('filterExpressionCompletions', () => {
 
   test('suggests columns at the start and after AND', () => {
     expect(
-      filterExpressionCompletions('', 0, defs).map((item) => item.label)
+      filterExpressionCompletions('', 0, defs, 'PostgreSQL').map((item) => item.label)
     ).toEqual(['status', 'revenue', 'name']);
     const text = "status = 'active' AND ";
     expect(
-      filterExpressionCompletions(text, text.length, defs).map((item) => item.label)
+      filterExpressionCompletions(text, text.length, defs, 'PostgreSQL').map((item) => item.label)
     ).toEqual(['status', 'revenue', 'name']);
   });
 
   test('suggests operators after a column and NULL after IS', () => {
-    const afterCol = filterExpressionCompletions('status ', 7, defs);
+    const afterCol = filterExpressionCompletions('status ', 7, defs, 'PostgreSQL');
     expect(afterCol.map((item) => item.label)).toContain('=');
     expect(afterCol.map((item) => item.label)).toContain('IS NULL');
-    const afterIs = filterExpressionCompletions('status IS', 9, defs).map((item) => item.label);
+    const afterIs = filterExpressionCompletions('status IS', 9, defs, 'PostgreSQL').map((item) => item.label);
     expect(afterIs).toEqual(['NULL', 'NOT NULL']);
   });
 
   test('suggests enum and row values after an operator, and nothing after a complete clause', () => {
-    const values = filterExpressionCompletions('status = ', 9, defs, {
+    const values = filterExpressionCompletions('status = ', 9, defs, 'PostgreSQL', {
       status: ['active', 'paused'],
     }).filter((item) => item.type === 'value');
     expect(values.map((item) => item.label)).toEqual(['active', 'paused']);
     const text = "status = 'active'";
-    expect(filterExpressionCompletions(text, text.length, defs)).toEqual([]);
+    expect(filterExpressionCompletions(text, text.length, defs, 'PostgreSQL')).toEqual([]);
   });
 
   test('keeps suggesting after a value with symbols the tokenizer does not know', () => {
     const text = 'name = a@b.com AND ';
     expect(
-      filterExpressionCompletions(text, text.length, defs).map((item) => item.label)
+      filterExpressionCompletions(text, text.length, defs, 'PostgreSQL').map((item) => item.label)
     ).toEqual(['status', 'revenue', 'name']);
   });
 
   test('filters suggestions by the token under the cursor', () => {
-    expect(filterExpressionCompletions('rev', 3, defs).map((item) => item.label)).toEqual(['revenue']);
+    expect(filterExpressionCompletions('rev', 3, defs, 'PostgreSQL').map((item) => item.label)).toEqual(['revenue']);
   });
 });
 
 describe('applyFilterCompletion', () => {
   test('replaces the token under the cursor and leaves the caret after the insert', () => {
-    const items = filterExpressionCompletions('rev', 3, [col('revenue')]);
+    const items = filterExpressionCompletions('rev', 3, [col('revenue')], 'PostgreSQL');
     expect(applyFilterCompletion('rev', 3, items[0]!)).toEqual({
       text: 'revenue ',
       cursor: 8,

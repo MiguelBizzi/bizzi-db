@@ -7,7 +7,7 @@ import type {
 } from '../types';
 import type { DatabaseDialect } from '../types';
 import { tableDdlFor } from './ddl/registry';
-import { ident, moduleFor, qualify, stringLiteral } from './dialectQuote';
+import { ident, moduleFor, qualify, stringLiteral, wrapTransaction } from './dialectQuote';
 
 export type PendingChangeKind = 'insert' | 'update' | 'delete' | 'truncate' | 'drop';
 
@@ -171,7 +171,7 @@ function sqlLiteral(dialect: DatabaseDialect, value: unknown): string {
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   if (typeof value === 'bigint') return String(value);
   if (typeof value === 'object') {
-    return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+    return moduleFor(dialect).quoteLiteral(JSON.stringify(value));
   }
   return stringLiteral(dialect, String(value));
 }
@@ -183,7 +183,7 @@ function qualifiedName(dialect: DatabaseDialect, bundle: TablePendingBundle): st
 export function sqlForInsert(
   bundle: TablePendingBundle,
   insert: PendingRowInsert,
-  dialect: DatabaseDialect = 'PostgreSQL',
+  dialect: DatabaseDialect,
 ): string {
   const entries = Object.entries(insert.data).filter(
     ([, value]) => value !== null && value !== undefined
@@ -194,13 +194,20 @@ export function sqlForInsert(
   }
   const cols = entries.map(([column]) => ident(dialect, column)).join(', ');
   const vals = entries.map(([, value]) => sqlLiteral(dialect, value)).join(', ');
-  return `INSERT INTO ${qualified} (${cols}) VALUES (${vals});`;
+  const sql = `INSERT INTO ${qualified} (${cols}) VALUES (${vals});`;
+  const explicitIdentity =
+    moduleFor(dialect).capabilities.identityColumns &&
+    bundle.table?.columns.some(
+      (column) => column.identity && entries.some(([name]) => name === column.name),
+    );
+  if (!explicitIdentity) return sql;
+  return `SET IDENTITY_INSERT ${qualified} ON;\n${sql}\nSET IDENTITY_INSERT ${qualified} OFF;`;
 }
 
 export function sqlForUpdateRow(
   bundle: TablePendingBundle,
   row: UpdateRowChange,
-  dialect: DatabaseDialect = 'PostgreSQL',
+  dialect: DatabaseDialect,
 ): string {
   const pk = primaryKeyColumn(bundle.table);
   const sets = row.cells
@@ -212,7 +219,7 @@ export function sqlForUpdateRow(
 export function sqlForDelete(
   bundle: TablePendingBundle,
   row: PendingRowDelete,
-  dialect: DatabaseDialect = 'PostgreSQL',
+  dialect: DatabaseDialect,
 ): string {
   const pk = primaryKeyColumn(bundle.table);
   return `DELETE FROM ${qualifiedName(dialect, bundle)} WHERE ${ident(dialect, pk)} = ${sqlLiteral(dialect, row.primaryKeyValue)};`;
@@ -232,7 +239,7 @@ function tableActionSql(
 export function sqlForChange(
   bundle: TablePendingBundle,
   ref: PendingChangeRef,
-  dialect: DatabaseDialect = 'PostgreSQL',
+  dialect: DatabaseDialect,
 ): string | null {
   if (ref.kind === 'insert') {
     const insert = bundle.inserts.find((row) => row.tempId === ref.tempId);
@@ -252,7 +259,7 @@ export function sqlForChange(
 
 export function sqlForBundle(
   bundle: TablePendingBundle,
-  dialect: DatabaseDialect = 'PostgreSQL',
+  dialect: DatabaseDialect,
 ): string {
   const statements = [
     ...bundle.inserts.map((row) => sqlForInsert(bundle, row, dialect)),
@@ -267,18 +274,18 @@ export function sqlForBundle(
 
 export function rowStatementsForAll(
   bundles: TablePendingBundle[],
-  dialect: DatabaseDialect = 'PostgreSQL',
+  dialect: DatabaseDialect,
 ): string {
   return bundles.map((bundle) => sqlForBundle(bundle, dialect)).filter(Boolean).join('\n');
 }
 
 export function sqlForAll(
   bundles: TablePendingBundle[],
-  dialect: DatabaseDialect = 'PostgreSQL',
+  dialect: DatabaseDialect,
 ): string {
   const body = rowStatementsForAll(bundles, dialect);
   if (!body) return '';
-  return `BEGIN;\n${body}\nCOMMIT;`;
+  return wrapTransaction(dialect, body);
 }
 
 export function removeChange(

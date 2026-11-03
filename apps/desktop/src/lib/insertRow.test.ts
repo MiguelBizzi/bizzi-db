@@ -15,6 +15,7 @@ import {
   isJsonType,
   isLongTextType,
   isNullable,
+  isReadOnlyColumn,
   isRequired,
   isTimestampType,
   validateFields,
@@ -50,6 +51,10 @@ describe('type helpers', () => {
     expect(isJsonType('jsonb')).toBe(true);
     expect(isLongTextType('text')).toBe(true);
     expect(isLongTextType('jsonb')).toBe(true);
+    expect(isBooleanType('bit')).toBe(true);
+    expect(isReadOnlyColumn(column('id', { identity: { seed: 1, increment: 1 } }))).toBe(true);
+    expect(isReadOnlyColumn(column('rv', { type: 'rowversion' }))).toBe(true);
+    expect(isReadOnlyColumn(column('name'))).toBe(false);
   });
 });
 
@@ -130,13 +135,13 @@ describe('assignmentFromField / buildInsertSql', () => {
     const created = column('created_at', { type: 'timestamptz', defaultValue: 'now()' });
     const name = column('name', { isNullable: false });
     const active = column('active', { type: 'boolean' });
-    expect(assignmentFromField(created, { mode: 'default', input: '' })).toEqual({ kind: 'omit' });
-    expect(assignmentFromField(created, { mode: 'now', input: '' })).toEqual({
+    expect(assignmentFromField(created, { mode: 'default', input: '' }, 'PostgreSQL')).toEqual({ kind: 'omit' });
+    expect(assignmentFromField(created, { mode: 'now', input: '' }, 'PostgreSQL')).toEqual({
       kind: 'expr',
       sql: 'now()',
     });
-    expect(assignmentFromField(name, { mode: 'null', input: '' })).toEqual({ kind: 'null' });
-    expect(assignmentFromField(active, { mode: 'value', input: 'true' })).toEqual({
+    expect(assignmentFromField(name, { mode: 'null', input: '' }, 'PostgreSQL')).toEqual({ kind: 'null' });
+    expect(assignmentFromField(active, { mode: 'value', input: 'true' }, 'PostgreSQL')).toEqual({
       kind: 'literal',
       value: true,
     });
@@ -145,7 +150,7 @@ describe('assignmentFromField / buildInsertSql', () => {
       created_at: { mode: 'now', input: '' },
       name: { mode: 'value', input: "O'Brien" },
       active: { mode: 'value', input: 'false' },
-    });
+    }, 'PostgreSQL');
     expect(sql).toBe(
       `INSERT INTO "public"."users" ("created_at", "name", "active") VALUES (now(), 'O''Brien', FALSE);`
     );
@@ -153,7 +158,7 @@ describe('assignmentFromField / buildInsertSql', () => {
 
   test('emits DEFAULT VALUES when every column is omitted', () => {
     const id = column('id', { type: 'int4', isPrimary: true, defaultValue: 'nextval' });
-    expect(buildInsertSql(users([id]), { id: { mode: 'default', input: '' } })).toBe(
+    expect(buildInsertSql(users([id]), { id: { mode: 'default', input: '' } }, 'PostgreSQL')).toBe(
       'INSERT INTO "public"."users" DEFAULT VALUES;'
     );
   });

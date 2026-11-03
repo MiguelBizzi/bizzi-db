@@ -32,6 +32,7 @@ export interface ForeignKeyDraft {
   targetTable: string;
   targetColumn: string;
   onDelete: string;
+  onUpdate?: string;
 }
 
 export interface ColumnDraft {
@@ -202,6 +203,7 @@ export function draftFromColumn(column: ColumnDefinition, types: ColumnTypeDef[]
           targetTable: fk.targetTable,
           targetColumn: fk.targetColumn,
           onDelete: fk.onDelete ?? '',
+          onUpdate: fk.onUpdate ?? '',
         }
       : null,
   };
@@ -342,6 +344,14 @@ export function alterWarnings(
   }
   if (current.isNullable !== false && !draft.nullable) {
     warnings.push('Setting NOT NULL will fail if existing rows contain NULL.');
+  }
+  if (
+    current.identity &&
+    (current.type !== nextType ||
+      (current.isNullable !== false) !== draft.nullable ||
+      (current.defaultValue?.trim() ?? '') !== draft.defaultValue.trim())
+  ) {
+    warnings.push('IDENTITY cannot be added or removed with ALTER COLUMN. Add a new column and copy the values.');
   }
   const hadDefault = Boolean(current.defaultValue?.trim());
   if (hadDefault && !draft.defaultValue.trim()) {

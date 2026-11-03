@@ -7,6 +7,7 @@ use crate::query_error::QueryError;
 pub enum DatabaseDialect {
     PostgreSQL,
     MySQL,
+    SQLServer,
     SQLite,
     ClickHouse,
     DuckDB,
@@ -76,6 +77,9 @@ pub struct ForeignKeyRef {
     pub target_schema: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub on_delete: Option<String>,
+    /// `ON UPDATE` action, such as `CASCADE`. Distinct from a column's `ON UPDATE` expression.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_update: Option<String>,
     /// Constraint name when the engine reports one. MySQL needs it to drop the key.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -107,6 +111,24 @@ pub struct ColumnDefinition {
     /// `ON UPDATE` expression, such as `CURRENT_TIMESTAMP(6)`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub on_update: Option<String>,
+    /// SQL Server `IDENTITY(seed, increment)`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity: Option<ColumnIdentity>,
+    /// Name of the default constraint, when the engine reports one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_constraint: Option<String>,
+    /// A computed column stored on disk. Absent means not computed, or not persisted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub persisted: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collation: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ColumnIdentity {
+    pub seed: i64,
+    pub increment: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -249,6 +271,9 @@ pub struct RoutineDefinition {
     /// MySQL data-access characteristic (`READS SQL DATA`, …).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data_access: Option<String>,
+    /// SQL Server `EXECUTE AS` clause (`CALLER`, `SELF`, `OWNER`, or a user).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execute_as: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

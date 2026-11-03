@@ -23,7 +23,7 @@ On Unix (macOS and Linux), `Storage::open` sets the app-data directory to `0700`
 
 ## Transit
 
-TLS is optional. New connections default SSL **on** for non-loopback hosts and **off** for `127.0.0.1` / `localhost` / `::1`. When SSL is enabled, the native TLS stack verifies system CAs; there is no skip-verify path. Disabling SSL for a remote (especially production) host shows a warning in the connection form.
+TLS is optional and the same three modes apply to PostgreSQL, MySQL, and SQL Server. `Disabled` is plain TCP. `Require` is TLS that accepts a certificate the system would not trust. `Enabled` verifies the certificate against the system CAs. New connections default SSL on for non-loopback hosts and off for `127.0.0.1` / `localhost` / `::1`. Disabling SSL for a remote host shows a warning in the connection form.
 
 ## Accepted risks
 

@@ -37,7 +37,7 @@ pub(crate) fn query_error_from_parts(parts: DbErrorParts, sql: &str) -> QueryErr
         line_col_at(sql, offset).map(|(line, column)| QueryErrorPosition {
             offset,
             line,
-            column,
+            column: Some(column),
         })
     });
     QueryError {
@@ -195,7 +195,7 @@ mod tests {
             Some(QueryErrorPosition {
                 offset: 15,
                 line: 2,
-                column: 6
+                column: Some(6)
             })
         );
     }

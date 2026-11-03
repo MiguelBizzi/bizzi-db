@@ -62,7 +62,7 @@ function keyLabel(index: IndexDefinition): string {
 interface TableSchemaDesignerProps {
   table: TableSchema;
   tables: TableSchema[];
-  dialect?: DatabaseDialect;
+  dialect: DatabaseDialect;
   disabled?: boolean;
   serverVersionNum?: number;
   newIndexRequested?: boolean;
@@ -75,7 +75,7 @@ interface TableSchemaDesignerProps {
 export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
   table,
   tables,
-  dialect = "PostgreSQL",
+  dialect,
   disabled,
   serverVersionNum,
   newIndexRequested,
@@ -445,6 +445,7 @@ export const TableSchemaDesigner: React.FC<TableSchemaDesignerProps> = ({
                                   <div className="rounded-lg border border-border bg-card overflow-hidden">
                                     <SqlCodeViewer
                                       value={`${index.definition};`}
+                                      dialect={dialect}
                                       lineNumbers={false}
                                       aria-label={`${index.name} definition`}
                                     />

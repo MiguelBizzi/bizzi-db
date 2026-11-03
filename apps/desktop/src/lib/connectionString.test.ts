@@ -173,6 +173,15 @@ describe('parseConnectionString', () => {
       },
     });
     expect(parseConnectionString('mysql://root@localhost').ok).toBe(true);
+    const mssql = parseConnectionString('sqlserver://sa:secret@127.0.0.1:1434?database=shop');
+    expect(mssql.ok && !mssql.empty && mssql.value.dialect).toBe('SQLServer');
+    if (mssql.ok && !mssql.empty) {
+      expect(mssql.value.port).toBe(1434);
+      expect(mssql.value.database).toBe('shop');
+      expect(mssql.value.username).toBe('sa');
+    }
+    const mssqlPath = parseConnectionString('mssql://sa@127.0.0.1/shop');
+    expect(mssqlPath.ok && !mssqlPath.empty && mssqlPath.value.port).toBe(1433);
     const jdbc = parseConnectionString('jdbc:mysql://root:mysql@127.0.0.1:3306/shop');
     expect(jdbc.ok && !jdbc.empty && jdbc.value.dialect).toBe('MySQL');
     if (jdbc.ok && !jdbc.empty) expect(jdbc.value.port).toBe(3306);
@@ -191,7 +200,7 @@ describe('parseConnectionString', () => {
     for (const [uri, engine] of cases) {
       expect(parseConnectionString(uri)).toEqual({
         ok: false,
-        error: `${engine} is not supported yet. Choose PostgreSQL or fill in the form manually.`,
+        error: `${engine} is not supported yet. Choose a supported database or fill in the form manually.`,
       });
     }
   });

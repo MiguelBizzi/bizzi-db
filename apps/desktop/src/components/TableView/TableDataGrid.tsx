@@ -63,6 +63,7 @@ import {
   type CellFilterOp,
 } from "../../lib/tableCellActions";
 import { copyExport, DATA_EXPORT_FORMATS } from "../../lib/dataExport";
+import { isReadOnlyColumn } from "../../lib/insertRow";
 import { toast } from "../../lib/toast";
 import { FORMAT_ICONS } from "../DataExport/DataExportMenu";
 import { useDebouncedValue } from "../../lib/useDebouncedValue";
@@ -161,7 +162,7 @@ interface TableDataGridProps {
   readOnlyReason?: string;
   /** Result columns that cannot be edited (aliases, expressions). */
   readOnlyColumns?: ReadonlySet<string>;
-  dialect?: DatabaseDialect;
+  dialect: DatabaseDialect;
   /** Table that Add Row inserts into when `table` is only a projection of it. */
   insertTable?: TableSchema;
   toolbarLeading?: React.ReactNode;
@@ -221,7 +222,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   readOnly = false,
   readOnlyReason,
   readOnlyColumns,
-  dialect = "PostgreSQL",
+  dialect,
   insertTable,
   toolbarLeading,
   toolbarTrailing,
@@ -284,7 +285,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   const lockedColumns = useMemo(() => {
     const names = new Set(readOnlyColumns);
     for (const column of table.columns) {
-      if (column.generated != null) names.add(column.name);
+      if (isReadOnlyColumn(column)) names.add(column.name);
     }
     return names;
   }, [readOnlyColumns, table.columns]);
@@ -646,6 +647,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
           locked: isCellLocked(contextMenu.column.name),
           allowFilter: !isQuery,
           pendingModifications,
+          dialect,
           onFilter: applyCellFilter,
           onSetValue: (newValue) => {
             if (contextMenu.rowPk === undefined) return;
@@ -697,7 +699,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     }
     try {
       const res = await onLookup(
-        foreignKeyPreviewSql(target, fk.targetColumn, value),
+        foreignKeyPreviewSql(target, fk.targetColumn, value, dialect),
       );
       if (fkLookupGen.current !== gen) return;
       if (res.error) {
@@ -1078,6 +1080,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
       <InsertRowDrawer
         isOpen={insertOpen}
         table={insertTable ?? table}
+        dialect={dialect}
         tables={tables}
         onClose={() => setInsertOpen(false)}
         onInsert={onInsertRow}
@@ -1238,6 +1241,7 @@ function cellMenuItems(opts: {
   locked: boolean;
   allowFilter: boolean;
   pendingModifications: PendingModifications;
+  dialect: DatabaseDialect;
   onFilter: (column: string, op: CellFilterOp, value: unknown) => void;
   onSetValue: (value: unknown) => void;
 }): ContextMenuItem[] {
@@ -1360,7 +1364,7 @@ function cellMenuItems(opts: {
           label: format.label,
           icon: <Icon className={`w-3.5 h-3.5 shrink-0 ${className}`} />,
           onSelect: () => {
-            void copyExport(exportInput, format.id)
+            void copyExport(exportInput, format.id, opts.dialect)
               .then(() => toast(`Copied as ${format.label}`))
               .catch(() => toast.error("Could not copy to clipboard"));
           },

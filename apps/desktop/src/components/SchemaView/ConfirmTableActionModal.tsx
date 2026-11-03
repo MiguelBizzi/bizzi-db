@@ -17,7 +17,7 @@ interface ConfirmTableActionModalProps {
 
 const ConfirmTableActionModalBody: React.FC<ConfirmTableActionModalProps> = ({
   table,
-  dialect = 'PostgreSQL',
+  dialect,
   action,
   onClose,
   onConfirm,
@@ -43,11 +43,12 @@ const ConfirmTableActionModalBody: React.FC<ConfirmTableActionModalProps> = ({
 
   const isDrop = action === 'drop';
   const isView = Boolean(table.isView);
-  const viewDrop = isView && isDrop ? objectDdlFor(dialect)?.dropView(table) : undefined;
-  const tables = tableDdlFor(dialect);
+  const viewDrop =
+    dialect && isView && isDrop ? objectDdlFor(dialect)?.dropView(table) : undefined;
+  const tables = dialect ? tableDdlFor(dialect) : undefined;
   const sql =
-    viewDrop && viewDrop.ok
-      ? planScript(viewDrop)
+    viewDrop && viewDrop.ok && dialect
+      ? planScript(viewDrop, dialect)
       : isDrop
         ? (tables?.buildDropTableSql(table) ?? '')
         : (tables?.buildTruncateTableSql(table) ?? '');

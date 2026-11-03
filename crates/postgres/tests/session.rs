@@ -408,7 +408,7 @@ async fn missing_table_is_a_reference_error() {
     assert_eq!(info.category, db_core::QueryErrorCategory::Reference);
     assert_eq!(info.code.as_deref(), Some("42P01"));
     let position = info.position.as_ref().expect("position");
-    assert_eq!((position.line, position.column), (1, 15));
+    assert_eq!((position.line, position.column), (1, Some(15)));
 }
 
 #[tokio::test]
@@ -447,7 +447,7 @@ async fn failing_second_statement_position_is_statement_relative() {
         .as_ref()
         .and_then(|info| info.position.as_ref())
         .expect("position");
-    assert_eq!((position.line, position.column), (1, 1));
+    assert_eq!((position.line, position.column), (1, Some(1)));
 }
 
 #[tokio::test]

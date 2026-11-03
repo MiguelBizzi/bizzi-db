@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { dialectModule } from '@db/database';
-import { sql, MySQL, PostgreSQL } from '@codemirror/lang-sql';
+import { sql, MSSQL, MySQL, PostgreSQL } from '@codemirror/lang-sql';
 import { autocompletion, type CompletionContext } from '@codemirror/autocomplete';
 import { linter, lintGutter } from '@codemirror/lint';
 import { keymap, EditorView } from '@codemirror/view';
@@ -15,7 +15,7 @@ import { BASIC_SETUP_WITHOUT_KEYMAPS, EDITOR_KEYMAP, editorShortcuts } from '../
 import type { DatabaseDialect } from '../../types';
 import type { RunMode, RunSelection } from '../../lib/runTarget';
 
-const CODEMIRROR_DIALECT = { PostgreSQL, MySQL } as const;
+const CODEMIRROR_DIALECT = { PostgreSQL, MySQL, MSSQL } as const;
 
 export interface SqlCodeEditorHandle {
   insertAtCursor: (text: string) => void;
@@ -37,7 +37,7 @@ function runRequest(view: EditorView, mode: RunMode): SqlRunRequest {
 interface SqlCodeEditorProps {
   value: string;
   tables: SqlSchemaTable[];
-  dialect?: DatabaseDialect;
+  dialect: DatabaseDialect;
   onChange: (value: string) => void;
   /** Fires when the editor gains or loses a non-blank selection. */
   onSelectionChange?: (hasSelection: boolean) => void;
@@ -49,7 +49,7 @@ interface SqlCodeEditorProps {
 
 export const SqlCodeEditor = forwardRef<SqlCodeEditorHandle, SqlCodeEditorProps>(
   function SqlCodeEditor(
-    { value, tables, dialect = 'PostgreSQL', onChange, onSelectionChange, onViewReady, onRunKey },
+    { value, tables, dialect, onChange, onSelectionChange, onViewReady, onRunKey },
     ref,
   ) {
     const viewRef = useRef<EditorView | null>(null);
@@ -90,7 +90,9 @@ export const SqlCodeEditor = forwardRef<SqlCodeEditorHandle, SqlCodeEditorProps>
 
     const extensions = useMemo(
       () => [
-        sql({ dialect: CODEMIRROR_DIALECT[meta?.editorDialect ?? 'PostgreSQL'] }),
+        sql({
+          dialect: meta ? CODEMIRROR_DIALECT[meta.editorDialect] : PostgreSQL,
+        }),
         syntaxHighlighting(sqlHighlightStyle),
         lintGutter(),
         linter((view) =>
@@ -114,7 +116,9 @@ export const SqlCodeEditor = forwardRef<SqlCodeEditorHandle, SqlCodeEditorProps>
                 tablesRef.current,
                 dialectRef.current,
               );
-              const word = context.matchBefore(/[\w."]*$/);
+              // `[` opens a quoted identifier on SQL Server, so the replacement includes it.
+              const brackets = dialectModule(dialectRef.current)?.capabilities.bracketIdents;
+              const word = context.matchBefore(brackets ? /[\w."[\]]*$/ : /[\w."]*$/);
               if (!word && !context.explicit) return null;
               if (items.length === 0 && !context.explicit) return null;
               return {

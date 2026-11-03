@@ -4,6 +4,19 @@ All notable changes to Bizzi DB are recorded here. The format follows [Keep a Ch
 
 New entries go under `## [Unreleased]`; the release process moves them under a version heading. Write for people who use the app, not for people who read commits. See [RELEASING.md](RELEASING.md).
 
+## [Unreleased] - SQL Server
+
+### New
+
+- Connect to SQL Server 2017 or newer, one database at a time, with a SQL login and the same TLS choices as the other engines. Browse schemas, tables, views, routines and indexes, run SQL, edit rows, and apply pending changes in one transaction.
+- Paste a `sqlserver://` or `mssql://` address to fill the connection form. Identity, computed, and rowversion columns stay read-only in the grid, and a SQL export splits inserts into batches of 1000 rows.
+
+### Fixed
+
+- Applying several pending changes on SQL Server keeps each procedure or view in its own batch. An index change that only updates included columns or options is saved, and renaming an index while changing its keys drops the current name.
+- A query SQL Server cannot page on the server returns one page instead of every row. A failed script no longer leaves the next statement unable to insert an identity value. Foreign key search treats `%` and `_` as ordinary characters, and a foreign key keeps its ON UPDATE action.
+- A host written as `HOST\INSTANCE` is rejected with an explanation. SQL Server named instances are not supported.
+
 ## [0.1.27] - 2026-10-31 - MySQL
 
 Bizzi DB now connects to MySQL as well as PostgreSQL.

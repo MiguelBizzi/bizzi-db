@@ -1,6 +1,7 @@
 mod adapter;
 #[cfg(feature = "conformance")]
 pub mod conformance;
+mod engines;
 mod profiles;
 mod query_error;
 mod sql;
@@ -10,6 +11,7 @@ pub use adapter::{
     schema_cache_is_fresh, Adapter, AdapterError, ConnectConfig, Session, SshTunnelAuth,
     SshTunnelConfig,
 };
+pub use engines::{dialect_from_label, engine_specs, EngineSpec};
 pub use profiles::{
     clamp_pool_size, connect_config_from_profile, database_required, dialect_is_supported,
     dialect_label, history_item_from_result, new_connection_requires_password, overlay_schema,

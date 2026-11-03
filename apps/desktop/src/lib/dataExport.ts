@@ -15,6 +15,8 @@ export interface DataExportInput {
   rows: Record<string, unknown>[];
   tableName?: string;
   schema?: string;
+  /** Wrap the script so explicit identity values are accepted. */
+  identityInsert?: boolean;
 }
 
 export const DATA_EXPORT_FORMATS: {
@@ -44,7 +46,7 @@ export function inferQualifiedTable(sql?: string): { schema: string; table: stri
 export function formatExport(
   input: DataExportInput,
   format: DataExportFormat,
-  dialect: DatabaseDialect = 'PostgreSQL',
+  dialect: DatabaseDialect,
 ): string {
   switch (format) {
     case 'csv':
@@ -84,14 +86,19 @@ export async function writeClipboard(text: string | Promise<string>): Promise<vo
 
 export async function copyExport(
   input: DataExportInput,
-  format: DataExportFormat
+  format: DataExportFormat,
+  dialect: DatabaseDialect,
 ): Promise<void> {
-  await writeClipboard(formatExport(input, format));
+  await writeClipboard(formatExport(input, format, dialect));
 }
 
-export function buildExportFile(input: DataExportInput, format: DataExportFormat): ExportFile {
+export function buildExportFile(
+  input: DataExportInput,
+  format: DataExportFormat,
+  dialect: DatabaseDialect,
+): ExportFile {
   const meta = DATA_EXPORT_FORMATS.find((item) => item.id === format);
-  const body = formatExport(input, format);
+  const body = formatExport(input, format, dialect);
   return {
     fileName: exportFileName(input, format),
     filterLabel: meta?.label ?? format,
@@ -101,8 +108,12 @@ export function buildExportFile(input: DataExportInput, format: DataExportFormat
   };
 }
 
-export function saveExport(input: DataExportInput, format: DataExportFormat): Promise<string | null> {
-  return exportSaveFile(buildExportFile(input, format));
+export function saveExport(
+  input: DataExportInput,
+  format: DataExportFormat,
+  dialect: DatabaseDialect,
+): Promise<string | null> {
+  return exportSaveFile(buildExportFile(input, format, dialect));
 }
 
 function formatCsv({ columns, rows }: DataExportInput): string {
@@ -130,7 +141,7 @@ function formatMarkdown({ columns, rows }: DataExportInput): string {
 }
 
 function formatSqlInsert(
-  { columns, rows, tableName, schema }: DataExportInput,
+  { columns, rows, tableName, schema, identityInsert }: DataExportInput,
   dialect: DatabaseDialect,
 ): string {
   if (rows.length === 0 || columns.length === 0) return '';
@@ -140,7 +151,17 @@ function formatSqlInsert(
     const values = columns.map((column) => sqlLiteral(row[column], dialect)).join(', ');
     return `(${values})`;
   });
-  return `INSERT INTO ${table} (${cols}) VALUES\n  ${tuples.join(',\n  ')};`;
+  const chunk = moduleFor(dialect).insertChunkSize;
+  const groups: string[][] = [];
+  const size = chunk && chunk > 0 ? chunk : tuples.length;
+  for (let i = 0; i < tuples.length; i += size) groups.push(tuples.slice(i, i + size));
+  let body = groups
+    .map((group) => `INSERT INTO ${table} (${cols}) VALUES\n  ${group.join(',\n  ')};`)
+    .join('\n');
+  if (identityInsert) {
+    body = `SET IDENTITY_INSERT ${table} ON;\n${body}\nSET IDENTITY_INSERT ${table} OFF;`;
+  }
+  return body;
 }
 
 function csvField(value: unknown): string {
@@ -155,7 +176,7 @@ function mdCell(value: unknown): string {
   return stringifyCell(value).replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
 }
 
-export function sqlLiteral(value: unknown, dialect: DatabaseDialect = 'PostgreSQL'): string {
+export function sqlLiteral(value: unknown, dialect: DatabaseDialect): string {
   if (value === null || value === undefined) return 'NULL';
   if (typeof value === 'boolean') return moduleFor(dialect).booleanLiteral(value);
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);

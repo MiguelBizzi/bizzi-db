@@ -5,30 +5,7 @@ use crate::types::{
     HistoryStatus, QueryExecutionResult, SaveConnectionInput, SshAuthMethod,
 };
 
-pub fn dialect_label(dialect: DatabaseDialect) -> &'static str {
-    match dialect {
-        DatabaseDialect::PostgreSQL => "PostgreSQL",
-        DatabaseDialect::MySQL => "MySQL",
-        DatabaseDialect::SQLite => "SQLite",
-        DatabaseDialect::ClickHouse => "ClickHouse",
-        DatabaseDialect::DuckDB => "DuckDB",
-    }
-}
-
-/// Engines with a registered adapter. The enum stays wider so an old profile
-/// still loads; saving or connecting one of the others is refused.
-pub fn dialect_is_supported(dialect: DatabaseDialect) -> bool {
-    matches!(
-        dialect,
-        DatabaseDialect::PostgreSQL | DatabaseDialect::MySQL
-    )
-}
-
-/// MySQL treats the database field as an optional default schema and lists
-/// every user database on the server. Other engines need a database name.
-pub fn database_required(dialect: DatabaseDialect) -> bool {
-    !matches!(dialect, DatabaseDialect::MySQL)
-}
+pub use crate::engines::{database_required, dialect_is_supported, dialect_label};
 
 pub const MIN_POOL_SIZE: u32 = 1;
 pub const MAX_POOL_SIZE: u32 = 32;
@@ -51,6 +28,9 @@ pub fn validate_save_input(
 ) -> Result<(), String> {
     if input.host.trim().is_empty() {
         return Err("Host is required".into());
+    }
+    if input.dialect == DatabaseDialect::SQLServer && input.host.contains('\\') {
+        return Err("SQL Server named instances are not supported. Use a host and a port.".into());
     }
     if input.port == 0 {
         return Err("Port must be between 1 and 65535".into());
@@ -450,6 +430,14 @@ mod tests {
         mysql.database.clear();
         mysql.port = 3306;
         assert!(validate_save_input(&mysql, false).is_ok());
+
+        let mut named = ok.clone();
+        named.dialect = DatabaseDialect::SQLServer;
+        named.host = r"localhost\SQLEXPRESS".into();
+        assert_eq!(
+            validate_save_input(&named, false).unwrap_err(),
+            "SQL Server named instances are not supported. Use a host and a port."
+        );
     }
 
     #[test]

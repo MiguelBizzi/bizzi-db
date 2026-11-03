@@ -11,6 +11,10 @@ import {
   validateRoutine,
 } from './routineDdl';
 
+function script(plan: DdlPlan): string {
+  return planScript(plan, 'PostgreSQL');
+}
+
 function routine(overrides: Partial<RoutineDefinition> = {}): RoutineDefinition {
   return {
     id: 'shop.order_total(p_subtotal numeric, p_tax numeric)',
@@ -58,7 +62,7 @@ describe('dollarQuote', () => {
 
 describe('createRoutine', () => {
   test('writes a function with every non-default attribute', () => {
-    const sql = planScript(
+    const sql = script(
       plan(
         createRoutine(
           draft({
@@ -129,7 +133,7 @@ describe('createRoutine', () => {
   });
 
   test('procedures take no RETURNS or function-only attributes', () => {
-    const sql = planScript(
+    const sql = script(
       plan(
         createRoutine({
           ...emptyRoutineDraft('ops', 'procedure'),

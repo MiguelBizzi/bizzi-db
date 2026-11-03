@@ -82,7 +82,7 @@ interface SqlEditorTabProps {
 
 export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
   isFocusedPane,
-  initialSql = 'SELECT * FROM users ORDER BY created_at DESC LIMIT 50;',
+  initialSql = 'SELECT 1;',
   onSqlChange,
   tabState,
   onTabStateChange,
@@ -734,6 +734,7 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
 
           <div className="min-h-0 overflow-hidden" style={{ flex: `${resultsFraction} 1 0%` }}>
             <QueryResultsView
+              dialect={currentDatabase.dialect}
               results={queryResults}
               isLoading={isRunning}
               activeIndex={clampResultIndex(tabState.activeResultIndex, queryResults.length)}

@@ -20,7 +20,7 @@ const REFRESH_SHORTCUT = shortcutLabel('conn.refreshTable');
 
 interface TableToolbarProps {
   table: TableSchema;
-  dialect?: DatabaseDialect;
+  dialect: DatabaseDialect;
   searchTerm: string;
   onSearchChange: (val: string) => void;
   filters: FilterClause[];
@@ -53,7 +53,7 @@ interface TableToolbarProps {
 
 export const TableToolbar: React.FC<TableToolbarProps> = ({
   table,
-  dialect = 'PostgreSQL',
+  dialect,
   searchTerm,
   onSearchChange,
   filters,
@@ -234,6 +234,8 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
             loadAllRows={selectedRowsCount > 0 ? undefined : fetchAllRows}
             tableName={table.name}
             schema={table.schema}
+            identityInsert={table.columns.some((column) => column.identity != null)}
+            dialect={dialect}
             disabled={isLoading}
             disabledReason={loadingHint}
             exportTriggerRef={exportTriggerRef}
@@ -254,6 +256,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
                 }}
                 onSubmit={submitExpression}
                 columns={table.columns}
+                dialect={dialect}
                 valueHints={valueHints}
                 error={expressionError}
                 placeholder={`Type a condition, e.g. ${columnNames[0] ?? 'id'} = value, then press Enter`}

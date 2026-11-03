@@ -303,6 +303,101 @@ export const MYSQL_OBJECTS: ObjectCapabilities = {
   },
 };
 
+const SQLSERVER_FILLFACTOR: StorageParamSpec = {
+  name: 'fillfactor',
+  kind: 'integer',
+  min: 1,
+  max: 100,
+  hint: 'Percent of each leaf page to fill.',
+};
+
+const SQLSERVER_ROWSTORE: StorageParamSpec[] = [
+  SQLSERVER_FILLFACTOR,
+  { name: 'pad_index', kind: 'boolean', hint: 'Apply fillfactor to intermediate index pages.' },
+  {
+    name: 'data_compression',
+    kind: 'enum',
+    values: ['NONE', 'ROW', 'PAGE'],
+    hint: 'ROW or PAGE compression. PAGE needs a supporting edition.',
+  },
+  { name: 'ignore_dup_key', kind: 'boolean', hint: 'A duplicate key warns and skips the row instead of failing the statement.' },
+];
+
+export const SQLSERVER_OBJECTS: ObjectCapabilities = {
+  indexes: {
+    methods: [
+      {
+        id: 'nonclustered',
+        label: 'Nonclustered',
+        description: 'A secondary index. The table keeps its existing row order.',
+        unique: true,
+        ordering: true,
+        multiColumn: true,
+        includeMinVersion: 0,
+        storageParams: SQLSERVER_ROWSTORE,
+      },
+      {
+        id: 'clustered',
+        label: 'Clustered',
+        description: 'The table is stored in this key order. A table has one.',
+        unique: true,
+        ordering: true,
+        multiColumn: true,
+        includeMinVersion: null,
+        storageParams: SQLSERVER_ROWSTORE,
+      },
+      {
+        id: 'nonclustered columnstore',
+        label: 'Nonclustered columnstore',
+        description: 'A columnstore copy of the rows, for scans.',
+        unique: false,
+        ordering: false,
+        multiColumn: true,
+        includeMinVersion: null,
+        storageParams: [],
+      },
+      {
+        id: 'clustered columnstore',
+        label: 'Clustered columnstore',
+        description: 'The table itself is stored as a columnstore.',
+        unique: false,
+        ordering: false,
+        multiColumn: false,
+        includeMinVersion: null,
+        storageParams: [],
+      },
+    ],
+    defaultMethod: 'nonclustered',
+    expressions: false,
+    partial: true,
+    concurrent: true,
+    ifNotExists: false,
+    tablespaces: false,
+    opclasses: false,
+    collations: false,
+    nullsNotDistinctMinVersion: null,
+    maxNameBytes: 128,
+    onlineBuildLabel: 'ONLINE = ON',
+    onlineBuildHint: 'WITH (ONLINE = ON) needs Enterprise, Developer, or Azure SQL, and cannot run inside a transaction.',
+  },
+  routines: {
+    kinds: ['function', 'procedure'],
+    createOrReplace: true,
+    parameterModes: ['in', 'out'],
+    functionParameterModes: ['in'],
+    returnsTable: true,
+    volatilities: [],
+    defaultVolatility: 'volatile',
+    parallelModes: [],
+    strict: false,
+    securityDefiner: true,
+    leakproof: false,
+    costAndRows: false,
+    defaultLanguage: 'T-SQL',
+    returnTypePresets: ['int', 'bigint', 'nvarchar(50)', 'decimal(10,2)', 'bit', 'datetime2', 'uniqueidentifier'],
+  },
+};
+
 export function versionAtLeast(version: number | undefined, minVersion: number | null | undefined) {
   if (minVersion === null) return false;
   if (minVersion === undefined || version === undefined || version <= 0) return true;

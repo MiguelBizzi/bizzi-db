@@ -1,10 +1,12 @@
 import type {
+  DatabaseDialect,
   IndexDefinition,
   ParameterMode,
   RoutineDefinition,
   RoutineKind,
   TableSchema,
 } from '../../types';
+import { moduleFor, wrapTransaction } from '../dialectQuote';
 
 export interface IndexKeyDraft {
   kind: 'column' | 'expression';
@@ -153,8 +155,8 @@ export interface ObjectDdl {
   dropView(view: TableSchema): DdlResult;
 }
 
-export function planScript(plan: DdlPlan): string {
+export function planScript(plan: DdlPlan, dialect: DatabaseDialect): string {
   if (plan.statements.length === 0) return '';
-  const body = plan.statements.join('\n');
-  return plan.transactional && plan.statements.length > 1 ? `BEGIN;\n${body}\nCOMMIT;` : body;
+  const body = plan.statements.join(moduleFor(dialect).scriptSeparator);
+  return plan.transactional && plan.statements.length > 1 ? wrapTransaction(dialect, body) : body;
 }

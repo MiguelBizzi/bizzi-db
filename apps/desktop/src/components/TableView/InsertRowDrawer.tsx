@@ -3,11 +3,11 @@ import { OverlayPresence } from "../ui/OverlayPresence";
 import { Drawer, DrawerPanel } from "../ui/Drawer";
 import { Check, Clock, Key, Link, Plus, X } from "lucide-react";
 import { ErrorNotice } from "../ui/ErrorNotice";
-import type { ColumnDefinition, TableSchema } from "../../types";
+import type { ColumnDefinition, DatabaseDialect, TableSchema } from "../../types";
 import { Select } from "../ui/Select";
 import { ForeignKeyPicker, type FkLookupFn } from "./ForeignKeyPicker";
+import { insertSqlFor } from "../../lib/ddl/registry";
 import {
-  buildInsertSql,
   enumValuesFor,
   hasDefault,
   initialFields,
@@ -26,6 +26,7 @@ import { shortColumnType } from "../../lib/columnTypeDisplay";
 interface InsertRowDrawerProps {
   isOpen: boolean;
   table: TableSchema;
+  dialect: DatabaseDialect;
   tables: TableSchema[];
   onClose: () => void;
   onInsert: (sql: string) => Promise<{ error?: string }>;
@@ -38,6 +39,7 @@ const inputClass =
 const InsertRowDrawerBody: React.FC<InsertRowDrawerProps> = ({
   isOpen,
   table,
+  dialect,
   tables,
   onClose,
   onInsert,
@@ -77,7 +79,7 @@ const InsertRowDrawerBody: React.FC<InsertRowDrawerProps> = ({
     return () => window.clearTimeout(timeout);
   }, [armed]);
 
-  const sql = useMemo(() => buildInsertSql(table, fields), [table, fields]);
+  const sql = useMemo(() => insertSqlFor(table, fields, dialect), [table, fields, dialect]);
   const requiredCount = table.columns.filter(isRequired).length;
   const missingRequired = table.columns.filter((column) => {
     const field = fields[column.name];
@@ -186,12 +188,13 @@ const InsertRowDrawerBody: React.FC<InsertRowDrawerProps> = ({
 
         <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col">
           <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
-            {table.columns.map((column) => (
+            {table.columns.filter((column) => column.generated == null && column.type.trim().toLowerCase() !== "rowversion").map((column) => (
               <ColumnField
                 key={column.name}
                 column={column}
                 sourceTable={table}
                 tables={tables}
+                dialect={dialect}
                 field={fields[column.name] ?? { mode: "value", input: "" }}
                 error={errors[column.name]}
                 onModeChange={(mode) => setMode(column.name, mode)}
@@ -265,6 +268,7 @@ function ColumnField({
   column,
   sourceTable,
   tables,
+  dialect,
   field,
   error,
   onModeChange,
@@ -274,6 +278,7 @@ function ColumnField({
   column: ColumnDefinition;
   sourceTable: TableSchema;
   tables: TableSchema[];
+  dialect: DatabaseDialect;
   field: InsertFieldState;
   error?: string;
   onModeChange: (mode: InsertFieldMode) => void;
@@ -282,7 +287,7 @@ function ColumnField({
 }) {
   const required = isRequired(column);
   const nullable = isNullable(column);
-  const withDefault = hasDefault(column);
+  const withDefault = hasDefault(column) || column.identity != null;
   const timestamp = isTimestampType(column.type);
   const enums = enumValuesFor(column);
   const booleanField = isBooleanType(column.type);
@@ -356,7 +361,7 @@ function ColumnField({
               onClick={() =>
                 onModeChange(field.mode === "now" ? "value" : "now")
               }
-              label="now()"
+              label="Now"
               icon={<Clock className="w-3 h-3" />}
             />
           )}
@@ -370,6 +375,7 @@ function ColumnField({
           disabled={disabled}
           targetColumn={column.foreignKey.targetColumn}
           referencedTable={referencedTable}
+          dialect={dialect}
           onChange={onInputChange}
           onLookup={onLookup}
           placeholder={`Search ${referencedTable.name} or type an ID`}

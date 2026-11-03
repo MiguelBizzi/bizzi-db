@@ -52,7 +52,7 @@ const DropIndexModalBody: React.FC<DropIndexModalProps> = ({
 
   const supportsConcurrent = Boolean(dialectMeta(dialect)?.objects.indexes.concurrent);
   const result = ddl.dropIndex(index, table, { concurrently });
-  const sql = result.ok ? planScript(result) : "";
+  const sql = result.ok ? planScript(result, dialect) : "";
   const matched = canConfirmDelete(typed, index.name);
 
   const handleSubmit = (event: React.FormEvent) => {
@@ -67,7 +67,7 @@ const DropIndexModalBody: React.FC<DropIndexModalProps> = ({
         name: index.name,
         parent: `${table.schema}.${table.name}`,
         title: `Delete index ${index.name}`,
-      }),
+      }, dialect),
     );
     onClose();
   };

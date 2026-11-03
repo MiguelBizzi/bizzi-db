@@ -47,7 +47,12 @@ export function isTimestampType(type: string): boolean {
 
 export function isBooleanType(type: string): boolean {
   const t = type.trim().toLowerCase();
-  return t === 'boolean' || t === 'bool' || t.startsWith('boolean') || t.startsWith('bool ');
+  return t === 'boolean' || t === 'bool' || t === 'bit' || t.startsWith('boolean') || t.startsWith('bool ');
+}
+
+export function isReadOnlyColumn(column: ColumnDefinition): boolean {
+  if (column.generated != null || column.identity != null) return true;
+  return column.type.trim().toLowerCase() === 'rowversion';
 }
 
 export function isIntegerType(type: string): boolean {
@@ -79,11 +84,12 @@ export function isNullable(column: ColumnDefinition): boolean {
 }
 
 export function isRequired(column: ColumnDefinition): boolean {
+  if (isReadOnlyColumn(column)) return false;
   return !isNullable(column) && !hasDefault(column);
 }
 
 export function initialFieldState(column: ColumnDefinition): InsertFieldState {
-  if (hasDefault(column)) return { mode: 'default', input: '' };
+  if (isReadOnlyColumn(column) || hasDefault(column)) return { mode: 'default', input: '' };
   if (isNullable(column)) return { mode: 'null', input: '' };
   return { mode: 'value', input: '' };
 }
@@ -151,7 +157,8 @@ function coerceValue(column: ColumnDefinition, input: string): unknown {
 
 export function assignmentFromField(
   column: ColumnDefinition,
-  field: InsertFieldState
+  field: InsertFieldState,
+  dialect: DatabaseDialect,
 ): InsertSqlValue {
   switch (field.mode) {
     case 'default':
@@ -159,7 +166,7 @@ export function assignmentFromField(
     case 'null':
       return { kind: 'null' };
     case 'now':
-      return { kind: 'expr', sql: 'now()' };
+      return { kind: 'expr', sql: moduleFor(dialect).currentTimestamp };
     case 'value':
       return { kind: 'literal', value: coerceValue(column, field.input) };
   }
@@ -192,13 +199,13 @@ function formatAssignment(dialect: DatabaseDialect, value: InsertSqlValue): stri
 export function buildInsertSql(
   table: TableSchema,
   fields: Record<string, InsertFieldState>,
-  dialect: DatabaseDialect = 'PostgreSQL',
+  dialect: DatabaseDialect,
 ): string {
   const qualified = qualify(dialect, table.schema, table.name);
   const included: { column: string; sql: string }[] = [];
   for (const column of table.columns) {
     const field = fields[column.name] ?? initialFieldState(column);
-    const formatted = formatAssignment(dialect, assignmentFromField(column, field));
+    const formatted = formatAssignment(dialect, assignmentFromField(column, field, dialect));
     if (formatted === null) continue;
     included.push({ column: column.name, sql: formatted });
   }

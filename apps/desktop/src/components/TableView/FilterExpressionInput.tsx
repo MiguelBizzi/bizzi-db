@@ -11,7 +11,7 @@ import {
 import { AnimatePresence } from 'motion/react';
 import { Popover } from '../ui/Popover';
 import { createPortal } from 'react-dom';
-import type { ColumnDefinition } from '../../types';
+import type { ColumnDefinition, DatabaseDialect } from '../../types';
 import {
   applyFilterCompletion,
   filterExpressionCompletions,
@@ -28,6 +28,7 @@ interface FilterExpressionInputProps {
   onChange: (value: string) => void;
   onSubmit: (value: string) => boolean;
   columns: ColumnDefinition[];
+  dialect: DatabaseDialect;
   valueHints: Record<string, string[]>;
   error: string | null;
   placeholder?: string;
@@ -40,6 +41,7 @@ export function FilterExpressionInput({
   onChange,
   onSubmit,
   columns,
+  dialect,
   valueHints,
   error,
   placeholder = 'Write a condition, then press Enter',
@@ -63,8 +65,8 @@ export function FilterExpressionInput({
   } | null>(null);
 
   const completions = useMemo(
-    () => filterExpressionCompletions(value, cursor, columns, valueHints),
-    [value, cursor, columns, valueHints]
+    () => filterExpressionCompletions(value, cursor, columns, dialect, valueHints),
+    [value, cursor, columns, dialect, valueHints]
   );
   const showMenu = open && completions.length > 0;
 

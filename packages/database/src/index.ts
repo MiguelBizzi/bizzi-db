@@ -1,5 +1,5 @@
 import type { DatabaseDialect } from '@db/shared';
-import { MYSQL_OBJECTS, POSTGRES_OBJECTS, type ObjectCapabilities } from './objects';
+import { MYSQL_OBJECTS, POSTGRES_OBJECTS, SQLSERVER_OBJECTS, type ObjectCapabilities } from './objects';
 
 export {
   columnTypesFor,
@@ -12,6 +12,7 @@ export {
   methodSupportsInclude,
   MYSQL_OBJECTS,
   POSTGRES_OBJECTS,
+  SQLSERVER_OBJECTS,
   storageParamsFor,
   versionAtLeast,
   type IndexCapabilities,
@@ -41,6 +42,12 @@ export interface EngineCapabilities {
   ilike: boolean;
   /** Postgres `INVALID` indexes. MySQL has no such state. */
   invalidIndexes: boolean;
+  /** Identifiers are quoted with `[` `]`. */
+  bracketIdents: boolean;
+  /** Scripts separate batches with a client directive such as `GO`. */
+  batchSeparator: boolean;
+  /** Columns can be IDENTITY. The property cannot be added or removed with ALTER COLUMN. */
+  identityColumns: boolean;
 }
 
 export interface DialectMeta {
@@ -53,9 +60,9 @@ export interface DialectMeta {
   defaultSchema: string;
   defaultSsl: boolean;
   uriSchemes: string[];
-  formatterLanguage: 'postgresql' | 'mysql';
+  formatterLanguage: 'postgresql' | 'mysql' | 'transactsql';
   /** `@codemirror/lang-sql` dialect. */
-  editorDialect: 'PostgreSQL' | 'MySQL';
+  editorDialect: 'PostgreSQL' | 'MySQL' | 'MSSQL';
   quoteIdent: (name: string) => string;
   quoteLiteral: (value: string) => string;
   booleanLiteral: (value: boolean) => string;
@@ -66,6 +73,24 @@ export interface DialectMeta {
   /** `ON DELETE` choices. MySQL has no `SET DEFAULT`. */
   foreignKeyActions: { value: string; label: string }[];
   defaultPresets: { label: string; sql: string }[];
+  /** Wrapped around a multi-statement script the app builds. */
+  transaction: { begin: string; commit: string };
+  /** Page clause. Offset 0 may be omitted when the engine allows it. */
+  limitClause: (limit: number, offset: number) => string;
+  /** Case-insensitive match. `columnSql` and `patternSql` are already quoted. */
+  caseInsensitiveLike: (columnSql: string, patternSql: string) => string;
+  /** SQL a new editor tab shows when no table is open. */
+  emptyEditorSql: string;
+  /** Creating a table must name a schema (MySQL databases). */
+  requiresSchemaOnCreate: boolean;
+  /** Expression inserted for the "current time" field action. */
+  currentTimestamp: string;
+  /** Joins statements of one plan. `GO` keeps each batch legal on its own. */
+  scriptSeparator: string;
+  /** The page clause is illegal unless the statement already has ORDER BY. */
+  pagingRequiresOrder: boolean;
+  /** Max rows in one INSERT … VALUES. Unset means one statement for the whole export. */
+  insertChunkSize?: number;
   objects: ObjectCapabilities;
   capabilities: EngineCapabilities;
 }
@@ -97,6 +122,20 @@ function quoteMysqlIdent(name: string): string {
   return `\`${name.replace(/`/g, '``')}\``;
 }
 
+function quoteBracketIdent(name: string): string {
+  return `[${name.replace(/]/g, ']]')}]`;
+}
+
+function quoteNationalLiteral(value: string): string {
+  return `N'${value.replace(/'/g, "''")}'`;
+}
+
+function limitOffset(limit: number, offset: number): string {
+  return offset > 0 ? `LIMIT ${limit} OFFSET ${offset}` : `LIMIT ${limit}`;
+}
+
+const SQL_TRANSACTION = { begin: 'BEGIN;', commit: 'COMMIT;' };
+
 const POSTGRES_PRESETS = [
   { label: 'NULL', sql: 'NULL' },
   { label: 'CURRENT_TIMESTAMP', sql: 'CURRENT_TIMESTAMP' },
@@ -114,7 +153,7 @@ const MYSQL_PRESETS = [
   { label: 'FALSE', sql: 'FALSE' },
 ];
 
-export const DIALECTS: Record<'PostgreSQL' | 'MySQL', DialectMeta> = {
+export const DIALECTS: Record<'PostgreSQL' | 'MySQL' | 'SQLServer', DialectMeta> = {
   PostgreSQL: {
     id: 'PostgreSQL',
     label: 'PostgreSQL',
@@ -133,6 +172,14 @@ export const DIALECTS: Record<'PostgreSQL' | 'MySQL', DialectMeta> = {
     byteaLiteral: (hex) => `'\\x${hex}'`,
     foreignKeyActions: [...FOREIGN_KEY_ACTIONS, { value: 'SET DEFAULT', label: 'SET DEFAULT' }],
     defaultPresets: POSTGRES_PRESETS,
+    transaction: SQL_TRANSACTION,
+    limitClause: limitOffset,
+    caseInsensitiveLike: (column, pattern) => `CAST(${column} AS text) ILIKE ${pattern} ESCAPE '\\'`,
+    emptyEditorSql: 'SELECT * FROM pg_catalog.pg_tables LIMIT 50;',
+    requiresSchemaOnCreate: false,
+    currentTimestamp: 'now()',
+    scriptSeparator: '\n',
+    pagingRequiresOrder: false,
     objects: POSTGRES_OBJECTS,
     capabilities: {
       transactionalDdl: true,
@@ -149,6 +196,9 @@ export const DIALECTS: Record<'PostgreSQL' | 'MySQL', DialectMeta> = {
       backtickIdents: false,
       ilike: true,
       invalidIndexes: true,
+      bracketIdents: false,
+      batchSeparator: false,
+      identityColumns: false,
     },
   },
   MySQL: {
@@ -169,6 +219,15 @@ export const DIALECTS: Record<'PostgreSQL' | 'MySQL', DialectMeta> = {
     byteaLiteral: (hex) => `X'${hex}'`,
     foreignKeyActions: FOREIGN_KEY_ACTIONS,
     defaultPresets: MYSQL_PRESETS,
+    transaction: SQL_TRANSACTION,
+    limitClause: limitOffset,
+    caseInsensitiveLike: (column, pattern) =>
+      `LOWER(CAST(${column} AS CHAR)) LIKE LOWER(${pattern})`,
+    emptyEditorSql: 'SELECT 1;',
+    requiresSchemaOnCreate: true,
+    currentTimestamp: 'CURRENT_TIMESTAMP',
+    scriptSeparator: '\n',
+    pagingRequiresOrder: false,
     objects: MYSQL_OBJECTS,
     capabilities: {
       transactionalDdl: false,
@@ -185,16 +244,91 @@ export const DIALECTS: Record<'PostgreSQL' | 'MySQL', DialectMeta> = {
       backtickIdents: true,
       ilike: false,
       invalidIndexes: false,
+      bracketIdents: false,
+      batchSeparator: false,
+      identityColumns: false,
+    },
+  },
+  SQLServer: {
+    id: 'SQLServer',
+    label: 'SQL Server',
+    defaultPort: 1433,
+    defaultUser: 'sa',
+    defaultDatabase: '',
+    defaultSchema: 'dbo',
+    defaultSsl: false,
+    uriSchemes: ['sqlserver', 'mssql'],
+    formatterLanguage: 'transactsql',
+    editorDialect: 'MSSQL',
+    quoteIdent: quoteBracketIdent,
+    quoteLiteral: quoteNationalLiteral,
+    booleanLiteral: (value) => (value ? '1' : '0'),
+    emptyInsert: 'DEFAULT VALUES',
+    byteaLiteral: (hex) => `0x${hex}`,
+    foreignKeyActions: [
+      { value: '', label: 'Default' },
+      { value: 'NO ACTION', label: 'NO ACTION' },
+      { value: 'CASCADE', label: 'CASCADE' },
+      { value: 'SET NULL', label: 'SET NULL' },
+      { value: 'SET DEFAULT', label: 'SET DEFAULT' },
+    ],
+    defaultPresets: [
+      { label: 'NULL', sql: 'NULL' },
+      { label: 'GETDATE()', sql: 'GETDATE()' },
+      { label: 'SYSUTCDATETIME()', sql: 'SYSUTCDATETIME()' },
+      { label: 'NEWID()', sql: 'NEWID()' },
+      { label: 'NEWSEQUENTIALID()', sql: 'NEWSEQUENTIALID()' },
+      { label: '0', sql: '0' },
+      { label: '1', sql: '1' },
+    ],
+    // GO ends the batch. CREATE OR ALTER of a module must be the first statement of its batch,
+    // and a bare BEGIN would open a T-SQL block instead of a transaction.
+    transaction: {
+      begin: 'SET XACT_ABORT ON;\nBEGIN TRANSACTION;\nGO',
+      commit: 'GO\nCOMMIT TRANSACTION;',
+    },
+    limitClause: (limit, offset) => `OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`,
+    caseInsensitiveLike: (column, pattern) =>
+      `LOWER(CAST(${column} AS NVARCHAR(MAX))) LIKE LOWER(${pattern}) ESCAPE '\\'`,
+    emptyEditorSql: 'SELECT TOP (50) name FROM sys.tables;',
+    requiresSchemaOnCreate: false,
+    currentTimestamp: 'SYSUTCDATETIME()',
+    scriptSeparator: '\nGO\n',
+    pagingRequiresOrder: true,
+    insertChunkSize: 1000,
+    objects: SQLSERVER_OBJECTS,
+    capabilities: {
+      transactionalDdl: true,
+      materializedViews: false,
+      routineOverloading: false,
+      orReplaceRoutines: true,
+      partialIndexes: true,
+      onlineIndexBuild: true,
+      explainPlanTree: false,
+      routines: true,
+      emptyDatabaseAllowed: false,
+      dollarQuotes: false,
+      hashComments: false,
+      backtickIdents: false,
+      ilike: false,
+      invalidIndexes: false,
+      bracketIdents: true,
+      batchSeparator: true,
+      identityColumns: true,
     },
   },
 };
 
-export const SUPPORTED_DIALECTS: DialectMeta[] = [DIALECTS.PostgreSQL, DIALECTS.MySQL];
+export const SUPPORTED_DIALECTS: DialectMeta[] = [
+  DIALECTS.PostgreSQL,
+  DIALECTS.MySQL,
+  DIALECTS.SQLServer,
+];
+
+const DIALECT_BY_ID: Partial<Record<DatabaseDialect, DialectMeta>> = DIALECTS;
 
 export function dialectMeta(id: DatabaseDialect): DialectModule | undefined {
-  if (id === 'PostgreSQL') return DIALECTS.PostgreSQL;
-  if (id === 'MySQL') return DIALECTS.MySQL;
-  return undefined;
+  return DIALECT_BY_ID[id];
 }
 
 export function dialectModule(id: DatabaseDialect): DialectModule | undefined {

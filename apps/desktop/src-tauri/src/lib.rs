@@ -18,6 +18,8 @@ use db_core::{
     SavedQuery, SchemaSyncRequest, SchemaSyncResponse, Session, SqlDialect, SqlRange,
     SshAuthMethod, TablePreviewRequest, TestConnectionResult, WorkspaceState,
 };
+use db_mssql::MssqlAdapter;
+use db_mssql::TSqlSql;
 use db_mysql::MySqlSql;
 use db_mysql::MysqlAdapter;
 use db_postgres::PostgresAdapter;
@@ -44,21 +46,55 @@ fn map_err(err: impl std::fmt::Display) -> String {
 
 static POSTGRES_ADAPTER: PostgresAdapter = PostgresAdapter;
 static MYSQL_ADAPTER: MysqlAdapter = MysqlAdapter;
+static MSSQL_ADAPTER: MssqlAdapter = MssqlAdapter;
+static POSTGRES_SQL: PostgresSql = PostgresSql;
 static MYSQL_SQL: MySqlSql = MySqlSql;
+static TSQL_SQL: TSqlSql = TSqlSql;
 
-fn adapter_for(dialect: DatabaseDialect) -> Result<&'static dyn Adapter, String> {
-    match dialect {
-        DatabaseDialect::PostgreSQL => Ok(&POSTGRES_ADAPTER),
-        DatabaseDialect::MySQL => Ok(&MYSQL_ADAPTER),
-        other => Err(format!("{} is not supported", dialect_label(other))),
-    }
+struct RegisteredEngine {
+    dialect: DatabaseDialect,
+    adapter: &'static dyn Adapter,
+    sql: &'static dyn SqlDialect,
 }
 
-fn sql_dialect_for(dialect: DatabaseDialect) -> &'static dyn SqlDialect {
-    match dialect {
-        DatabaseDialect::MySQL => &MYSQL_SQL,
-        _ => &PostgresSql,
-    }
+/// Every supported engine is registered here. `adapter_for` and `sql_dialect_for`
+/// both read this list, so an engine cannot connect with another engine's splitter.
+static REGISTERED_ENGINES: &[RegisteredEngine] = &[
+    RegisteredEngine {
+        dialect: DatabaseDialect::PostgreSQL,
+        adapter: &POSTGRES_ADAPTER,
+        sql: &POSTGRES_SQL,
+    },
+    RegisteredEngine {
+        dialect: DatabaseDialect::MySQL,
+        adapter: &MYSQL_ADAPTER,
+        sql: &MYSQL_SQL,
+    },
+    RegisteredEngine {
+        dialect: DatabaseDialect::SQLServer,
+        adapter: &MSSQL_ADAPTER,
+        sql: &TSQL_SQL,
+    },
+];
+
+fn registered_engines() -> &'static [RegisteredEngine] {
+    REGISTERED_ENGINES
+}
+
+fn adapter_for(dialect: DatabaseDialect) -> Result<&'static dyn Adapter, String> {
+    registered_engines()
+        .iter()
+        .find(|engine| engine.dialect == dialect)
+        .map(|engine| engine.adapter)
+        .ok_or_else(|| format!("{} is not supported", dialect_label(dialect)))
+}
+
+fn sql_dialect_for(dialect: DatabaseDialect) -> Result<&'static dyn SqlDialect, String> {
+    registered_engines()
+        .iter()
+        .find(|engine| engine.dialect == dialect)
+        .map(|engine| engine.sql)
+        .ok_or_else(|| format!("{} is not supported", dialect_label(dialect)))
 }
 
 fn keychain_enabled(state: &AppState) -> Result<bool, String> {
@@ -466,7 +502,7 @@ fn sql_statement_ranges(
         }
         None => DatabaseDialect::PostgreSQL,
     };
-    Ok(sql_dialect_for(dialect).split_ranges(&sql))
+    Ok(sql_dialect_for(dialect)?.split_ranges(&sql))
 }
 
 fn record_history(
@@ -478,7 +514,7 @@ fn record_history(
         format!("log_{}", Uuid::new_v4()),
         profile,
         result,
-        sql_dialect_for(profile.dialect),
+        sql_dialect_for(profile.dialect)?,
     );
     state
         .storage
@@ -858,6 +894,25 @@ mod tests {
     #[test]
     fn settings_save_runs_off_the_main_thread() {
         assert!(include_str!("lib.rs").contains("#[tauri::command(async)]\nfn settings_save("));
+    }
+
+    #[test]
+    fn every_supported_engine_is_registered_once() {
+        use db_core::engine_specs;
+        for spec in engine_specs() {
+            let found = registered_engines()
+                .iter()
+                .filter(|engine| engine.dialect == spec.dialect)
+                .count();
+            if spec.supported {
+                assert_eq!(found, 1, "{}", spec.label);
+                assert!(adapter_for(spec.dialect).is_ok(), "{}", spec.label);
+                assert!(sql_dialect_for(spec.dialect).is_ok(), "{}", spec.label);
+            } else {
+                assert_eq!(found, 0, "{}", spec.label);
+                assert!(sql_dialect_for(spec.dialect).is_err(), "{}", spec.label);
+            }
+        }
     }
 
     #[test]

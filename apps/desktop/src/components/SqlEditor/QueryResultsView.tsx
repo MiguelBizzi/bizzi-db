@@ -1,7 +1,13 @@
 import React, { useMemo, useState, type RefObject } from 'react';
 import { motion } from 'motion/react';
 import { fade } from '../../lib/motion';
-import { FilterClause, PendingModifications, QueryExecutionResult, TableSchema } from '../../types';
+import {
+  DatabaseDialect,
+  FilterClause,
+  PendingModifications,
+  QueryExecutionResult,
+  TableSchema,
+} from '../../types';
 import { ExplainPlanView } from './ExplainPlanView';
 import { QueryErrorCard } from './QueryErrorCard';
 import { Lock, Table, Network } from 'lucide-react';
@@ -45,6 +51,7 @@ export interface QueryGridActions {
 }
 
 interface QueryResultsViewProps {
+  dialect: DatabaseDialect;
   results: QueryExecutionResult[];
   isLoading?: boolean;
   activeIndex: number;
@@ -55,6 +62,7 @@ interface QueryResultsViewProps {
 }
 
 export const QueryResultsView: React.FC<QueryResultsViewProps> = ({
+  dialect,
   results,
   isLoading = false,
   activeIndex,
@@ -74,7 +82,7 @@ export const QueryResultsView: React.FC<QueryResultsViewProps> = ({
         animate="animate"
         className="flex-1 flex flex-col bg-background overflow-hidden h-full min-h-0"
       >
-        <ResultsToolbar disabled rows={0} />
+        <ResultsToolbar dialect={dialect} disabled rows={0} />
         <ResultsSkeleton />
       </motion.div>
     );
@@ -118,6 +126,7 @@ export const QueryResultsView: React.FC<QueryResultsViewProps> = ({
       {result ? (
         <SingleResultView
           key={result.id}
+          dialect={dialect}
           result={result}
           isLoading={isLoading}
           grid={grid}
@@ -129,6 +138,7 @@ export const QueryResultsView: React.FC<QueryResultsViewProps> = ({
 };
 
 function ResultsToolbar({
+  dialect,
   disabled,
   rows,
   result,
@@ -137,6 +147,7 @@ function ResultsToolbar({
   loadAllRows,
   exportTriggerRef,
 }: {
+  dialect: DatabaseDialect;
   disabled: boolean;
   rows: number;
   result?: QueryExecutionResult;
@@ -168,6 +179,7 @@ function ResultsToolbar({
           loadAllRows={loadAllRows}
           tableName={sqlTarget.table}
           schema={sqlTarget.schema}
+          dialect={dialect}
           disabled={disabled}
           disabledReason="Unavailable while the query is running"
           exportTriggerRef={exportTriggerRef}
@@ -268,11 +280,13 @@ function ResultsSkeleton() {
 }
 
 function SingleResultView({
+  dialect,
   result,
   isLoading,
   grid,
   exportTriggerRef,
 }: {
+  dialect: DatabaseDialect;
   result: QueryExecutionResult;
   isLoading: boolean;
   grid: QueryGridActions;
@@ -319,6 +333,7 @@ function SingleResultView({
         >
           <TableDataGrid
             variant="query"
+            dialect={dialect}
             table={table}
             rows={rows}
             readOnly={!editable}
@@ -380,6 +395,7 @@ function SingleResultView({
   return (
     <div className="flex-1 flex flex-col bg-background overflow-hidden font-mono text-xs select-none min-h-0">
       <ResultsToolbar
+        dialect={dialect}
         disabled={isLoading}
         rows={rows.length}
         result={result}

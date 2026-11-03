@@ -1,11 +1,15 @@
-# The only consumer of `zip` is tauri-plugin-updater (cargo tree -i zip --target all). Every release of that
-# plugin, including the newest stable, depends on zip 2.x or 4.x, and the advisories are fixed only in zip >=9.
-# The affected `extract()` calls run on update archives, which the plugin verifies against the minisign public
-# key in tauri.conf.json before unpacking, and macOS updates are .tar.gz, not zip. App code never uses zip.
-# Drop these ignores once tauri-plugin-updater ships a release that depends on zip >=9.
+# The only consumer of `zip` is tauri-plugin-updater 2.2.0 (`cargo tree -i zip --target all`).
+# These advisories, including RUSTSEC-2026-0429 (`ZipArchive::extract` aborts on a symlink
+# whose declared size is huge), are fixed only in zip >= 9. Updater 2.14.1 depends on zip 9,
+# but it requires tauri ^2.12. This app pins tauri 2.2.0 because a newer runtime pulls a
+# WebView2 type that does not unify (see apps/desktop/src-tauri/Cargo.toml).
+# `extract()` runs only on update archives the plugin has already checked against the minisign
+# public key in tauri.conf.json. macOS updates are .tar.gz, not zip. App code never calls zip.
+# Drop these ignores once the updater pin can move to a release that depends on zip >= 9.
 [advisories]
 ignore = [
   "RUSTSEC-2026-0367",
   "RUSTSEC-2026-0368",
   "RUSTSEC-2026-0369",
+  "RUSTSEC-2026-0429",
 ]

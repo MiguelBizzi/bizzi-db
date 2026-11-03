@@ -68,7 +68,7 @@ pub fn position_from_message(message: &str, sql: &str) -> Option<QueryErrorPosit
     Some(QueryErrorPosition {
         offset,
         line,
-        column,
+        column: Some(column),
     })
 }
 
@@ -103,6 +103,6 @@ mod tests {
         assert_eq!(error.code.as_deref(), Some("42000"));
         let position = error.position.expect("position");
         assert_eq!(position.line, 2);
-        assert_eq!(position.column, 1);
+        assert_eq!(position.column, Some(1));
     }
 }

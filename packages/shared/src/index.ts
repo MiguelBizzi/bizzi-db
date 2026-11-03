@@ -1,4 +1,10 @@
-export type DatabaseDialect = 'PostgreSQL' | 'MySQL' | 'SQLite' | 'ClickHouse' | 'DuckDB';
+export type DatabaseDialect =
+  | 'PostgreSQL'
+  | 'MySQL'
+  | 'SQLServer'
+  | 'SQLite'
+  | 'ClickHouse'
+  | 'DuckDB';
 
 export type Environment = 'production' | 'staging' | 'development';
 
@@ -30,6 +36,7 @@ export interface ColumnDefinition {
     targetColumn: string;
     targetSchema?: string;
     onDelete?: string;
+    onUpdate?: string;
     /** Constraint name. MySQL uses it to drop the key. */
     name?: string;
   };
@@ -37,6 +44,13 @@ export interface ColumnDefinition {
   generated?: string;
   /** `ON UPDATE` expression, such as `CURRENT_TIMESTAMP(6)`. */
   onUpdate?: string;
+  /** SQL Server `IDENTITY(seed, increment)`. */
+  identity?: { seed: number; increment: number };
+  /** Name of the default constraint, when the engine reports one. */
+  defaultConstraint?: string;
+  /** A computed column stored on disk. */
+  persisted?: boolean;
+  collation?: string;
 }
 
 export interface IndexKey {
@@ -108,6 +122,8 @@ export interface RoutineDefinition {
   owner?: string;
   /** MySQL data-access characteristic (`READS SQL DATA`, …). */
   dataAccess?: string;
+  /** SQL Server `EXECUTE AS` (`CALLER`, `SELF`, `OWNER`, or a user). */
+  executeAs?: string;
 }
 
 export interface RoutineSource {
@@ -265,14 +281,15 @@ export type QueryErrorCategory =
 export interface QueryErrorPosition {
   offset: number;
   line: number;
-  column: number;
+  /** Absent when the engine reports a line but not a column. */
+  column?: number;
 }
 
 /** A query failure as the database reported it. */
 export interface QueryErrorInfo {
   category: QueryErrorCategory;
   severity?: string;
-  /** SQLSTATE, for engines that have one. */
+  /** SQLSTATE, when the engine has one. TDS errors leave this empty. */
   code?: string;
   /** Vendor error number when the engine has one besides the SQLSTATE (MySQL errno). */
   vendorCode?: number;

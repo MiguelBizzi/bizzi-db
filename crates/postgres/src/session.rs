@@ -693,6 +693,7 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
                     Some(target_schema)
                 },
                 on_delete: on_delete_from_confdeltype(confdeltype.trim()),
+                on_update: None,
                 name: None,
             },
         );
@@ -758,6 +759,10 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
                 foreign_key: fks.get(&key).cloned(),
                 generated: None,
                 on_update: None,
+                identity: None,
+                default_constraint: None,
+                persisted: None,
+                collation: None,
             });
     }
 

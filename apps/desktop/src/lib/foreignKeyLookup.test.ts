@@ -79,14 +79,14 @@ describe('resolveReferencedTable', () => {
 
 describe('foreignKeyPreviewSql', () => {
   test('quotes schema, table, column, and string values', () => {
-    expect(foreignKeyPreviewSql(table('users'), 'id', "O'Brien")).toBe(
+    expect(foreignKeyPreviewSql(table('users'), 'id', "O'Brien", 'PostgreSQL')).toBe(
       `SELECT * FROM "public"."users" WHERE "id" = 'O''Brien' LIMIT 1;`
     );
   });
 
   test('leaves numeric literals unquoted', () => {
     expect(
-      foreignKeyPreviewSql(table('orders', { schema: 'sales' }), 'user_id', 42)
+      foreignKeyPreviewSql(table('orders', { schema: 'sales' }), 'user_id', 42, 'PostgreSQL')
     ).toBe(`SELECT * FROM "sales"."orders" WHERE "user_id" = 42 LIMIT 1;`);
   });
 });
@@ -169,8 +169,8 @@ describe('buildLookupSql', () => {
   });
 
   test('lists the first page when the query is empty', () => {
-    expect(buildLookupSql(users, 'id', '', 0)).toBe(
-      'SELECT "id", "name", "email" FROM "public"."users" ORDER BY "id" LIMIT 21 OFFSET 0;'
+    expect(buildLookupSql(users, 'id', '', 0, 20, 'PostgreSQL')).toBe(
+      'SELECT "id", "name", "email" FROM "public"."users" ORDER BY "id" LIMIT 21;'
     );
   });
 
@@ -179,8 +179,15 @@ describe('buildLookupSql', () => {
     expect(sql).toContain("LOWER(CAST(`id` AS CHAR)) LIKE LOWER('%O''Brien\\\\%%')");
   });
 
+  test('SQL Server search escapes LIKE wildcards', () => {
+    const sql = buildLookupSql(users, 'id', "O'Brien%", 0, 20, 'SQLServer');
+    expect(sql).toContain(
+      "LOWER(CAST([id] AS NVARCHAR(MAX))) LIKE LOWER(N'%O''Brien\\%%') ESCAPE '\\'",
+    );
+  });
+
   test('ILIKE-searches label columns and escapes wildcards', () => {
-    expect(buildLookupSql(users, 'id', "O'Brien%", 20)).toBe(
+    expect(buildLookupSql(users, 'id', "O'Brien%", 20, 20, 'PostgreSQL')).toBe(
       `SELECT "id", "name", "email" FROM "public"."users" WHERE CAST("id" AS text) ILIKE '%O''Brien\\%%' ESCAPE '\\' OR CAST("name" AS text) ILIKE '%O''Brien\\%%' ESCAPE '\\' OR CAST("email" AS text) ILIKE '%O''Brien\\%%' ESCAPE '\\' ORDER BY "id" LIMIT 21 OFFSET 20;`
     );
   });

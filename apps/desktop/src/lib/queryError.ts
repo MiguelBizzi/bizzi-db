@@ -38,17 +38,18 @@ export function errorExcerpt(
   if (!position) return null;
   const line = query.split(/\r?\n/)[position.line - 1];
   if (line === undefined) return null;
+  const column = position.column ?? 1;
   if (line.length <= EXCERPT_WIDTH) {
-    return { lineNumber: position.line, text: line, caretColumn: position.column };
+    return { lineNumber: position.line, text: line, caretColumn: column };
   }
-  const start = Math.max(0, position.column - 1 - EXCERPT_WIDTH / 2);
+  const start = Math.max(0, column - 1 - EXCERPT_WIDTH / 2);
   const end = Math.min(line.length, start + EXCERPT_WIDTH);
   const lead = start > 0 ? ELLIPSIS : '';
   const tail = end < line.length ? ELLIPSIS : '';
   return {
     lineNumber: position.line,
     text: lead + line.slice(start, end) + tail,
-    caretColumn: position.column - start + lead.length,
+    caretColumn: column - start + lead.length,
   };
 }
 
@@ -80,7 +81,9 @@ export function queryErrorCopyText(result: QueryExecutionResult): string {
   if (info.position && excerpt) {
     const gutter = String(excerpt.lineNumber).length + 3;
     lines.push(
-      `Line ${info.position.line}, column ${info.position.column}`,
+      info.position.column != null
+        ? `Line ${info.position.line}, column ${info.position.column}`
+        : `Line ${info.position.line}`,
       `${excerpt.lineNumber} │ ${excerpt.text}`,
       `${' '.repeat(gutter + excerpt.caretColumn - 1)}^`
     );

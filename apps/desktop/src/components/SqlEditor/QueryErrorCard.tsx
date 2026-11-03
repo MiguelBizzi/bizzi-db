@@ -34,7 +34,8 @@ export function QueryErrorCard({ result }: { result: QueryExecutionResult }) {
       {info?.position && excerpt && (
         <div className="space-y-1.5">
           <div className="text-[11px] text-muted-foreground">
-            Line {info.position.line}, column {info.position.column}
+            Line {info.position.line}
+            {info.position.column != null ? `, column ${info.position.column}` : ''}
           </div>
           <pre className="bg-background p-3 rounded-lg border border-red-500/30 overflow-x-auto leading-relaxed">
             <span className="text-muted-foreground select-none">{excerpt.lineNumber} │ </span>

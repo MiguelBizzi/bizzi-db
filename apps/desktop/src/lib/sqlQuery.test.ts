@@ -3,19 +3,19 @@ import { defaultQuerySql, nextUntitledQueryTitle, queryErrorText, resultTabLabel
 
 describe('defaultQuerySql', () => {
   test('qualifies schema and table with Postgres identifiers', () => {
-    expect(defaultQuerySql({ schema: 'shop', name: 'users' })).toBe(
+    expect(defaultQuerySql({ schema: 'shop', name: 'users' }, 'PostgreSQL')).toBe(
       'SELECT * FROM "shop"."users" LIMIT 50;'
     );
   });
 
   test('escapes quotes in identifiers', () => {
-    expect(defaultQuerySql({ schema: 'we"ird', name: 't' })).toBe(
+    expect(defaultQuerySql({ schema: 'we"ird', name: 't' }, 'PostgreSQL')).toBe(
       'SELECT * FROM "we""ird"."t" LIMIT 50;'
     );
   });
 
   test('falls back to pg_catalog when no table is available', () => {
-    expect(defaultQuerySql()).toBe('SELECT * FROM pg_catalog.pg_tables LIMIT 50;');
+    expect(defaultQuerySql(undefined, 'PostgreSQL')).toBe('SELECT * FROM pg_catalog.pg_tables LIMIT 50;');
   });
 });
 
