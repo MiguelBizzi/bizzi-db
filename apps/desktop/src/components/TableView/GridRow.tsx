@@ -33,6 +33,7 @@ export interface CellMenuTarget {
 /** Stable callbacks, so memoised rows only re-render when their own data changes. */
 export interface GridRowActions {
   toggleSelect: (rowPk: unknown) => void;
+  activateCell: (rowPk: unknown, column: string) => void;
   openCellMenu: (event: React.MouseEvent, target: CellMenuTarget) => void;
   openJson: (column: string, rowPk: unknown, value: unknown) => void;
   startEdit: (rowPk: unknown, column: string, value: string) => void;
@@ -65,6 +66,8 @@ interface GridRowProps {
   rowPending?: Record<string, PendingUpdate>;
   /** The cell being edited, when it belongs to this row. */
   editing: EditingCell | null;
+  /** Column of the grid's active cell, when it belongs to this row. */
+  activeColumn: string | null;
   actions: GridRowActions;
 }
 
@@ -80,6 +83,7 @@ function GridRowImpl({
   isPendingDelete,
   rowPending,
   editing,
+  activeColumn,
   actions,
 }: GridRowProps) {
   const rowPkVal = row[pkCol];
@@ -139,6 +143,9 @@ function GridRowImpl({
                 isPendingDelete,
               })
             }
+            onClick={() => {
+              if (!isEditing) actions.activateCell(rowPkVal, col.name);
+            }}
             onDoubleClick={() => {
               if (isPendingDelete) return;
               if (isJson) {
@@ -153,6 +160,10 @@ function GridRowImpl({
             }}
             className={`border-r border-border whitespace-nowrap font-mono relative transition-colors ${
               isEditing ? "p-0 overflow-hidden" : "px-3 py-0"
+            } ${
+              activeColumn === col.name && !isEditing
+                ? "outline-1 -outline-offset-1 outline-primary/70"
+                : ""
             } ${
               isPendingDelete
                 ? "text-rose-300/80 line-through"

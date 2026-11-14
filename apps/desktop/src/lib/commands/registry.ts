@@ -93,6 +93,15 @@ export const COMMANDS: readonly Command[] = [
     enabled: (ctx) => tableDataActive(ctx) && ctx.selectedRowCount > 0,
     typingConflict: true,
   },
+  // Its target is a focused foreign key field (Insert Row drawer) or the grid's active cell,
+  // so it must also run inside the drawer and while that field takes text.
+  {
+    id: 'edit.chooseReferencedRow',
+    label: 'Choose Referenced Row…',
+    accelerator: 'CmdOrCtrl+J',
+    enabled: (ctx) => ctx.foreignKeyTarget,
+    allowInModal: true,
+  },
   { id: 'edit.formatSql', label: 'Format SQL', accelerator: 'CmdOrCtrl+Shift+F', enabled: sqlEditorActive },
   { id: 'edit.toggleComment', label: 'Toggle Comment', accelerator: 'CmdOrCtrl+/', enabled: sqlEditorActive },
   {

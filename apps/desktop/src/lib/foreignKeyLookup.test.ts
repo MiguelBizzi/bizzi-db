@@ -1,16 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import type { ColumnDefinition, TableSchema } from '../types';
 import {
-  buildLookupSql,
   columnsForForeignRow,
   floaterPosition,
   foreignKeyGoToFilter,
   foreignKeyPreviewSql,
   foreignRowClipboardText,
-  lookupColumns,
   resolveReferencedTable,
   rowKeyValue,
-  rowSecondaryLabel,
 } from './foreignKeyLookup';
 
 function column(
@@ -144,67 +141,10 @@ describe('floaterPosition', () => {
   });
 });
 
-describe('lookupColumns', () => {
-  test('picks the target key plus name/email-style labels', () => {
-    const users = table('users', {
-      columns: [
-        column('id', { isPrimary: true, type: 'uuid' }),
-        column('email', { type: 'varchar' }),
-        column('full_name'),
-        column('bio', { type: 'text' }),
-        column('metadata', { type: 'jsonb' }),
-      ],
-    });
-    expect(lookupColumns(users, 'id')).toEqual(['id', 'full_name', 'email']);
-  });
-});
-
-describe('buildLookupSql', () => {
-  const users = table('users', {
-    columns: [
-      column('id', { isPrimary: true, type: 'uuid' }),
-      column('email'),
-      column('name'),
-    ],
-  });
-
-  test('lists the first page when the query is empty', () => {
-    expect(buildLookupSql(users, 'id', '', 0, 20, 'PostgreSQL')).toBe(
-      'SELECT "id", "name", "email" FROM "public"."users" ORDER BY "id" LIMIT 21;'
-    );
-  });
-
-  test('MySQL search keeps a literal percent inside the LIKE pattern', () => {
-    const sql = buildLookupSql(users, 'id', "O'Brien%", 0, 20, 'MySQL');
-    expect(sql).toContain("LOWER(CAST(`id` AS CHAR)) LIKE LOWER('%O''Brien\\\\%%')");
-  });
-
-  test('SQL Server search escapes LIKE wildcards', () => {
-    const sql = buildLookupSql(users, 'id', "O'Brien%", 0, 20, 'SQLServer');
-    expect(sql).toContain(
-      "LOWER(CAST([id] AS NVARCHAR(MAX))) LIKE LOWER(N'%O''Brien\\%%') ESCAPE '\\'",
-    );
-  });
-
-  test('ILIKE-searches label columns and escapes wildcards', () => {
-    expect(buildLookupSql(users, 'id', "O'Brien%", 20, 20, 'PostgreSQL')).toBe(
-      `SELECT "id", "name", "email" FROM "public"."users" WHERE CAST("id" AS text) ILIKE '%O''Brien\\%%' ESCAPE '\\' OR CAST("name" AS text) ILIKE '%O''Brien\\%%' ESCAPE '\\' OR CAST("email" AS text) ILIKE '%O''Brien\\%%' ESCAPE '\\' ORDER BY "id" LIMIT 21 OFFSET 20;`
-    );
-  });
-});
-
 describe('rowKeyValue', () => {
   test('stringifies the target column and treats null as empty', () => {
     expect(rowKeyValue({ id: 3, name: 'Ada' }, 'id')).toBe('3');
     expect(rowKeyValue({ id: null }, 'id')).toBe('');
-  });
-});
-
-describe('rowSecondaryLabel', () => {
-  test('joins non-key columns with names', () => {
-    expect(
-      rowSecondaryLabel({ id: 3, name: 'Ada', email: 'ada@ex.com' }, 'id')
-    ).toBe('name: Ada · email: ada@ex.com');
   });
 });
 

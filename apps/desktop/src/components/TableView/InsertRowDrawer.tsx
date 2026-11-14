@@ -5,7 +5,8 @@ import { Check, Clock, Key, Link, Plus, X } from "lucide-react";
 import { ErrorNotice } from "../ui/ErrorNotice";
 import type { ColumnDefinition, DatabaseDialect, TableSchema } from "../../types";
 import { Select } from "../ui/Select";
-import { ForeignKeyPicker, type FkLookupFn } from "./ForeignKeyPicker";
+import { ForeignKeyField } from "./ForeignKeyField";
+import type { FkLookupFn } from "./ForeignKeySheet";
 import { insertSqlFor } from "../../lib/ddl/registry";
 import {
   enumValuesFor,
@@ -369,16 +370,18 @@ function ColumnField({
       </div>
 
       {column.foreignKey && referencedTable ? (
-        <ForeignKeyPicker
+        <ForeignKeyField
           id={fieldId}
           value={field.input}
           disabled={disabled}
+          nullable={nullable}
+          sourceLabel={`${sourceTable.name}.${column.name}`}
           targetColumn={column.foreignKey.targetColumn}
           referencedTable={referencedTable}
           dialect={dialect}
           onChange={onInputChange}
+          onSetNull={() => onModeChange("null")}
           onLookup={onLookup}
-          placeholder={`Search ${referencedTable.name} or type an ID`}
         />
       ) : enums.length > 0 ? (
         <Select

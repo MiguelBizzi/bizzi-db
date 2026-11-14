@@ -19,7 +19,7 @@ import { hasUnloadedRows } from '../../lib/queryPaging';
 import { shortcutLabel } from '../../lib/commands/shortcutLabel';
 import { emptyPending } from '../../lib/pendingChanges';
 import { TableDataGrid } from '../TableView/TableDataGrid';
-import type { FkLookupFn } from '../TableView/ForeignKeyPicker';
+import type { FkLookupFn } from '../TableView/ForeignKeySheet';
 
 const SKELETON_ROWS = 8;
 const SKELETON_COLS = 5;
