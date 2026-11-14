@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode } from 'react';
+import type { ComponentProps, CSSProperties, ReactNode } from 'react';
 import { motion, useIsPresent } from 'motion/react';
 import { fade, slideInRight } from '../../lib/motion';
 
@@ -6,6 +6,8 @@ interface DrawerProps {
   children: ReactNode;
   scrim?: boolean;
   onScrimClick?: () => void;
+  /** Overrides for the scrim, e.g. a higher z-index for a drawer stacked over another. */
+  scrimStyle?: CSSProperties;
 }
 
 /**
@@ -13,7 +15,7 @@ interface DrawerProps {
  * <AnimatePresence>; it has no box of its own and only drives its children's
  * enter and exit.
  */
-export function Drawer({ children, scrim = true, onScrimClick }: DrawerProps) {
+export function Drawer({ children, scrim = true, onScrimClick, scrimStyle }: DrawerProps) {
   const isPresent = useIsPresent();
 
   return (
@@ -23,7 +25,7 @@ export function Drawer({ children, scrim = true, onScrimClick }: DrawerProps) {
           variants={fade}
           className="fixed inset-0 z-40 bg-background/50 backdrop-blur-[2px]"
           // A fading scrim must not swallow clicks meant for the app behind it.
-          style={{ pointerEvents: isPresent ? undefined : 'none' }}
+          style={{ ...scrimStyle, pointerEvents: isPresent ? undefined : 'none' }}
           onClick={onScrimClick}
         />
       )}

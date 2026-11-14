@@ -4,6 +4,13 @@ All notable changes to Bizzi DB are recorded here. The format follows [Keep a Ch
 
 New entries go under `## [Unreleased]`; the release process moves them under a version heading. Write for people who use the app, not for people who read commits. See [RELEASING.md](RELEASING.md).
 
+## [Unreleased] - Foreign key sheet
+
+### New
+
+- Choosing a foreign key value opens a searchable sheet of the referenced table instead of a small dropdown. Type words to match names, emails or IDs, add filters such as `status = 'active'`, pick a row with the arrow keys and Enter, or set the value to NULL when the column allows it. Open it by double-clicking a foreign key cell, from the cell's right-click menu, or with ⌘J (Ctrl+J) on the selected cell or a foreign key field in Insert Row.
+- Clicking a grid cell selects it; press Enter to edit it.
+
 ## [0.1.28] - 2026-11-02 - SQL Server
 
 Bizzi DB now connects to SQL Server as well as PostgreSQL and MySQL.

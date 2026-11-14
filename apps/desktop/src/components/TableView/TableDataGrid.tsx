@@ -34,7 +34,7 @@ import { Checkbox } from "../ui/Checkbox";
 import { JsonModal } from "./JsonModal";
 import { InsertRowDrawer } from "./InsertRowDrawer";
 import { ForeignKeyFloater } from "./ForeignKeyFloater";
-import type { FkLookupFn } from "./ForeignKeyPicker";
+import { ForeignKeySheet, type FkLookupFn } from "./ForeignKeySheet";
 import {
   formatCellValue,
   isSetColumnDefault,
@@ -45,6 +45,8 @@ import {
   foreignKeyPreviewSql,
   resolveReferencedTable,
 } from "../../lib/foreignKeyLookup";
+import { canChooseReferencedRow } from "../../lib/foreignKeySheet";
+import { shortcutLabel } from "../../lib/commands/shortcutLabel";
 import {
   activeFilters,
   applyTableView,
@@ -239,6 +241,19 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   );
   const [sort, setSort] = useState<SortClause | null>(null);
   const [selectedRowPks, setSelectedRowPks] = useState<any[]>([]);
+  const [activeCell, setActiveCell] = useState<{
+    rowPk: unknown;
+    column: string;
+  } | null>(null);
+  const [fkSheet, setFkSheet] = useState<{
+    rowPk: unknown;
+    column: ColumnDefinition;
+    oldValue: unknown;
+    currentValue: string | null;
+    target: TableSchema;
+  } | null>(null);
+  // Kept apart from fkSheet so the sheet keeps its props while it animates out.
+  const [fkSheetOpen, setFkSheetOpen] = useState(false);
   const [editingCell, setEditingCell] = useState<{
     rowPk: any;
     column: string;
@@ -501,6 +516,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     insertRow: () => {},
     deleteRows: () => {},
     exportCsv: () => {},
+    chooseReferencedRow: () => {},
   });
   menuActions.current = {
     find: () => {
@@ -518,6 +534,9 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
     },
     deleteRows: handleDeleteSelected,
     exportCsv: () => exportRef.current?.(),
+    chooseReferencedRow: () => {
+      if (activeCell) openCellEditor(activeCell.rowPk, activeCell.column);
+    },
   };
 
   useEffect(() => {
@@ -551,6 +570,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
       "edit.insertRow": () => menuActions.current.insertRow(),
       "edit.deleteRows": () => menuActions.current.deleteRows(),
       "file.export": () => menuActions.current.exportCsv(),
+      "edit.chooseReferencedRow": () => menuActions.current.chooseReferencedRow(),
     });
     // Only the focused pane's grid is active, whatever order the panes mount in.
     scope.setActive(isFocusedPaneRef.current);
@@ -577,6 +597,55 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   useEffect(() => {
     scopeRef.current?.setContext({ modalOpen: overlayOpen });
   }, [overlayOpen]);
+
+  const activeColumnDef = activeCell
+    ? visibleColumns.find((column) => column.name === activeCell.column)
+    : undefined;
+  const activeCellIsForeignKey =
+    activeCell !== null &&
+    canChooseReferencedRow(activeColumnDef, {
+      locked: isCellLocked(activeCell.column),
+      pendingDelete: pendingDeletePks.has(String(activeCell.rowPk)),
+    });
+  useEffect(() => {
+    scopeRef.current?.setContext({ foreignKeyTarget: activeCellIsForeignKey });
+  }, [activeCellIsForeignKey]);
+
+  const cellDisplayValue = (row: Record<string, unknown>, column: string) => {
+    const pending = pendingByRow.get(String(row[pkCol]))?.[column];
+    return pending ? pending.newValue : row[column];
+  };
+
+  /** Opens the editor a double-click would: the referenced-row sheet for a foreign key. */
+  const openCellEditor = (rowPk: unknown, columnName: string) => {
+    const column = visibleColumns.find((c) => c.name === columnName);
+    const row = filteredRows.find((r) => r[pkCol] === rowPk);
+    if (!column || !row || isCellLocked(columnName)) return;
+    if (pendingDeletePks.has(String(rowPk))) return;
+    const display = cellDisplayValue(row, columnName);
+    if (typeof display === "object" && display !== null && !isSetColumnDefault(display)) {
+      setJsonModalState({ isOpen: true, columnName, rowPk, value: display });
+      return;
+    }
+    const text = isSetColumnDefault(display) ? "" : String(display ?? "");
+    const target = column.foreignKey
+      ? resolveReferencedTable(tables, table, column.foreignKey)
+      : undefined;
+    if (column.foreignKey && target) {
+      setEditingCell(null);
+      setActiveCell({ rowPk, column: columnName });
+      setFkSheet({
+        rowPk,
+        column,
+        oldValue: row[columnName],
+        currentValue: display === null || display === undefined ? null : text,
+        target,
+      });
+      setFkSheetOpen(true);
+      return;
+    }
+    setEditingCell({ rowPk, column: columnName, value: text });
+  };
 
   const handleCellEditSubmit = (
     rowPk: any,
@@ -649,6 +718,17 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
           pendingModifications,
           dialect,
           onFilter: applyCellFilter,
+          onChooseReferenced:
+            contextMenu.rowPk !== undefined &&
+            canChooseReferencedRow(contextMenu.column, {
+              locked: isCellLocked(contextMenu.column.name),
+              pendingDelete: Boolean(contextMenu.isPendingDelete),
+            })
+              ? () => {
+                  setActiveCell({ rowPk: contextMenu.rowPk, column: contextMenu.column.name });
+                  openCellEditor(contextMenu.rowPk, contextMenu.column.name);
+                }
+              : undefined,
           onSetValue: (newValue) => {
             if (contextMenu.rowPk === undefined) return;
             onUpdateCell(
@@ -735,11 +815,17 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   const latestActions = useRef<GridRowActions>(null as never);
   latestActions.current = {
     toggleSelect: handleToggleRowSelect,
+    activateCell: (rowPk, column) => setActiveCell({ rowPk, column }),
     openCellMenu,
     openJson: (columnName, rowPk, value) =>
       setJsonModalState({ isOpen: true, columnName, rowPk, value }),
-    startEdit: (rowPk, column, value) =>
-      setEditingCell({ rowPk, column, value }),
+    startEdit: (rowPk, column, value) => {
+      if (visibleColumns.find((c) => c.name === column)?.foreignKey) {
+        openCellEditor(rowPk, column);
+      } else {
+        setEditingCell({ rowPk, column, value });
+      }
+    },
     changeEdit: (value) =>
       setEditingCell((prev) => (prev ? { ...prev, value } : prev)),
     submitEdit: handleCellEditSubmit,
@@ -750,6 +836,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
   const rowActions = useMemo<GridRowActions>(
     () => ({
       toggleSelect: (pk) => latestActions.current.toggleSelect(pk),
+      activateCell: (pk, c) => latestActions.current.activateCell(pk, c),
       openCellMenu: (e, t) => latestActions.current.openCellMenu(e, t),
       openJson: (c, pk, v) => latestActions.current.openJson(c, pk, v),
       startEdit: (pk, c, v) => latestActions.current.startEdit(pk, c, v),
@@ -804,7 +891,17 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
 
       <div
         ref={portRef}
-        className="flex-1 table-scroll-port"
+        tabIndex={-1}
+        onKeyDown={(event) => {
+          if (!activeCell || editingCell || event.target !== event.currentTarget) return;
+          if (event.key === "Enter") {
+            event.preventDefault();
+            openCellEditor(activeCell.rowPk, activeCell.column);
+          } else if (event.key === "Escape") {
+            setActiveCell(null);
+          }
+        }}
+        className="flex-1 table-scroll-port focus:outline-none"
         aria-busy={loading}
         aria-live="polite"
       >
@@ -920,6 +1017,14 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
                         editingCell && editingCell.rowPk === rowPkVal
                           ? editingCell
                           : null
+                      }
+                      activeColumn={
+                        activeCell && activeCell.rowPk === rowPkVal
+                          ? activeCell.column
+                          : null
+                      }
+                      isLinking={
+                        fkSheetOpen && fkSheet !== null && fkSheet.rowPk === rowPkVal
                       }
                       actions={rowActions}
                     />
@@ -1087,6 +1192,28 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
         onLookup={onLookup}
       />
 
+      {fkSheet && (
+        <ForeignKeySheet
+          open={fkSheetOpen}
+          referencedTable={fkSheet.target}
+          targetColumn={fkSheet.column.foreignKey?.targetColumn ?? ""}
+          sourceLabel={`${table.name}.${fkSheet.column.name}`}
+          currentValue={fkSheet.currentValue}
+          nullable={canSetNull(fkSheet.column, { isView: false, isPendingDelete: false })}
+          dialect={dialect}
+          onLookup={onLookup}
+          onSelect={(value) => {
+            handleCellEditSubmit(fkSheet.rowPk, fkSheet.column.name, fkSheet.oldValue, value);
+            setFkSheetOpen(false);
+          }}
+          onSetNull={() => {
+            onUpdateCell(fkSheet.rowPk, fkSheet.column.name, fkSheet.oldValue, null);
+            setFkSheetOpen(false);
+          }}
+          onClose={() => setFkSheetOpen(false)}
+        />
+      )}
+
       <AnimatePresence>
       {fkFloater && (
         <ForeignKeyFloater
@@ -1244,6 +1371,8 @@ function cellMenuItems(opts: {
   dialect: DatabaseDialect;
   onFilter: (column: string, op: CellFilterOp, value: unknown) => void;
   onSetValue: (value: unknown) => void;
+  /** Set when the cell is an editable foreign key. */
+  onChooseReferenced?: () => void;
 }): ContextMenuItem[] {
   const ctx = {
     isView: Boolean(opts.table.isView) || opts.locked,
@@ -1320,6 +1449,16 @@ function cellMenuItems(opts: {
           .catch(() => toast.error("Could not copy to clipboard"));
       },
     },
+    ...(opts.onChooseReferenced
+      ? [
+          {
+            id: "choose-referenced",
+            label: "Choose referenced row…",
+            hint: shortcutLabel("edit.chooseReferencedRow"),
+            onSelect: opts.onChooseReferenced,
+          },
+        ]
+      : []),
     ...(opts.allowFilter
       ? [
           {
