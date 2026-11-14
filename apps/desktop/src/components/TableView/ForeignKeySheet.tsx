@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Check, Filter, Key, Link, LoaderCircle, Search, X } from 'lucide-react';
-import { Modal, ModalPanel } from '../ui/Modal';
+import { Drawer, DrawerPanel } from '../ui/Drawer';
 import { FilterExpressionInput } from './FilterExpressionInput';
 import type { DatabaseDialect, FilterClause, TableSchema } from '../../types';
 import { registerScope } from '../../lib/commands/commandBus';
@@ -215,12 +215,15 @@ function ForeignKeySheetBody({
   const activeFilters = filters.filter((filter) => filter.enabled);
 
   return (
-    <Modal align="top" onScrimClick={onClose} style={{ zIndex: 60 }}>
-      <ModalPanel
+    <Drawer scrim={false}>
+      {/* No dimming or blur: the grid row being linked stays readable beside the sheet. */}
+      <div aria-hidden className="fixed inset-0" style={{ zIndex: 59 }} onClick={onClose} />
+      <DrawerPanel
         role="dialog"
         aria-modal="true"
         aria-label={`Choose a row from ${qualifiedName}`}
-        className="w-full max-w-4xl h-[min(640px,calc(100vh-7rem))] flex flex-col bg-popover border border-border rounded-2xl shadow-2xl overflow-hidden"
+        style={{ zIndex: 60 }}
+        className="fixed inset-y-0 right-0 w-full max-w-2xl flex flex-col bg-popover border-l border-border shadow-2xl font-sans text-popover-foreground overflow-hidden"
       >
         <header className="flex items-start gap-3 px-4 pt-3.5 pb-3 border-b border-border">
           <div className="mt-0.5 p-1.5 rounded-lg bg-primary/10 text-primary shrink-0">
@@ -447,8 +450,8 @@ function ForeignKeySheetBody({
             </button>
           )}
         </footer>
-      </ModalPanel>
-    </Modal>
+      </DrawerPanel>
+    </Drawer>
   );
 }
 

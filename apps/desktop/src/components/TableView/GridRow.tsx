@@ -68,6 +68,8 @@ interface GridRowProps {
   editing: EditingCell | null;
   /** Column of the grid's active cell, when it belongs to this row. */
   activeColumn: string | null;
+  /** The referenced-row sheet is open for this row's active cell. */
+  isLinking: boolean;
   actions: GridRowActions;
 }
 
@@ -84,6 +86,7 @@ function GridRowImpl({
   rowPending,
   editing,
   activeColumn,
+  isLinking,
   actions,
 }: GridRowProps) {
   const rowPkVal = row[pkCol];
@@ -94,7 +97,13 @@ function GridRowImpl({
     <tr
       style={ROW_STYLE}
       className={`hover:bg-accent/50 transition-colors ${
-        isPendingDelete ? "bg-rose-500/10" : isSelected ? "bg-primary/10" : ""
+        isPendingDelete
+          ? "bg-rose-500/10"
+          : isLinking
+            ? "bg-primary/15"
+            : isSelected
+              ? "bg-primary/10"
+              : ""
       }`}
     >
       {!readOnly && (
@@ -162,7 +171,9 @@ function GridRowImpl({
               isEditing ? "p-0 overflow-hidden" : "px-3 py-0"
             } ${
               activeColumn === col.name && !isEditing
-                ? "outline-1 -outline-offset-1 outline-primary/70"
+                ? isLinking
+                  ? "outline-2 -outline-offset-2 outline-primary bg-primary/10"
+                  : "outline-1 -outline-offset-1 outline-primary/70"
                 : ""
             } ${
               isPendingDelete

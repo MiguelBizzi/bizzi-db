@@ -633,6 +633,7 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
       : undefined;
     if (column.foreignKey && target) {
       setEditingCell(null);
+      setActiveCell({ rowPk, column: columnName });
       setFkSheet({
         rowPk,
         column,
@@ -1021,6 +1022,9 @@ export const TableDataGrid: React.FC<TableDataGridProps> = ({
                         activeCell && activeCell.rowPk === rowPkVal
                           ? activeCell.column
                           : null
+                      }
+                      isLinking={
+                        fkSheetOpen && fkSheet !== null && fkSheet.rowPk === rowPkVal
                       }
                       actions={rowActions}
                     />
