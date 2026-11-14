@@ -4,7 +4,9 @@ All notable changes to Bizzi DB are recorded here. The format follows [Keep a Ch
 
 New entries go under `## [Unreleased]`; the release process moves them under a version heading. Write for people who use the app, not for people who read commits. See [RELEASING.md](RELEASING.md).
 
-## [Unreleased] - Foreign key sheet
+## [0.1.29] - 2026-11-14 - Foreign key sheet and What's New
+
+Choose foreign key values from a searchable sheet, and read what changed after each update.
 
 ### New
 
