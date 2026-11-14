@@ -11,6 +11,13 @@ New entries go under `## [Unreleased]`; the release process moves them under a v
 - Choosing a foreign key value opens a searchable sheet of the referenced table instead of a small dropdown. Type words to match names, emails or IDs, add filters such as `status = 'active'`, pick a row with the arrow keys and Enter, or set the value to NULL when the column allows it. Open it by double-clicking a foreign key cell, from the cell's right-click menu, or with ⌘J (Ctrl+J) on the selected cell or a foreign key field in Insert Row.
 - Clicking a grid cell selects it; press Enter to edit it.
 
+### Fixed
+
+- An app that is several versions behind now updates straight to the newest release. If a newer version ships while an earlier update is downloaded and waiting, Restart to update installs the newest one instead of stepping through each.
+- Saving a view or routine you did not change no longer adds a pending change on MySQL and SQL Server.
+- Tabs for views and procedures use the same icons as the sidebar.
+- The window reopens on the same screen, at the same position and size, after you quit or the app restarts to update.
+
 ## [0.1.28] - 2026-11-02 - SQL Server
 
 Bizzi DB now connects to SQL Server as well as PostgreSQL and MySQL.

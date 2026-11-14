@@ -45,11 +45,34 @@ describe('mysql view ddl', () => {
     expect(draft.checkOption).toBe(true);
     expect(draft.definition).toBe('SELECT id FROM users');
     expect(draft.sqlSecurity).toBe('INVOKER');
+    draft.definition = 'SELECT id, email FROM users';
     const plan = planViewChange(loaded, draft);
     expect(plan.ok).toBe(true);
     if (!plan.ok) return;
     expect(plan.statements[0]).toContain('SQL SECURITY INVOKER');
     expect(plan.statements[0]).toContain('WITH CHECK OPTION');
     expect(plan.statements[0].match(/CHECK OPTION/g)?.length).toBe(1);
+  });
+
+  test('an untouched view stages nothing', () => {
+    const plan = planViewChange(view, viewDraftFrom(view));
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.mode).toBe('none');
+    expect(plan.statements).toEqual([]);
+  });
+
+  test('trailing semicolon and surrounding whitespace are not a change', () => {
+    const draft = viewDraftFrom(view);
+    draft.definition = `  ${draft.definition};\n`;
+    const plan = planViewChange(view, draft);
+    expect(plan.ok && plan.statements).toEqual([]);
+  });
+
+  test('a changed definition still replaces the view', () => {
+    const draft = viewDraftFrom(view);
+    draft.definition = 'SELECT id, email FROM users';
+    const plan = planViewChange(view, draft);
+    expect(plan.ok && plan.mode).toBe('replace');
   });
 });

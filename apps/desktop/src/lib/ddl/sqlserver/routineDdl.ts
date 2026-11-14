@@ -100,9 +100,12 @@ export function createRoutine(draft: RoutineDraft): DdlResult {
   return { ok: true, mode: 'create', statements: [createStatement(draft)], transactional: true, warnings: [] };
 }
 
-export function planRoutineChange(original: RoutineDefinition, _body: string, draft: RoutineDraft): DdlResult {
+export function planRoutineChange(original: RoutineDefinition, body: string, draft: RoutineDraft): DdlResult {
   const errors = validateRoutine(draft);
   if (errors.length > 0) return { ok: false, reason: errors[0] };
+  if (createStatement(draft) === createStatement(routineDraftFrom(original, body))) {
+    return { ok: true, mode: 'none', statements: [], transactional: true, warnings: [] };
+  }
   const statements = [createStatement(draft)];
   if (draft.name.trim() !== original.name) {
     const old = `${quoteIdent(original.schema)}.${quoteIdent(original.name)}`;

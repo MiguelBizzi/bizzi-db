@@ -18,6 +18,7 @@ import {
   PanelBottom,
   PanelTop,
   SquareFunction,
+  Workflow,
   Eye,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
@@ -25,6 +26,7 @@ import { useMotionPreference } from '../lib/motionPreference';
 import { WorkspaceTab } from '../types';
 import { ContextMenu, type ContextMenuItem } from './ui/ContextMenu';
 import { canClosePaneTabs, type CloseTabKind } from '../lib/tabPaneActions';
+import type { TabObjectKind } from '../lib/tabIcon';
 import type { SplitDirection, SplitSide } from '../lib/workspaceLayout';
 
 const INDICATOR_INSET_PX = 8;
@@ -46,6 +48,7 @@ interface TabsBarProps {
   onSplitPane: (tabId: string, direction: SplitDirection, side: SplitSide) => void;
   onOpenNewQueryTab: () => void;
   onReorderTabs?: (fromIndex: number, toIndex: number) => void;
+  objectKindOf?: (tab: WorkspaceTab) => TabObjectKind | undefined;
 }
 
 type DragSession = {
@@ -79,6 +82,7 @@ export const TabsBar: React.FC<TabsBarProps> = ({
   onSplitPane,
   onOpenNewQueryTab,
   onReorderTabs,
+  objectKindOf,
 }) => {
   const listRef = useRef<HTMLDivElement>(null);
   const renameRef = useRef<HTMLInputElement>(null);
@@ -96,26 +100,31 @@ export const TabsBar: React.FC<TabsBarProps> = ({
   const [renameValue, setRenameValue] = useState('');
   const { reduced: reduceMotion } = useMotionPreference();
 
-  const getTabIcon = (type: WorkspaceTab['type']) => {
-    switch (type) {
-      case 'table_data':
-        return <TableIcon className="w-3.5 h-3.5 text-indigo-400" />;
+  const getTabIcon = (tab: WorkspaceTab) => {
+    const cls = 'w-3.5 h-3.5';
+    switch (objectKindOf?.(tab)) {
+      case 'view':
+        return <Eye className={`${cls} text-amber-400`} />;
+      case 'function':
+        return <SquareFunction className={`${cls} text-sky-400`} />;
+      case 'procedure':
+        return <Workflow className={`${cls} text-sky-400`} />;
+      case 'table':
+        return <TableIcon className={`${cls} text-primary`} />;
+    }
+    switch (tab.type) {
       case 'sql_editor':
-        return <Code className="w-3.5 h-3.5 text-emerald-400" />;
+        return <Code className={`${cls} text-emerald-400`} />;
       case 'erd_schema':
-        return <Network className="w-3.5 h-3.5 text-purple-400" />;
+        return <Network className={`${cls} text-purple-400`} />;
       case 'metrics':
-        return <Activity className="w-3.5 h-3.5 text-amber-400" />;
+        return <Activity className={`${cls} text-amber-400`} />;
       case 'activity_log':
-        return <Logs className="w-3.5 h-3.5 text-secondary" />;
+        return <Logs className={`${cls} text-secondary`} />;
       case 'schema_designer':
-        return <Edit3 className="w-3.5 h-3.5 text-rose-400" />;
-      case 'function_designer':
-        return <SquareFunction className="w-3.5 h-3.5 text-sky-400" />;
-      case 'view_designer':
-        return <Eye className="w-3.5 h-3.5 text-amber-400" />;
+        return <Edit3 className={`${cls} text-rose-400`} />;
       default:
-        return <TableIcon className="w-3.5 h-3.5 text-muted-foreground" />;
+        return <TableIcon className={`${cls} text-muted-foreground`} />;
     }
   };
 
@@ -390,7 +399,7 @@ export const TabsBar: React.FC<TabsBarProps> = ({
                     : 'hover:bg-accent text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <div className="shrink-0">{getTabIcon(tab.type)}</div>
+                <div className="shrink-0">{getTabIcon(tab)}</div>
 
                 {isRenaming ? (
                   <input

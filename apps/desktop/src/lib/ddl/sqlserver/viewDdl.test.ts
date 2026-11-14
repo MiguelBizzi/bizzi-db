@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { TableSchema } from '../../../types';
-import { planCreateView, planViewChange } from './viewDdl';
+import { planCreateView, planViewChange, viewDraftFrom } from './viewDdl';
 
 describe('sqlserver view ddl', () => {
   test('emits CREATE OR ALTER VIEW as its own statement', () => {
@@ -70,5 +70,29 @@ describe('sqlserver view ddl', () => {
     expect(plan.statements[0]).toBe('DROP VIEW [dbo].[open_orders];');
     expect(plan.statements[1]).toContain('CREATE OR ALTER VIEW [sales].[open_orders]');
     expect(plan.statements.join('\n')).not.toContain('sp_rename');
+  });
+
+  test('an untouched view stages nothing', () => {
+    const view: TableSchema = {
+      id: 'dbo.open_orders',
+      schema: 'dbo',
+      name: 'open_orders',
+      rowCount: 0,
+      sizeMb: 0,
+      tags: [],
+      createdAt: '',
+      updatedAt: '',
+      columns: [],
+      indexes: [],
+      viewSql: 'SELECT id FROM orders',
+    };
+    const plan = planViewChange(view, viewDraftFrom(view));
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.mode).toBe('none');
+    expect(plan.statements).toEqual([]);
+    const edited = { ...viewDraftFrom(view), definition: 'SELECT id, total FROM orders' };
+    const changed = planViewChange(view, edited);
+    expect(changed.ok && changed.statements.length).toBe(1);
   });
 });

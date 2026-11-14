@@ -69,6 +69,9 @@ export function planViewChange(view: TableSchema, draft: ViewDraft): DdlResult {
   }
   const statements: string[] = [];
   const renamed = draft.name.trim() !== view.name;
+  if (!renamed && clean(draft.definition) === clean(view.viewSql ?? '')) {
+    return { ok: true, mode: 'none', statements: [], transactional: true, warnings: [] };
+  }
   if (renamed && clean(draft.definition) === clean(view.viewSql ?? '')) {
     const old = `${quoteIdent(view.schema)}.${quoteIdent(view.name)}`;
     statements.push(

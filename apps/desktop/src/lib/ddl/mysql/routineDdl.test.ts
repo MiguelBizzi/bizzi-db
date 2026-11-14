@@ -35,7 +35,7 @@ describe('mysql routine ddl', () => {
     draft.name = 'touch_user';
     draft.body = 'BEGIN\n  SELECT 1;\nEND';
     draft.parameters = [{ mode: 'in', name: 'uid', dataType: 'BIGINT', default: '' }];
-    const original = { schema: 'shop', name: 'touch_user', kind: 'procedure' } as RoutineDefinition;
+    const original = { schema: 'shop', name: 'touch_user', kind: 'procedure', parameters: [] } as unknown as RoutineDefinition;
     const plan = planRoutineChange(original, '', draft);
     expect(plan.ok).toBe(true);
     if (!plan.ok) return;
@@ -75,5 +75,25 @@ describe('mysql routine ddl', () => {
     const draft = routineDraftFrom(original, 'RETURN 1');
     expect(draft.dataAccess).toBe('READS SQL DATA');
     expect(draft.volatility).toBe('immutable');
+  });
+
+  test('an untouched routine stages nothing', () => {
+    const original = {
+      schema: 'shop',
+      name: 'touch_user',
+      kind: 'procedure',
+      parameters: [{ mode: 'in', name: 'uid', dataType: 'BIGINT' }],
+      securityDefiner: true,
+      dataAccess: 'MODIFIES SQL DATA',
+    } as unknown as RoutineDefinition;
+    const body = 'BEGIN\n  SELECT 1;\nEND';
+    const draft = routineDraftFrom(original, body);
+    const plan = planRoutineChange(original, body, draft);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.mode).toBe('none');
+    expect(plan.statements).toEqual([]);
+    const edited = planRoutineChange(original, body, { ...draft, body: 'BEGIN\n  SELECT 2;\nEND' });
+    expect(edited.ok && edited.mode).toBe('recreate');
   });
 });

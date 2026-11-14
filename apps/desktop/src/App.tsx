@@ -93,6 +93,7 @@ import {
   routineTabTitle,
   type RoutineTarget,
 } from "./lib/routineTabs";
+import { tabObjectKind } from "./lib/tabIcon";
 import { dialectModule } from "@db/database";
 import { objectDdlFor, tableDdlFor } from "./lib/ddl/registry";
 import { planScript } from "./lib/ddl/types";
@@ -195,6 +196,7 @@ import {
   canStartUpdateCheck,
   shouldShowUpdateBanner,
   statusAfterCheck,
+  supersedesDownloaded,
   statusAfterCheckError,
   statusAfterDownloadComplete,
   statusAfterDownloadEvent,
@@ -539,9 +541,11 @@ export default function App() {
         setUpdateStatus((current) => statusAfterDownloadEvent(current, event));
       });
       setUpdateStatus(statusAfterDownloadComplete);
+      return true;
     } catch (error: unknown) {
       console.error("Update download failed", error);
       setUpdateStatus(statusAfterDownloadFailure(error));
+      return false;
     }
   }, []);
 
@@ -555,10 +559,15 @@ export default function App() {
       const channel = await getUpdateChannel();
       if (!canAutoCheck(channel)) return null;
       if (!canStartUpdateCheck(updateStatusRef.current)) return null;
-      setUpdateStatus({ phase: "checking" });
+      // A downloaded update stays ready while we look for a newer release.
+      const waiting = updateStatusRef.current;
+      const quiet = waiting.phase === "ready";
+      if (!quiet) setUpdateStatus({ phase: "checking" });
       try {
         const update = await check(checkOptions(channel));
-        if (!update) {
+        if (quiet) {
+          if (!supersedesDownloaded(waiting, update) || !update) return null;
+        } else if (!update) {
           pendingUpdateRef.current = null;
           const next = statusAfterCheck(null);
           setUpdateStatus(next);
@@ -572,6 +581,7 @@ export default function App() {
         return null;
       } catch (error: unknown) {
         console.error("Update check failed", error);
+        if (quiet) return null;
         const next = statusAfterCheckError(error);
         setUpdateStatus(next);
         return next;
@@ -590,17 +600,29 @@ export default function App() {
   }, [appVersion, checkForAppUpdate, getUpdateChannel]);
 
   const restartToUpdate = useCallback(async () => {
-    const update = pendingUpdateRef.current;
-    if (!canRestartToUpdate(updateStatusRef.current) || !update) return;
+    let update = pendingUpdateRef.current;
+    const waiting = updateStatusRef.current;
+    if (!canRestartToUpdate(waiting) || !update) return;
     setUpdateStatus({ phase: "installing" });
     try {
+      // Releases may have shipped since the download; install the newest.
+      const channel = await getUpdateChannel();
+      const newer = await check(checkOptions(channel)).catch(() => null);
+      if (newer && supersedesDownloaded(waiting, newer)) {
+        pendingUpdateRef.current = newer;
+        setUpdateStatus(
+          statusAfterCheck({ version: newer.version, body: newer.body }),
+        );
+        if (!(await downloadAppUpdate(newer))) return;
+        update = newer;
+      }
       await update.install();
       await relaunch();
     } catch (error: unknown) {
       console.error("Update install failed", error);
       setUpdateStatus(statusAfterInstallFailure(error));
     }
-  }, []);
+  }, [downloadAppUpdate, getUpdateChannel]);
 
   useEffect(() => {
     if (!bootstrapped) return;
@@ -2531,6 +2553,7 @@ export default function App() {
                 }
                 onResizeSplit={handleResizeSplit}
                 renderTabContent={renderTabContent}
+                objectKindOf={(tab) => tabObjectKind(tab, currentDatabase)}
               />
             </div>
 

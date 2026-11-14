@@ -12,6 +12,22 @@ export const UPCOMING: UpcomingEntry | null = {
     {
       "kind": "new",
       "text": "Clicking a grid cell selects it; press Enter to edit it."
+    },
+    {
+      "kind": "fixed",
+      "text": "An app that is several versions behind now updates straight to the newest release. If a newer version ships while an earlier update is downloaded and waiting, Restart to update installs the newest one instead of stepping through each."
+    },
+    {
+      "kind": "fixed",
+      "text": "Saving a view or routine you did not change no longer adds a pending change on MySQL and SQL Server."
+    },
+    {
+      "kind": "fixed",
+      "text": "Tabs for views and procedures use the same icons as the sidebar."
+    },
+    {
+      "kind": "fixed",
+      "text": "The window reopens on the same screen, at the same position and size, after you quit or the app restarts to update."
     }
   ]
 };

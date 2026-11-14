@@ -6,6 +6,7 @@ import { TabsBar } from './TabsBar';
 import { ErrorBoundary, PaneCrashFallback } from './ErrorBoundary';
 import { WorkspaceEmptyState } from './WorkspaceEmptyState';
 import { SplitHandle } from './ui/SplitHandle';
+import type { TabObjectKind } from '../lib/tabIcon';
 import type { CloseTabKind } from '../lib/tabPaneActions';
 import {
   type LayoutNode,
@@ -32,6 +33,7 @@ interface WorkspacePanesProps {
   onOpenNewQueryTab: (paneId: string) => void;
   onResizeSplit: (splitId: string, sizes: [number, number]) => void;
   renderTabContent: (tab: WorkspaceTab) => React.ReactNode;
+  objectKindOf?: (tab: WorkspaceTab) => TabObjectKind | undefined;
 }
 
 export function WorkspacePanes(props: WorkspacePanesProps) {
@@ -89,6 +91,7 @@ function LeafPane({
   onReorderTabs,
   onOpenNewQueryTab,
   renderTabContent,
+  objectKindOf,
 }: WorkspacePanesProps & { pane: Extract<LayoutNode, { type: 'leaf' }> }) {
   const paneTabs = pane.tabIds
     .map((id) => tabs.find((tab) => tab.id === id))
@@ -113,6 +116,7 @@ function LeafPane({
         }
         onOpenNewQueryTab={() => onOpenNewQueryTab(pane.id)}
         onReorderTabs={(from, to) => onReorderTabs(pane.id, from, to)}
+        objectKindOf={objectKindOf}
       />
       <div className="flex-1 min-h-0 overflow-hidden relative">
         {/* Opacity only: a transform here would break the grid's sticky headers. */}

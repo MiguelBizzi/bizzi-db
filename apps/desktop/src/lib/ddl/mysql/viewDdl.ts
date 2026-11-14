@@ -66,6 +66,9 @@ export function planViewChange(view: TableSchema, draft: ViewDraft): DdlResult {
   const errors = validateView(draft);
   if (errors.length > 0) return { ok: false, reason: errors[0] };
   const renamed = draft.name.trim() !== view.name || draft.schema.trim() !== view.schema;
+  if (!renamed && createStatement(draft) === createStatement(viewDraftFrom(view))) {
+    return { ok: true, mode: 'none', statements: [], transactional: true, warnings: [] };
+  }
   if (renamed && clean(draft.definition) === clean(view.viewSql ?? '')) {
     return {
       ok: true,
