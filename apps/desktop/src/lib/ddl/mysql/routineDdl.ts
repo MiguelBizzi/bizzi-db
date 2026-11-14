@@ -136,9 +136,12 @@ export function createRoutine(draft: RoutineDraft): DdlResult {
   };
 }
 
-export function planRoutineChange(original: RoutineDefinition, _body: string, draft: RoutineDraft): DdlResult {
+export function planRoutineChange(original: RoutineDefinition, body: string, draft: RoutineDraft): DdlResult {
   const errors = validateRoutine(draft);
   if (errors.length > 0) return { ok: false, reason: errors[0] };
+  if (createStatement(draft) === createStatement(routineDraftFrom(original, body))) {
+    return { ok: true, mode: 'none', statements: [], transactional: true, warnings: [] };
+  }
   const kind = original.kind === 'procedure' ? 'PROCEDURE' : 'FUNCTION';
   const temp = tempRoutineName(original.name);
   const probe = createStatement(draft, temp);

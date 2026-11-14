@@ -113,16 +113,29 @@ export function canRestartToUpdate(status: AppUpdateStatus): boolean {
   return status.phase === 'ready';
 }
 
-/** Neither a background nor a manual check may interrupt an update that is already moving. */
+/**
+ * Neither a background nor a manual check may interrupt an update that is
+ * already moving. A finished download may be replaced by a newer release, so
+ * a user who waits through several releases installs the latest one directly.
+ */
 export function canStartUpdateCheck(status: AppUpdateStatus): boolean {
   switch (status.phase) {
     case 'idle':
     case 'upToDate':
+    case 'ready':
     case 'error':
       return true;
     default:
       return false;
   }
+}
+
+/** True when `update` is a release other than the one already downloaded and waiting. */
+export function supersedesDownloaded(
+  status: AppUpdateStatus,
+  update: { version: string } | null,
+): boolean {
+  return status.phase === 'ready' && update != null && update.version !== status.version;
 }
 
 /**

@@ -10,6 +10,7 @@ import {
   manualCheckFeedback,
   downloadPercent,
   canStartUpdateCheck,
+  supersedesDownloaded,
   shouldShowUpdateBanner,
   statusAfterCheck,
   statusAfterCheckError,
@@ -193,10 +194,13 @@ describe('starting a check', () => {
         total: null,
       }),
     ).toBe(false);
+    expect(canStartUpdateCheck({ phase: 'installing' })).toBe(false);
+  });
+
+  test('keeps looking for a newer release while one is downloaded and waiting', () => {
     expect(
       canStartUpdateCheck({ phase: 'ready', version: '0.2.0', notes: '' }),
-    ).toBe(false);
-    expect(canStartUpdateCheck({ phase: 'installing' })).toBe(false);
+    ).toBe(true);
   });
 
   test('re-checks when idle, current, or after a failure', () => {
@@ -317,5 +321,19 @@ describe('resolveUpdateChannel', () => {
   test('a resolved channel passes through', async () => {
     const deb = { selfUpdate: true, target: 'linux-x86_64-deb' };
     expect(await resolveUpdateChannel(() => Promise.resolve(deb))).toEqual(deb);
+  });
+});
+
+describe('supersedesDownloaded', () => {
+  const ready: AppUpdateStatus = { phase: 'ready', version: '0.1.27', notes: '' };
+
+  test('a different version than the downloaded one replaces it', () => {
+    expect(supersedesDownloaded(ready, { version: '0.1.28' })).toBe(true);
+  });
+
+  test('the same version, no update, or nothing downloaded does not', () => {
+    expect(supersedesDownloaded(ready, { version: '0.1.27' })).toBe(false);
+    expect(supersedesDownloaded(ready, null)).toBe(false);
+    expect(supersedesDownloaded({ phase: 'idle' }, { version: '0.1.28' })).toBe(false);
   });
 });

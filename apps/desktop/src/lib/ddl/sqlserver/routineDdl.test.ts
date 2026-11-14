@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { planCreateRoutine } from './routineDdl';
+import type { RoutineDefinition } from '../../../types';
+import { planCreateRoutine, planRoutineChange, routineDraftFrom } from './routineDdl';
 import type { RoutineDraft } from '../types';
 
 function draft(overrides: Partial<RoutineDraft> = {}): RoutineDraft {
@@ -59,5 +60,26 @@ describe('sqlserver routine ddl', () => {
     if (!plan.ok) return;
     expect(plan.statements[0]).toContain('CREATE OR ALTER FUNCTION [dbo].[twice](@n int)');
     expect(plan.statements[0]).toContain('RETURNS int');
+  });
+
+  test('an untouched routine stages nothing', () => {
+    const original = {
+      schema: 'dbo',
+      name: 'twice',
+      kind: 'function',
+      parameters: [{ mode: 'in', name: '@n', dataType: 'int' }],
+      returnType: 'int',
+      returnsSet: false,
+      securityDefiner: false,
+    } as unknown as RoutineDefinition;
+    const body = 'RETURN @n * 2';
+    const unchanged = routineDraftFrom(original, body);
+    const plan = planRoutineChange(original, body, unchanged);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.mode).toBe('none');
+    expect(plan.statements).toEqual([]);
+    const edited = planRoutineChange(original, body, { ...unchanged, body: 'RETURN @n * 3' });
+    expect(edited.ok && edited.statements.length).toBe(1);
   });
 });

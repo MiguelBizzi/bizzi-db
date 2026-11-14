@@ -4,6 +4,15 @@ All notable changes to Bizzi DB are recorded here. The format follows [Keep a Ch
 
 New entries go under `## [Unreleased]`; the release process moves them under a version heading. Write for people who use the app, not for people who read commits. See [RELEASING.md](RELEASING.md).
 
+## [Unreleased] - Fixes
+
+### Fixed
+
+- An app that is several versions behind now updates straight to the newest release. If a newer version ships while an earlier update is downloaded and waiting, Restart to update installs the newest one instead of stepping through each.
+- Saving a view or routine you did not change no longer adds a pending change on MySQL and SQL Server.
+- Tabs for views and procedures use the same icons as the sidebar.
+- The window reopens on the same screen, at the same position and size, after you quit or the app restarts to update.
+
 ## [0.1.28] - 2026-11-02 - SQL Server
 
 Bizzi DB now connects to SQL Server as well as PostgreSQL and MySQL.
