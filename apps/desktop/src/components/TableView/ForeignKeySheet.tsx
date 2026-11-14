@@ -215,9 +215,8 @@ function ForeignKeySheetBody({
   const activeFilters = filters.filter((filter) => filter.enabled);
 
   return (
-    <Drawer scrim={false}>
-      {/* No dimming or blur: the grid row being linked stays readable beside the sheet. */}
-      <div aria-hidden className="fixed inset-0" style={{ zIndex: 59 }} onClick={onClose} />
+    // Above the Insert Row drawer (z-50), which this sheet can open over.
+    <Drawer onScrimClick={onClose} scrimStyle={{ zIndex: 59 }}>
       <DrawerPanel
         role="dialog"
         aria-modal="true"
