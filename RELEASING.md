@@ -3,7 +3,7 @@
 Ship from `main` with a version bump and a `v*` tag. Cursor follows [`.cursor/rules/cut-release.mdc`](.cursor/rules/cut-release.mdc) when you ask to cut a release. `main` is protected, so the bump goes through a pull request.
 
 1. Branch `release/vX.Y.Z` from `main`. Set the same semver in `Cargo.toml` (`workspace.package.version`), `apps/desktop/src-tauri/tauri.conf.json`, `package.json`, and `apps/desktop/package.json`.
-2. In [`CHANGELOG.md`](CHANGELOG.md), turn `## [Unreleased] - Title` into `## [X.Y.Z] - YYYY-MM-DD - Title` (or add that section at the top if there is no Unreleased one). Write what a user would notice, not commit messages. Then run `bun run changelog:generate` and commit the regenerated `apps/web/src/lib/changelog.data.ts`. A test fails if that file is stale or if the newest entry does not match the version in `package.json`. The landing page reads the live version from GitHub, so only the notes need writing.
+2. In [`CHANGELOG.md`](CHANGELOG.md), turn `## [Unreleased] - Title` into `## [X.Y.Z] - YYYY-MM-DD - Title` (or add that section at the top if there is no Unreleased one). Write what a user would notice, not commit messages. Then run `bun run changelog:generate` and commit the regenerated `apps/web/src/lib/changelog.data.ts` and `apps/desktop/src/lib/changelog.data.ts`. The desktop copy is what the What's New drawer shows after an update. A test fails if that file is stale or if the newest entry does not match the version in `package.json`. The landing page reads the live version from GitHub, so only the notes need writing.
 3. Open a pull request, wait for the checks, and merge it.
 4. Tag the merged commit and push the tag:
    ```sh

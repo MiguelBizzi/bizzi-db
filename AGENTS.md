@@ -129,7 +129,7 @@ bun run test:all  # db:up, then the same tests plus #[ignore] live tests
 - New behavior starts with a failing test. A bug fix starts with a test that reproduces it.
 - Put `foo.test.ts` next to `foo.ts`. Rust unit tests sit in the module; live session tests sit in `crates/*/tests/` and are `#[ignore]`.
 - Extract logic out of React and test the function. Do not mount the tree unless the bug is interaction-only.
-- Skip tests for type-only modules, one-line `invoke` wrappers, icons, and generated code (`apps/web/src/lib/changelog.data.ts`).
+- Skip tests for type-only modules, one-line `invoke` wrappers, icons, and generated code (`apps/web/src/lib/changelog.data.ts`, `apps/desktop/src/lib/changelog.data.ts`).
 - `bun run test` is enough for UI and unit changes. Run `bun run test:all` when you touch a session, preview, introspection, or a docker seed.
 - CI path filters live in `.github/scripts/changed-areas.sh`. Docs-only changes skip the build.
 
@@ -149,7 +149,7 @@ Comment the constraint a reader cannot see in the next line: an engine rule, a T
 - Grid windowing mounts only rows and columns near the viewport. A CSS `transform` on a pane breaks `position: sticky` headers; pane transitions change opacity only.
 - Large ERDs mount only the visible cards.
 - The landing page's testimonials section is intentionally unwired. The comments in `apps/web/src/App.tsx`, `Header.tsx`, and `Testimonials.tsx` say so. Leave them.
-- `apps/web/src/lib/changelog.data.ts` is generated. Edit `CHANGELOG.md`, then `bun run changelog:generate`.
+- `apps/web/src/lib/changelog.data.ts` and its copy `apps/desktop/src/lib/changelog.data.ts` (the What's New drawer) are generated. Edit `CHANGELOG.md`, then `bun run changelog:generate`.
 
 ## Where to change what
 

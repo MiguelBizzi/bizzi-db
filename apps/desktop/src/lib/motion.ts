@@ -38,6 +38,9 @@ export const slideInRight = variants(
   DURATION.slow
 );
 
+// The full height of a bottom sheet; percentages resolve against the sheet itself.
+export const sheetUp = variants({ y: '100%' }, { y: 0 }, DURATION.slow);
+
 export const slideUp = variants({ opacity: 0, y: 8 }, { opacity: 1, y: 0 }, DURATION.base);
 
 export const collapse = variants(
