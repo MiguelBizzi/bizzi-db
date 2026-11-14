@@ -85,6 +85,7 @@ describe('buildMenuModel', () => {
       { kind: 'item', commandId: 'edit.find' },
       { kind: 'item', commandId: 'edit.insertRow' },
       { kind: 'item', commandId: 'edit.deleteRows' },
+      { kind: 'item', commandId: 'edit.chooseReferencedRow' },
       { kind: 'separator' },
       { kind: 'item', commandId: 'edit.toggleComment' },
       { kind: 'item', commandId: 'edit.formatSql' },

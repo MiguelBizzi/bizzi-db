@@ -58,6 +58,7 @@ describe('EMPTY_CONTEXT', () => {
       connectionOpen: false,
       modalOpen: false,
       textInputFocused: false,
+      foreignKeyTarget: false,
       sqlSelectionPresent: false,
       sqlResultPresent: false,
       closedTabCount: 0,

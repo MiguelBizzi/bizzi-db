@@ -2,9 +2,17 @@
 import type { ChangelogEntry, UpcomingEntry } from './changelog';
 
 export const UPCOMING: UpcomingEntry | null = {
-  "title": "Fixes",
+  "title": "Foreign key sheet",
   "summary": "",
   "changes": [
+    {
+      "kind": "new",
+      "text": "Choosing a foreign key value opens a searchable sheet of the referenced table instead of a small dropdown. Type words to match names, emails or IDs, add filters such as `status = 'active'`, pick a row with the arrow keys and Enter, or set the value to NULL when the column allows it. Open it by double-clicking a foreign key cell, from the cell's right-click menu, or with ⌘J (Ctrl+J) on the selected cell or a foreign key field in Insert Row."
+    },
+    {
+      "kind": "new",
+      "text": "Clicking a grid cell selects it; press Enter to edit it."
+    },
     {
       "kind": "fixed",
       "text": "An app that is several versions behind now updates straight to the newest release. If a newer version ships while an earlier update is downloaded and waiting, Restart to update installs the newest one instead of stepping through each."
