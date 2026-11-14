@@ -1,47 +1,7 @@
 import type { ColumnDefinition, DatabaseDialect, FilterClause, TableSchema } from '../types';
 import { sqlLiteral as typedSqlLiteral } from './dataExport';
-import { ident, moduleFor, pagedSql, qualify } from './dialectQuote';
+import { ident, pagedSql, qualify } from './dialectQuote';
 import { filterFromCell } from './tableCellActions';
-
-export const FK_LOOKUP_PAGE = 20;
-
-const LABEL_HINTS = [
-  'name',
-  'full_name',
-  'display_name',
-  'title',
-  'email',
-  'username',
-  'user_name',
-  'slug',
-  'label',
-  'code',
-];
-
-
-function sqlLiteral(dialect: DatabaseDialect, value: string): string {
-  return moduleFor(dialect).quoteLiteral(value);
-}
-
-function ilikePattern(raw: string): string {
-  const escaped = raw.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
-  return `%${escaped}%`;
-}
-
-function isSearchableType(type: string): boolean {
-  const t = type.trim().toLowerCase();
-  if (
-    t.includes('json') ||
-    t.includes('bytea') ||
-    t.includes('xml') ||
-    t.includes('[]') ||
-    t.startsWith('vector') ||
-    t.includes('tsvector')
-  ) {
-    return false;
-  }
-  return true;
-}
 
 export function resolveReferencedTable(
   tables: TableSchema[],
@@ -56,69 +16,10 @@ export function resolveReferencedTable(
   return byName.find((table) => table.schema === source.schema) ?? byName[0];
 }
 
-export function lookupColumns(table: TableSchema, targetColumn: string): string[] {
-  const picked: string[] = [];
-  const add = (name: string) => {
-    if (!picked.includes(name) && table.columns.some((column) => column.name === name)) {
-      picked.push(name);
-    }
-  };
-  add(targetColumn);
-  for (const hint of LABEL_HINTS) {
-    const match = table.columns.find(
-      (column) => column.name.toLowerCase() === hint && isSearchableType(column.type)
-    );
-    if (match) add(match.name);
-    if (picked.length >= 4) return picked;
-  }
-  for (const column of table.columns) {
-    if (picked.length >= 3) break;
-    if (!isSearchableType(column.type)) continue;
-    add(column.name);
-  }
-  return picked;
-}
-
-export function buildLookupSql(
-  table: TableSchema,
-  targetColumn: string,
-  query: string,
-  offset: number,
-  limit = FK_LOOKUP_PAGE,
-  dialect: DatabaseDialect,
-): string {
-  const columns = lookupColumns(table, targetColumn);
-  const qualified = qualify(dialect, table.schema, table.name);
-  const selectList = columns.map((column) => ident(dialect, column)).join(', ');
-  const fetch = Math.max(1, limit) + 1;
-  const start = Math.max(0, offset);
-  const order = ident(dialect, targetColumn);
-  const trimmed = query.trim();
-  if (!trimmed) {
-    return `${pagedSql(dialect, `SELECT ${selectList} FROM ${qualified} ORDER BY ${order}`, fetch, start)};`;
-  }
-  const pattern = sqlLiteral(dialect, ilikePattern(trimmed));
-  const where = columns
-    .map((column) => moduleFor(dialect).caseInsensitiveLike(ident(dialect, column), pattern))
-    .join(' OR ');
-  return `${pagedSql(dialect, `SELECT ${selectList} FROM ${qualified} WHERE ${where} ORDER BY ${order}`, fetch, start)};`;
-}
-
 export function rowKeyValue(row: Record<string, unknown>, targetColumn: string): string {
   const value = row[targetColumn];
   if (value === null || value === undefined) return '';
   return String(value);
-}
-
-export function rowSecondaryLabel(
-  row: Record<string, unknown>,
-  targetColumn: string
-): string {
-  return Object.entries(row)
-    .filter(([column, value]) => column !== targetColumn && value !== null && value !== undefined)
-    .map(([column, value]) => `${column}: ${String(value)}`)
-    .filter((part) => !part.endsWith(': '))
-    .join(' · ');
 }
 
 export function foreignKeyPreviewSql(

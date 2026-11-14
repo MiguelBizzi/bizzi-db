@@ -14,6 +14,8 @@ export interface CommandContext {
   connectionOpen: boolean;
   modalOpen: boolean;
   textInputFocused: boolean;
+  /** A foreign key field or grid cell is focused and can open the referenced-row sheet. */
+  foreignKeyTarget: boolean;
   sqlSelectionPresent: boolean;
   sqlResultPresent: boolean;
   closedTabCount: number;
@@ -29,6 +31,7 @@ export const EMPTY_CONTEXT: CommandContext = {
   connectionOpen: false,
   modalOpen: false,
   textInputFocused: false,
+  foreignKeyTarget: false,
   sqlSelectionPresent: false,
   sqlResultPresent: false,
   closedTabCount: 0,

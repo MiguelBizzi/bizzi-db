@@ -88,6 +88,7 @@ export function buildMenuModel(): MenuNode[] {
         item('edit.find'),
         item('edit.insertRow'),
         item('edit.deleteRows'),
+        item('edit.chooseReferencedRow'),
         separator(),
         item('edit.toggleComment'),
         item('edit.formatSql'),

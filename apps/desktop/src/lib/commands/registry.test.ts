@@ -138,6 +138,7 @@ describe('COMMANDS registry invariants', () => {
         'edit.find',
         'edit.insertRow',
         'edit.deleteRows',
+        'edit.chooseReferencedRow',
         'file.closeTab',
         'file.closeOthers',
         'file.closeRight',
@@ -226,6 +227,14 @@ describe('COMMANDS registry invariants', () => {
       expect(cmd.typingConflict ?? false).toBe(typingConflict);
       expect(cmd.allowInModal ?? false).toBe(false);
     }
+  });
+
+  test('choose referenced row opens from a focused foreign key field', () => {
+    const cmd = commandById('edit.chooseReferencedRow');
+    expect(cmd.label).toBe('Choose Referenced Row…');
+    expect(cmd.accelerator).toBe('CmdOrCtrl+J');
+    expect(cmd.typingConflict ?? false).toBe(false);
+    expect(cmd.allowInModal).toBe(true);
   });
 
   test('connection and schema commands have the expected labels, accelerators and rules', () => {
@@ -376,6 +385,12 @@ describe('isCommandEnabled', () => {
     ['edit.deleteRows', { activeTabType: 'table_data', selectedRowCount: 0 }, false],
     ['edit.deleteRows', { activeTabType: 'table_data', selectedRowCount: 1, textInputFocused: true }, false],
     ['edit.deleteRows', { activeTabType: 'sql_editor', selectedRowCount: 1 }, false],
+    // works from a focused foreign key field, including inside the Insert Row drawer
+    ['edit.chooseReferencedRow', { foreignKeyTarget: true }, true],
+    ['edit.chooseReferencedRow', { foreignKeyTarget: true, textInputFocused: true }, true],
+    ['edit.chooseReferencedRow', { foreignKeyTarget: true, modalOpen: true }, true],
+    ['edit.chooseReferencedRow', { activeTabType: 'table_data' }, false],
+    ['edit.chooseReferencedRow', {}, false],
     ['file.export', { activeTabType: 'table_data' }, true],
     ['file.export', { activeTabType: 'table_data', textInputFocused: true }, true],
     ['file.export', { activeTabType: 'sql_editor', sqlResultPresent: true }, true],

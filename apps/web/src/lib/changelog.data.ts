@@ -2,12 +2,20 @@
 import type { ChangelogEntry, UpcomingEntry } from './changelog';
 
 export const UPCOMING: UpcomingEntry | null = {
-  "title": "Fixes",
+  "title": "Foreign key sheet",
   "summary": "",
   "changes": [
     {
       "kind": "new",
-      "text": "After an update, a What's New drawer lists what changed since the version you had, including every release you skipped. It shows once per update. To read every release's notes at any time, click the sparkle button next to Settings or choose Help → What's New."
+      "text": "Choosing a foreign key value opens a searchable sheet of the referenced table instead of a small dropdown. Type words to match names, emails or IDs, add filters such as `status = 'active'`, pick a row with the arrow keys and Enter, or set the value to NULL when the column allows it. Open it by double-clicking a foreign key cell, from the cell's right-click menu, or with ⌘J (Ctrl+J) on the selected cell or a foreign key field in Insert Row."
+    },
+    {
+      "kind": "new",
+      "text": "Clicking a grid cell selects it; press Enter to edit it."
+    },
+    {
+      "kind": "new",
+      "text": "After an update, a What's New sheet lists what changed since the version you had, including every release you skipped. It shows once per update. To read every release's notes at any time, click the sparkle button next to Settings or choose Help → What's New."
     },
     {
       "kind": "fixed",

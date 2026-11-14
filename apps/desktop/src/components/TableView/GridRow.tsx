@@ -33,6 +33,7 @@ export interface CellMenuTarget {
 /** Stable callbacks, so memoised rows only re-render when their own data changes. */
 export interface GridRowActions {
   toggleSelect: (rowPk: unknown) => void;
+  activateCell: (rowPk: unknown, column: string) => void;
   openCellMenu: (event: React.MouseEvent, target: CellMenuTarget) => void;
   openJson: (column: string, rowPk: unknown, value: unknown) => void;
   startEdit: (rowPk: unknown, column: string, value: string) => void;
@@ -65,6 +66,10 @@ interface GridRowProps {
   rowPending?: Record<string, PendingUpdate>;
   /** The cell being edited, when it belongs to this row. */
   editing: EditingCell | null;
+  /** Column of the grid's active cell, when it belongs to this row. */
+  activeColumn: string | null;
+  /** The referenced-row sheet is open for this row's active cell. */
+  isLinking: boolean;
   actions: GridRowActions;
 }
 
@@ -80,6 +85,8 @@ function GridRowImpl({
   isPendingDelete,
   rowPending,
   editing,
+  activeColumn,
+  isLinking,
   actions,
 }: GridRowProps) {
   const rowPkVal = row[pkCol];
@@ -90,7 +97,13 @@ function GridRowImpl({
     <tr
       style={ROW_STYLE}
       className={`hover:bg-accent/50 transition-colors ${
-        isPendingDelete ? "bg-rose-500/10" : isSelected ? "bg-primary/10" : ""
+        isPendingDelete
+          ? "bg-rose-500/10"
+          : isLinking
+            ? "bg-primary/15"
+            : isSelected
+              ? "bg-primary/10"
+              : ""
       }`}
     >
       {!readOnly && (
@@ -139,6 +152,9 @@ function GridRowImpl({
                 isPendingDelete,
               })
             }
+            onClick={() => {
+              if (!isEditing) actions.activateCell(rowPkVal, col.name);
+            }}
             onDoubleClick={() => {
               if (isPendingDelete) return;
               if (isJson) {
@@ -153,6 +169,12 @@ function GridRowImpl({
             }}
             className={`border-r border-border whitespace-nowrap font-mono relative transition-colors ${
               isEditing ? "p-0 overflow-hidden" : "px-3 py-0"
+            } ${
+              activeColumn === col.name && !isEditing
+                ? isLinking
+                  ? "outline-2 -outline-offset-2 outline-primary bg-primary/10"
+                  : "outline-1 -outline-offset-1 outline-primary/70"
+                : ""
             } ${
               isPendingDelete
                 ? "text-rose-300/80 line-through"
