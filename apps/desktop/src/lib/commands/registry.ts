@@ -151,6 +151,7 @@ export const COMMANDS: readonly Command[] = [
   { id: 'view.splitDown', label: 'Split Pane Down', enabled: tabActive },
   { id: 'view.toggleFullscreen', label: 'Full Screen', nonMacAccelerator: 'F11', enabled: () => true },
   { id: 'help.docs', label: 'Documentation', enabled: () => true },
+  { id: 'help.whatsNew', label: "What's New", enabled: () => true },
   { id: 'help.releaseNotes', label: 'Release Notes', enabled: () => true },
   { id: 'help.reportIssue', label: 'Report an Issue', enabled: () => true },
   { id: 'help.shortcuts', label: 'Keyboard Shortcuts…', enabled: () => true },

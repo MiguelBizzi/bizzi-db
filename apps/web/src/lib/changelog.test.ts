@@ -18,6 +18,11 @@ describe('changelog', () => {
     expect(readRepoFile('./changelog.data.ts')).toBe(generated);
   });
 
+  test("the desktop What's New copy is current with CHANGELOG.md", () => {
+    const generated = renderChangelogData(parseChangelog(readRepoFile('../../../../CHANGELOG.md')));
+    expect(readRepoFile('../../../desktop/src/lib/changelog.data.ts')).toBe(generated);
+  });
+
   test('newest entry is the version this repo ships', () => {
     expect(CHANGELOG[0]?.version).toBe(rootPackage.version);
   });

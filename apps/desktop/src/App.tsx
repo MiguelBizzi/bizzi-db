@@ -25,6 +25,16 @@ import { PendingChangesDrawer } from "./components/PendingChanges/PendingChanges
 import { ConnectionModal } from "./components/Modals/ConnectionModal";
 import { SettingsModal } from "./components/Modals/SettingsModal";
 import { ShortcutsModal } from "./components/Modals/ShortcutsModal";
+import { WhatsNewDrawer } from "./components/Modals/WhatsNewDrawer";
+import type { ChangelogEntry } from "./lib/changelog";
+import {
+  decideWhatsNew,
+  entriesForManualOpen,
+  releaseHistory,
+  loadLastSeenVersion,
+  releasesBetween,
+  saveLastSeenVersion,
+} from "./lib/whatsNew";
 import { ConnectionPicker } from "./components/ConnectionPicker";
 import { Toaster } from "./components/ui/Toaster";
 import {
@@ -209,6 +219,13 @@ import { AnimatePresence, MotionConfig } from "motion/react";
 import { useMotionPreference } from "./lib/motionPreference";
 
 const ROOT_PANE_ID = "pane_root";
+// Lets the workspace paint before the drawer slides in after an update.
+const WHATS_NEW_DELAY_MS = 700;
+
+// Loaded on demand so launch does not parse every release's notes.
+async function loadChangelog(): Promise<ChangelogEntry[]> {
+  return (await import("./lib/changelog.data")).CHANGELOG;
+}
 const EMPTY_WORKSPACE: WorkspaceState = {
   tabs: [],
   activeTabId: null,
@@ -283,6 +300,27 @@ export default function App() {
   >(null);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const closeShortcuts = useCallback(() => setIsShortcutsOpen(false), []);
+  const [whatsNew, setWhatsNew] = useState<{
+    isOpen: boolean;
+    entries: ChangelogEntry[];
+    since: string | null;
+  }>({ isOpen: false, entries: [], since: null });
+  const closeWhatsNew = useCallback(
+    () => setWhatsNew((current) => ({ ...current, isOpen: false })),
+    [],
+  );
+  const runningVersionRef = useRef<string | null>(null);
+  const openWhatsNew = useCallback(() => {
+    void loadChangelog()
+      .then((changelog) =>
+        setWhatsNew({
+          isOpen: true,
+          entries: releaseHistory(changelog, runningVersionRef.current),
+          since: null,
+        }),
+      )
+      .catch(() => undefined);
+  }, []);
   const shortcutGroups = useMemo(() => {
     const platform = currentPlatform();
     return cheatSheetRows(adaptMenuModel(buildMenuModel(), platform), platform);
@@ -635,6 +673,50 @@ export default function App() {
     }, UPDATE_CHECK_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [bootstrapped, checkForAppUpdate]);
+
+  useEffect(() => {
+    if (!bootstrapped) return;
+    let cancelled = false;
+    let timer: number | undefined;
+    const hasExistingWorkspace =
+      profiles.length > 0 || (workspaceRef.current?.tabs.length ?? 0) > 0;
+    void (async () => {
+      const current = await getVersion();
+      runningVersionRef.current = current;
+      const decision = decideWhatsNew({
+        lastSeen: loadLastSeenVersion(),
+        current,
+        hasExistingWorkspace,
+      });
+      if (!decision.show) {
+        if (decision.record) saveLastSeenVersion(decision.record);
+        return;
+      }
+      const changelog = await loadChangelog();
+      const entries = decision.since
+        ? releasesBetween(changelog, decision.since, current)
+        : entriesForManualOpen(changelog, current).filter(
+            (e) => e.version === current,
+          );
+      if (cancelled) return;
+      if (entries.length === 0) {
+        saveLastSeenVersion(decision.record);
+        return;
+      }
+      // Recorded only once shown, so a cancelled run (StrictMode remount) does not swallow it.
+      timer = window.setTimeout(() => {
+        saveLastSeenVersion(decision.record);
+        setWhatsNew({ isOpen: true, entries, since: decision.since });
+      }, WHATS_NEW_DELAY_MS);
+    })().catch(() => {
+      // getVersion throws outside Tauri; a missing changelog just means no drawer.
+    });
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+    // Once per launch, after the saved workspace has loaded.
+  }, [bootstrapped]);
 
   useEffect(() => {
     if (!bootstrapped || skipWorkspaceSave.current) return;
@@ -2277,6 +2359,7 @@ export default function App() {
           isCommandPaletteOpen,
           isSettingsOpen,
           isShortcutsOpen,
+          isWhatsNewOpen: whatsNew.isOpen,
           isConnectionModalOpen,
           isPendingChangesOpen,
           isActivityLogOpen,
@@ -2294,6 +2377,7 @@ export default function App() {
       isCommandPaletteOpen,
       isSettingsOpen,
       isShortcutsOpen,
+      whatsNew.isOpen,
       isConnectionModalOpen,
       isPendingChangesOpen,
       isActivityLogOpen,
@@ -2394,6 +2478,7 @@ export default function App() {
       "view.splitDown": () =>
         handleSplitPane(activePaneId, activeTabId, "column", "after"),
       "help.docs": () => openExternalLink("docs"),
+      "help.whatsNew": openWhatsNew,
       "help.releaseNotes": () => openExternalLink("releaseNotes"),
       "help.reportIssue": () => openExternalLink("reportIssue"),
       "help.shortcuts": () => setIsShortcutsOpen(true),
@@ -2425,6 +2510,7 @@ export default function App() {
           onOpenNewConnection={openNewConnection}
           onOpenMetrics={openMetrics}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          onOpenWhatsNew={openWhatsNew}
           onBackToConnections={() => {
             void handleBackToConnections();
           }}
@@ -2582,6 +2668,14 @@ export default function App() {
           isOpen={isShortcutsOpen}
           groups={shortcutGroups}
           onClose={closeShortcuts}
+        />
+
+        <WhatsNewDrawer
+          isOpen={whatsNew.isOpen}
+          entries={whatsNew.entries}
+          since={whatsNew.since}
+          onClose={closeWhatsNew}
+          onOpenReleaseNotes={() => openExternalLink("releaseNotes")}
         />
 
         <CommandPalette

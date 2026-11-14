@@ -6,6 +6,10 @@ export const UPCOMING: UpcomingEntry | null = {
   "summary": "",
   "changes": [
     {
+      "kind": "new",
+      "text": "After an update, a What's New drawer lists what changed since the version you had, including every release you skipped. It shows once per update. To read every release's notes at any time, click the sparkle button next to Settings or choose Help → What's New."
+    },
+    {
       "kind": "fixed",
       "text": "An app that is several versions behind now updates straight to the newest release. If a newer version ships while an earlier update is downloaded and waiting, Restart to update installs the newest one instead of stepping through each."
     },

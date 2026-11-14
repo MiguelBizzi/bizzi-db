@@ -28,6 +28,7 @@ expect "cargo audit config" "desktop=true web=false deps=true" .cargo/audit.toml
 expect "landing page" "$WEB" apps/web/src/App.tsx
 expect "landing page README" "$WEB" apps/web/README.md
 expect "changelog feeds the landing page" "$WEB" CHANGELOG.md
+expect "desktop changelog copy is checked by the landing page tests" "desktop=true web=true deps=false" apps/desktop/src/lib/changelog.data.ts
 
 expect "root package.json" "$ALL" package.json
 expect "bun.lock" "$ALL" bun.lock

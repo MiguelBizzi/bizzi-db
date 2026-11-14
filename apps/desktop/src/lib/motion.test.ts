@@ -11,6 +11,7 @@ import {
   fade,
   popIn,
   scaleIn,
+  sheetUp,
   slideInRight,
   slideUp,
   viewEnter,
@@ -41,7 +42,7 @@ describe('motion constants', () => {
 });
 
 describe('motion variants', () => {
-  const withExit = { fade, scaleIn, slideInRight, slideUp, collapse, popInTop: popIn('top') };
+  const withExit = { fade, scaleIn, slideInRight, slideUp, sheetUp, collapse, popInTop: popIn('top') };
 
   test.each(Object.entries(withExit))('%s defines initial, animate and exit', (_, v) => {
     expect(Object.keys(v).sort()).toEqual(['animate', 'exit', 'initial']);
@@ -56,6 +57,11 @@ describe('motion variants', () => {
       const d = (v.animate as { transition: { duration: number } }).transition.duration;
       expect(d).toBeLessThanOrEqual(0.24);
     }
+  });
+
+  test('sheetUp rises from below the window edge', () => {
+    expect(sheetUp.initial).toMatchObject({ y: '100%' });
+    expect(sheetUp.animate).toMatchObject({ y: 0 });
   });
 
   test('popIn offsets away from the trigger side', () => {

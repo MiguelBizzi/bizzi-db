@@ -26,6 +26,7 @@ function submenu(model: MenuNode[], id: string): Extract<MenuNode, { kind: 'subm
 
 const HELP_ITEMS: MenuNode[] = [
   { kind: 'item', commandId: 'help.docs' },
+  { kind: 'item', commandId: 'help.whatsNew' },
   { kind: 'item', commandId: 'help.releaseNotes' },
   { kind: 'item', commandId: 'help.reportIssue' },
   { kind: 'separator' },

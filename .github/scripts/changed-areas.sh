@@ -40,6 +40,8 @@ classify() {
     .githooks/*) mark desktop "$path" ;;
 
     Cargo.toml | Cargo.lock | .cargo/*) mark desktop "$path"; mark deps "$path" ;;
+    # The landing page tests also check this generated copy against CHANGELOG.md.
+    apps/desktop/src/lib/changelog.data.ts) mark desktop "$path"; mark web "$path" ;;
     apps/desktop/* | packages/* | crates/* | docker/* | docker-compose.yml | rust-toolchain.toml) mark desktop "$path" ;;
 
     # The landing page tests check that the generated changelog data is current with CHANGELOG.md.

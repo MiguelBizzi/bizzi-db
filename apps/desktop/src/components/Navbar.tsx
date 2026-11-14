@@ -12,6 +12,7 @@ import {
   Loader2,
   ListChecks,
   Settings,
+  Sparkles,
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { handleTitlebarMouseDown } from "../lib/windowDrag";
@@ -47,6 +48,7 @@ interface NavbarProps {
   onOpenNewConnection: () => void;
   onOpenMetrics: () => void;
   onOpenSettings: () => void;
+  onOpenWhatsNew: () => void;
   onBackToConnections?: () => void;
   /** Increment to open the connection switcher (menu bar "Switch Connection…"). */
   switcherRequest?: number;
@@ -140,6 +142,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenNewConnection,
   onOpenMetrics,
   onOpenSettings,
+  onOpenWhatsNew,
   onBackToConnections,
   switcherRequest = 0,
 }) => {
@@ -232,6 +235,15 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </>
       )}
+      <button
+        type="button"
+        onClick={onOpenWhatsNew}
+        title="What's New"
+        aria-label="What's New"
+        className="p-2 rounded-lg bg-muted hover:bg-accent border border-border text-foreground transition-colors"
+      >
+        <Sparkles className="w-4 h-4 text-muted-foreground" />
+      </button>
       <button
         type="button"
         onClick={onOpenSettings}

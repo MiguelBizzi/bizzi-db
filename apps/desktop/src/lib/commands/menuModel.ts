@@ -163,6 +163,7 @@ export function buildMenuModel(): MenuNode[] {
       role: 'help',
       items: [
         item('help.docs'),
+        item('help.whatsNew'),
         item('help.releaseNotes'),
         item('help.reportIssue'),
         separator(),
