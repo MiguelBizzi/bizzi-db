@@ -1,6 +1,17 @@
 import type { DatabaseDialect } from '@db/shared';
+import type { DocumentEngineMeta, EngineMeta } from './engines';
+import { MONGODB } from './mongo';
 import { MYSQL_OBJECTS, POSTGRES_OBJECTS, SQLSERVER_OBJECTS, type ObjectCapabilities } from './objects';
 
+export type {
+  ConnectionParamSpec,
+  DocumentCapabilities,
+  DocumentEngineMeta,
+  EngineMeta,
+  EngineNouns,
+  Paradigm,
+} from './engines';
+export { MONGODB } from './mongo';
 export {
   columnTypesFor,
   type ColumnTypeDef,
@@ -50,16 +61,10 @@ export interface EngineCapabilities {
   identityColumns: boolean;
 }
 
-export interface DialectMeta {
-  id: DatabaseDialect;
-  label: string;
-  defaultPort: number;
-  defaultUser: string;
-  defaultDatabase: string;
+export interface DialectMeta extends EngineMeta {
+  paradigm: 'relational';
   /** Schema suggested when creating an object. */
   defaultSchema: string;
-  defaultSsl: boolean;
-  uriSchemes: string[];
   formatterLanguage: 'postgresql' | 'mysql' | 'transactsql';
   /** `@codemirror/lang-sql` dialect. */
   editorDialect: 'PostgreSQL' | 'MySQL' | 'MSSQL';
@@ -153,9 +158,22 @@ const MYSQL_PRESETS = [
   { label: 'FALSE', sql: 'FALSE' },
 ];
 
+const RELATIONAL_NOUNS = {
+  namespace: 'Schema',
+  container: 'Table',
+  containers: 'Tables',
+  record: 'Row',
+  records: 'Rows',
+};
+
 export const DIALECTS: Record<'PostgreSQL' | 'MySQL' | 'SQLServer', DialectMeta> = {
   PostgreSQL: {
     id: 'PostgreSQL',
+    paradigm: 'relational',
+    supported: true,
+    databaseOptional: false,
+    connectionParams: [],
+    nouns: RELATIONAL_NOUNS,
     label: 'PostgreSQL',
     defaultPort: 5432,
     defaultUser: 'postgres',
@@ -203,6 +221,11 @@ export const DIALECTS: Record<'PostgreSQL' | 'MySQL' | 'SQLServer', DialectMeta>
   },
   MySQL: {
     id: 'MySQL',
+    paradigm: 'relational',
+    supported: true,
+    databaseOptional: true,
+    connectionParams: [],
+    nouns: RELATIONAL_NOUNS,
     label: 'MySQL',
     defaultPort: 3306,
     defaultUser: 'root',
@@ -251,6 +274,11 @@ export const DIALECTS: Record<'PostgreSQL' | 'MySQL' | 'SQLServer', DialectMeta>
   },
   SQLServer: {
     id: 'SQLServer',
+    paradigm: 'relational',
+    supported: true,
+    databaseOptional: false,
+    connectionParams: [],
+    nouns: RELATIONAL_NOUNS,
     label: 'SQL Server',
     defaultPort: 1433,
     defaultUser: 'sa',
@@ -333,4 +361,28 @@ export function dialectMeta(id: DatabaseDialect): DialectModule | undefined {
 
 export function dialectModule(id: DatabaseDialect): DialectModule | undefined {
   return dialectMeta(id);
+}
+
+export type EngineModule = DialectMeta | DocumentEngineMeta;
+
+export const ENGINES: Record<'PostgreSQL' | 'MySQL' | 'SQLServer' | 'MongoDB', EngineModule> = {
+  ...DIALECTS,
+  MongoDB: MONGODB,
+};
+
+export const SUPPORTED_ENGINES: EngineModule[] = Object.values(ENGINES).filter((e) => e.supported);
+
+const ENGINE_BY_ID: Partial<Record<DatabaseDialect, EngineModule>> = ENGINES;
+
+export function engineMeta(id: DatabaseDialect): EngineModule | undefined {
+  return ENGINE_BY_ID[id];
+}
+
+export function isDocumentEngine(m: EngineModule | undefined): m is DocumentEngineMeta {
+  return m?.paradigm === 'document';
+}
+
+export function documentEngine(id: DatabaseDialect): DocumentEngineMeta | undefined {
+  const meta = engineMeta(id);
+  return isDocumentEngine(meta) ? meta : undefined;
 }

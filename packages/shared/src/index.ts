@@ -2,6 +2,7 @@ export type DatabaseDialect =
   | 'PostgreSQL'
   | 'MySQL'
   | 'SQLServer'
+  | 'MongoDB'
   | 'SQLite'
   | 'ClickHouse'
   | 'DuckDB';
