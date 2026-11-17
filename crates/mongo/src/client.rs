@@ -38,15 +38,32 @@ pub async fn resolve_options(
     if tunnel_port.is_some() || !is_srv(cfg) {
         return client_options(cfg, tunnel_port);
     }
-    let host = cfg.host.trim();
-    if host.is_empty() || host.contains(['/', '@', '?', ':', ',', '#']) {
-        return Err("SRV needs a host name without a port, such as cluster0.example.net".into());
-    }
-    let mut opts = ClientOptions::parse(format!("mongodb+srv://{host}/"))
+    let mut opts = ClientOptions::parse(srv_uri(cfg)?)
         .await
         .map_err(|e| e.to_string())?;
     apply_profile(&mut opts, cfg, false)?;
     Ok(opts)
+}
+
+/// The driver copies a TXT record's authSource only onto a credential parsed
+/// from the URI, so the username goes in; the password never does.
+fn srv_uri(cfg: &ConnectConfig) -> Result<String, String> {
+    let host = cfg.host.trim();
+    if host.is_empty() || host.contains(['/', '@', '?', ':', ',', '#']) {
+        return Err("SRV needs a host name without a port, such as cluster0.example.net".into());
+    }
+    if cfg.user.is_empty() {
+        return Ok(format!("mongodb+srv://{host}/"));
+    }
+    let mut user = String::new();
+    for b in cfg.user.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
+            user.push(b as char);
+        } else {
+            user.push_str(&format!("%{b:02X}"));
+        }
+    }
+    Ok(format!("mongodb+srv://{user}@{host}/"))
 }
 
 fn param<'a>(cfg: &'a ConnectConfig, key: &str) -> Option<&'a str> {
@@ -103,7 +120,8 @@ fn apply_profile(
         let mechanism = param(cfg, "authMechanism")
             .map(|m| m.parse::<AuthMechanism>().map_err(|e| e.to_string()))
             .transpose()?;
-        // An SRV TXT record may name the auth database; it beats the profile database.
+        // Precedence: authSource param, then a source already on the options
+        // (the SRV TXT record's, via `srv_uri`), then the database, then admin.
         let source = param(cfg, "authSource")
             .map(str::to_string)
             .or_else(|| opts.credential.take().and_then(|c| c.source))
@@ -260,6 +278,49 @@ mod tests {
         assert_eq!(opts.connect_timeout, Some(Duration::from_secs(10)));
         assert_eq!(opts.direct_connection, None);
         assert!(client_options(&cfg(&[("srv", "true")]), None).is_err());
+    }
+
+    #[test]
+    fn auth_source_precedence_param_txt_database_admin() {
+        let mut c = cfg(&[]);
+        c.user = "app".into();
+        c.database = "shop".into();
+        // A credential already carrying a source stands in for what the driver
+        // copies from the SRV TXT record.
+        let resolved = || {
+            let mut opts = ClientOptions::builder().build();
+            opts.credential = Some(Credential::builder().source("admin".to_string()).build());
+            opts
+        };
+        let source = |c: &ConnectConfig, mut opts: ClientOptions| {
+            apply_profile(&mut opts, c, false).unwrap();
+            opts.credential.unwrap().source.unwrap()
+        };
+        assert_eq!(source(&c, resolved()), "admin");
+        assert_eq!(source(&c, ClientOptions::builder().build()), "shop");
+        c.params = cfg(&[("authSource", "users")]).params;
+        assert_eq!(source(&c, resolved()), "users");
+    }
+
+    #[test]
+    fn srv_uri_has_username_but_no_password() {
+        let mut c = cfg(&[("srv", "true")]);
+        c.host = "cluster0.example.net".into();
+        c.password = "hunter2-very-secret".into();
+        assert_eq!(srv_uri(&c).unwrap(), "mongodb+srv://cluster0.example.net/");
+        c.user = "a b@c:d%é".into();
+        let uri = srv_uri(&c).unwrap();
+        assert_eq!(
+            uri,
+            "mongodb+srv://a%20b%40c%3Ad%25%C3%A9@cluster0.example.net/"
+        );
+        assert!(!uri.contains("hunter2"));
+        let parsed = mongodb::options::ConnectionString::parse(uri.replace("+srv", "")).unwrap();
+        let cred = parsed.credential.unwrap();
+        assert_eq!(cred.username.as_deref(), Some("a b@c:d%é"));
+        assert_eq!(cred.password, None);
+        c.host = "cluster0.example.net:27017".into();
+        assert!(srv_uri(&c).is_err());
     }
 
     #[test]
