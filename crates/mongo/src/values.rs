@@ -3,26 +3,7 @@ use std::fmt::Write as _;
 use db_core::DocValue;
 use mongodb::bson::{Bson, Document, JavaScriptCodeWithScope};
 
-use crate::json::{self, Json};
-
-const WRAPPER_KEYS: &[&str] = &[
-    "$oid",
-    "$symbol",
-    "$regularExpression",
-    "$numberInt",
-    "$numberLong",
-    "$numberDouble",
-    "$numberDecimal",
-    "$binary",
-    "$uuid",
-    "$code",
-    "$timestamp",
-    "$date",
-    "$minKey",
-    "$maxKey",
-    "$dbPointer",
-    "$undefined",
-];
+use crate::shell;
 
 pub fn to_doc_value(b: &Bson) -> DocValue {
     match b {
@@ -120,97 +101,7 @@ pub fn parse_editable(text: &str) -> Result<Document, String> {
 }
 
 pub fn parse_editable_value(text: &str) -> Result<Bson, String> {
-    to_bson(json::parse(text)?)
-}
-
-fn to_bson(value: Json) -> Result<Bson, String> {
-    Ok(match value {
-        Json::Null => Bson::Null,
-        Json::Bool(v) => Bson::Boolean(v),
-        Json::Number(text) => number(&text)?,
-        Json::String(v) => Bson::String(v),
-        Json::Array(items) => {
-            Bson::Array(items.into_iter().map(to_bson).collect::<Result<_, _>>()?)
-        }
-        Json::Object(entries) => object(entries)?,
-    })
-}
-
-fn number(text: &str) -> Result<Bson, String> {
-    if text.contains(['.', 'e', 'E']) {
-        let v: f64 = text
-            .parse()
-            .map_err(|_| format!("{text} is not a valid number"))?;
-        if !v.is_finite() {
-            return Err(format!(
-                "{text} is out of range for a double; use {{\"$numberDouble\": \"Infinity\"}}"
-            ));
-        }
-        return Ok(Bson::Double(v));
-    }
-    let v: i64 = text.parse().map_err(|_| {
-        format!(
-            "{text} is out of range for a 64-bit integer; use {{\"$numberDecimal\": \"{text}\"}}"
-        )
-    })?;
-    Ok(match i32::try_from(v) {
-        Ok(small) => Bson::Int32(small),
-        Err(_) => Bson::Int64(v),
-    })
-}
-
-fn object(entries: Vec<(String, Json)>) -> Result<Bson, String> {
-    let keys: Vec<&str> = entries.iter().map(|(k, _)| k.as_str()).collect();
-    if keys == ["$code", "$scope"] {
-        let mut it = entries.into_iter();
-        let (_, code) = it.next().expect("two entries");
-        let (_, scope) = it.next().expect("two entries");
-        let Json::String(code) = code else {
-            return Err("\"$code\" must be a string".into());
-        };
-        let Bson::Document(scope) = to_bson(scope)? else {
-            return Err("\"$scope\" must be a document".into());
-        };
-        return Ok(Bson::JavaScriptCodeWithScope(JavaScriptCodeWithScope {
-            code,
-            scope,
-        }));
-    }
-    if let [key] = keys.as_slice() {
-        if WRAPPER_KEYS.contains(key) {
-            let key = key.to_string();
-            // Wrapper payloads are small fixed shapes, so serde_json's sorted maps lose nothing.
-            let value = to_serde(Json::Object(entries))?;
-            return Bson::try_from(value).map_err(|e| format!("{key}: {e}"));
-        }
-    }
-    let mut doc = Document::new();
-    for (k, v) in entries {
-        doc.insert(k, to_bson(v)?);
-    }
-    Ok(Bson::Document(doc))
-}
-
-fn to_serde(value: Json) -> Result<serde_json::Value, String> {
-    use serde_json::Value;
-    Ok(match value {
-        Json::Null => Value::Null,
-        Json::Bool(v) => Value::Bool(v),
-        Json::Number(text) => Value::Number(
-            text.parse()
-                .map_err(|_| format!("{text} is not a valid number"))?,
-        ),
-        Json::String(v) => Value::String(v),
-        Json::Array(items) => {
-            Value::Array(items.into_iter().map(to_serde).collect::<Result<_, _>>()?)
-        }
-        Json::Object(entries) => Value::Object(
-            entries
-                .into_iter()
-                .map(|(k, v)| Ok((k, to_serde(v)?)))
-                .collect::<Result<_, String>>()?,
-        ),
-    })
+    shell::parse_value(text).map_err(|e| e.describe(text))
 }
 
 fn write_pretty(out: &mut String, v: &DocValue, depth: usize) {
@@ -469,21 +360,30 @@ mod tests {
             "",
             "{",
             r#"{"a" 1}"#,
-            r#"{"a": 1,}"#,
-            "[1,]",
             "01",
             "1.",
             ".5",
             "+1",
-            "'a'",
             r#""\x""#,
             "\"a\nb\"",
             r#""\ud800""#,
             "nul",
-            "{a: 1}",
+            "{a: b}",
         ] {
             assert!(parse_editable_value(bad).is_err(), "{bad:?}");
         }
+    }
+
+    #[test]
+    fn parse_accepts_shell_syntax() {
+        assert_eq!(
+            parse_editable("{a: 'x', b: [1,], c: NumberLong(2),} // note").unwrap(),
+            mongodb::bson::doc! { "a": "x", "b": [1], "c": 2_i64 }
+        );
+        assert_eq!(
+            parse_editable("{\n  a: nope\n}").unwrap_err(),
+            "nope is not supported; use a literal value or a helper such as ObjectId(\"…\") at line 2, column 6"
+        );
     }
 
     #[test]
