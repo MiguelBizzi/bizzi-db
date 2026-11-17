@@ -13,10 +13,11 @@ use db_core::{
     resolve_connection_password, schema_cache_is_fresh, ssh_secret_key, ssh_tunnel_from_profile,
     ssh_tunnel_from_save, validate_folder_name, validate_save_input, ActivityLogItem, Adapter,
     AppSettings, ConnectionFolder, ConnectionProfile, ConnectionStatus, DatabaseDialect,
-    DatabaseSchema, ExecuteQueryRequest, PostgresSql, QueryExecuteResponse, QueryExecutionResult,
-    QueryPageRequest, RoutineSource, RoutineSourceRequest, SaveConnectionInput, SaveFolderInput,
-    SavedQuery, SchemaSyncRequest, SchemaSyncResponse, Session, SqlDialect, SqlRange,
-    SshAuthMethod, TablePreviewRequest, TestConnectionResult, WorkspaceState,
+    DatabaseSchema, DocumentAdapter, DocumentSession, ExecuteQueryRequest, PostgresSql,
+    QueryExecuteResponse, QueryExecutionResult, QueryPageRequest, RoutineSource,
+    RoutineSourceRequest, SaveConnectionInput, SaveFolderInput, SavedQuery, SchemaSyncRequest,
+    SchemaSyncResponse, Session, SqlDialect, SqlRange, SshAuthMethod, TablePreviewRequest,
+    TestConnectionResult, WorkspaceState,
 };
 use db_mssql::MssqlAdapter;
 use db_mssql::TSqlSql;
@@ -36,7 +37,7 @@ type AppSecrets = DualSecretStore<KeychainSecrets, FileSecrets>;
 pub struct AppState {
     storage: Mutex<Storage>,
     secrets: AppSecrets,
-    sessions: tokio::sync::Mutex<HashMap<String, Arc<dyn Session>>>,
+    sessions: tokio::sync::Mutex<HashMap<String, LiveSession>>,
     tunnels: tokio::sync::Mutex<HashMap<String, SshTunnel>>,
 }
 
@@ -51,10 +52,61 @@ static POSTGRES_SQL: PostgresSql = PostgresSql;
 static MYSQL_SQL: MySqlSql = MySqlSql;
 static TSQL_SQL: TSqlSql = TSqlSql;
 
+enum EngineKind {
+    Relational {
+        adapter: &'static dyn Adapter,
+        sql: &'static dyn SqlDialect,
+    },
+    // No document engine is registered until its adapter lands.
+    #[allow(dead_code)]
+    Document {
+        adapter: &'static dyn DocumentAdapter,
+    },
+}
+
 struct RegisteredEngine {
     dialect: DatabaseDialect,
-    adapter: &'static dyn Adapter,
-    sql: &'static dyn SqlDialect,
+    kind: EngineKind,
+}
+
+#[derive(Clone)]
+enum LiveSession {
+    Relational(Arc<dyn Session>),
+    Document(Arc<dyn DocumentSession>),
+}
+
+impl LiveSession {
+    async fn introspect(&self) -> Result<DatabaseSchema, db_core::AdapterError> {
+        match self {
+            Self::Relational(session) => session.introspect().await,
+            Self::Document(session) => session.introspect().await,
+        }
+    }
+
+    async fn schema_fingerprint(&self) -> Result<String, db_core::AdapterError> {
+        match self {
+            Self::Relational(session) => session.schema_fingerprint().await,
+            Self::Document(session) => session.schema_fingerprint().await,
+        }
+    }
+}
+
+fn relational(live: LiveSession) -> Result<Arc<dyn Session>, String> {
+    match live {
+        LiveSession::Relational(session) => Ok(session),
+        LiveSession::Document(_) => Err(
+            "This connection is a document database; SQL commands are not available".to_string(),
+        ),
+    }
+}
+
+fn document(live: LiveSession) -> Result<Arc<dyn DocumentSession>, String> {
+    match live {
+        LiveSession::Document(session) => Ok(session),
+        LiveSession::Relational(_) => Err(
+            "This connection is a SQL database; document commands are not available".to_string(),
+        ),
+    }
 }
 
 /// Every supported engine is registered here. `adapter_for` and `sql_dialect_for`
@@ -62,18 +114,24 @@ struct RegisteredEngine {
 static REGISTERED_ENGINES: &[RegisteredEngine] = &[
     RegisteredEngine {
         dialect: DatabaseDialect::PostgreSQL,
-        adapter: &POSTGRES_ADAPTER,
-        sql: &POSTGRES_SQL,
+        kind: EngineKind::Relational {
+            adapter: &POSTGRES_ADAPTER,
+            sql: &POSTGRES_SQL,
+        },
     },
     RegisteredEngine {
         dialect: DatabaseDialect::MySQL,
-        adapter: &MYSQL_ADAPTER,
-        sql: &MYSQL_SQL,
+        kind: EngineKind::Relational {
+            adapter: &MYSQL_ADAPTER,
+            sql: &MYSQL_SQL,
+        },
     },
     RegisteredEngine {
         dialect: DatabaseDialect::SQLServer,
-        adapter: &MSSQL_ADAPTER,
-        sql: &TSQL_SQL,
+        kind: EngineKind::Relational {
+            adapter: &MSSQL_ADAPTER,
+            sql: &TSQL_SQL,
+        },
     },
 ];
 
@@ -81,20 +139,45 @@ fn registered_engines() -> &'static [RegisteredEngine] {
     REGISTERED_ENGINES
 }
 
-fn adapter_for(dialect: DatabaseDialect) -> Result<&'static dyn Adapter, String> {
+fn engine_for(dialect: DatabaseDialect) -> Result<&'static EngineKind, String> {
     registered_engines()
         .iter()
         .find(|engine| engine.dialect == dialect)
-        .map(|engine| engine.adapter)
+        .map(|engine| &engine.kind)
         .ok_or_else(|| format!("{} is not supported", dialect_label(dialect)))
 }
 
+fn not_sql(dialect: DatabaseDialect) -> String {
+    format!(
+        "{} is a document database; SQL is not available on this connection",
+        dialect_label(dialect)
+    )
+}
+
+#[allow(dead_code)]
+fn adapter_for(dialect: DatabaseDialect) -> Result<&'static dyn Adapter, String> {
+    match engine_for(dialect)? {
+        EngineKind::Relational { adapter, .. } => Ok(*adapter),
+        EngineKind::Document { .. } => Err(not_sql(dialect)),
+    }
+}
+
 fn sql_dialect_for(dialect: DatabaseDialect) -> Result<&'static dyn SqlDialect, String> {
-    registered_engines()
-        .iter()
-        .find(|engine| engine.dialect == dialect)
-        .map(|engine| engine.sql)
-        .ok_or_else(|| format!("{} is not supported", dialect_label(dialect)))
+    match engine_for(dialect)? {
+        EngineKind::Relational { sql, .. } => Ok(*sql),
+        EngineKind::Document { .. } => Err(not_sql(dialect)),
+    }
+}
+
+#[allow(dead_code)]
+fn document_adapter_for(dialect: DatabaseDialect) -> Result<&'static dyn DocumentAdapter, String> {
+    match engine_for(dialect)? {
+        EngineKind::Document { adapter } => Ok(*adapter),
+        EngineKind::Relational { .. } => Err(format!(
+            "{} is a SQL database; document commands are not available",
+            dialect_label(dialect)
+        )),
+    }
 }
 
 fn keychain_enabled(state: &AppState) -> Result<bool, String> {
@@ -310,13 +393,16 @@ async fn connections_test(
         None => None,
     };
     let profile = profile_from_input(input);
-    let adapter = adapter_for(profile.dialect)?;
     let cfg = connect_config_from_profile(
         &profile,
         password,
         _tunnel.as_ref().map(SshTunnel::local_port),
     );
-    match adapter.test_connection(&cfg).await {
+    let probe = match engine_for(profile.dialect)? {
+        EngineKind::Relational { adapter, .. } => adapter.test_connection(&cfg).await,
+        EngineKind::Document { adapter } => adapter.test_connection(&cfg).await,
+    };
+    match probe {
         Ok((latency_ms, version)) => Ok(TestConnectionResult {
             ok: true,
             latency_ms,
@@ -360,20 +446,20 @@ async fn connections_connect(
         ),
         None => None,
     };
-    let adapter = adapter_for(profile.dialect)?;
-    let session = adapter
-        .connect(&connect_config_from_profile(
-            &profile,
-            password,
-            tunnel.as_ref().map(SshTunnel::local_port),
-        ))
-        .await
-        .map_err(map_err)?;
-    state
-        .sessions
-        .lock()
-        .await
-        .insert(id.clone(), Arc::from(session));
+    let cfg = connect_config_from_profile(
+        &profile,
+        password,
+        tunnel.as_ref().map(SshTunnel::local_port),
+    );
+    let session = match engine_for(profile.dialect)? {
+        EngineKind::Relational { adapter, .. } => {
+            LiveSession::Relational(Arc::from(adapter.connect(&cfg).await.map_err(map_err)?))
+        }
+        EngineKind::Document { adapter } => {
+            LiveSession::Document(Arc::from(adapter.connect(&cfg).await.map_err(map_err)?))
+        }
+    };
+    state.sessions.lock().await.insert(id.clone(), session);
     if let Some(tunnel) = tunnel {
         state.tunnels.lock().await.insert(id, tunnel);
     }
@@ -387,7 +473,7 @@ async fn connections_disconnect(state: State<'_, AppState>, id: String) -> Resul
     Ok(())
 }
 
-async fn session_for(state: &AppState, id: &str) -> Result<Arc<dyn Session>, String> {
+async fn live_session_for(state: &AppState, id: &str) -> Result<LiveSession, String> {
     state
         .sessions
         .lock()
@@ -395,6 +481,18 @@ async fn session_for(state: &AppState, id: &str) -> Result<Arc<dyn Session>, Str
         .get(id)
         .cloned()
         .ok_or_else(|| "Not connected".to_string())
+}
+
+async fn session_for(state: &AppState, id: &str) -> Result<Arc<dyn Session>, String> {
+    relational(live_session_for(state, id).await?)
+}
+
+#[allow(dead_code)]
+async fn document_session_for(
+    state: &AppState,
+    id: &str,
+) -> Result<Arc<dyn DocumentSession>, String> {
+    document(live_session_for(state, id).await?)
 }
 
 #[tauri::command]
@@ -409,7 +507,7 @@ async fn schema_introspect(
         .get_connection(&connection_id)
         .map_err(map_err)?
         .ok_or_else(|| "Connection not found".to_string())?;
-    let session = session_for(&state, &connection_id).await?;
+    let session = live_session_for(&state, &connection_id).await?;
     let schema = session.introspect().await.map_err(map_err)?;
     Ok(overlay_schema(schema, &profile))
 }
@@ -438,7 +536,7 @@ async fn schema_sync(
         .get_connection(&input.connection_id)
         .map_err(map_err)?
         .ok_or_else(|| "Connection not found".to_string())?;
-    let session = session_for(&state, &input.connection_id).await?;
+    let session = live_session_for(&state, &input.connection_id).await?;
     let fingerprint = session.schema_fingerprint().await.map_err(map_err)?;
     if schema_cache_is_fresh(input.force, input.last_fingerprint.as_deref(), &fingerprint) {
         return Ok(SchemaSyncResponse {
@@ -891,6 +989,7 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use db_core::{paradigm_of, DocumentSession, Paradigm};
 
     fn failing_probe() -> Result<(), StorageError> {
         Err(StorageError::msg("x"))
@@ -919,13 +1018,171 @@ mod tests {
                 .count();
             if spec.supported {
                 assert_eq!(found, 1, "{}", spec.label);
-                assert!(adapter_for(spec.dialect).is_ok(), "{}", spec.label);
-                assert!(sql_dialect_for(spec.dialect).is_ok(), "{}", spec.label);
+                match paradigm_of(spec.dialect) {
+                    Paradigm::Relational => {
+                        assert!(adapter_for(spec.dialect).is_ok(), "{}", spec.label);
+                        assert!(sql_dialect_for(spec.dialect).is_ok(), "{}", spec.label);
+                        assert!(
+                            document_adapter_for(spec.dialect).is_err(),
+                            "{}",
+                            spec.label
+                        );
+                    }
+                    Paradigm::Document => {
+                        assert!(document_adapter_for(spec.dialect).is_ok(), "{}", spec.label);
+                        assert!(adapter_for(spec.dialect).is_err(), "{}", spec.label);
+                        assert!(sql_dialect_for(spec.dialect).is_err(), "{}", spec.label);
+                    }
+                }
             } else {
                 assert_eq!(found, 0, "{}", spec.label);
                 assert!(sql_dialect_for(spec.dialect).is_err(), "{}", spec.label);
+                assert!(
+                    document_adapter_for(spec.dialect).is_err(),
+                    "{}",
+                    spec.label
+                );
             }
         }
+    }
+
+    struct StubSql;
+
+    #[async_trait::async_trait]
+    impl Session for StubSql {
+        async fn introspect(&self) -> Result<DatabaseSchema, db_core::AdapterError> {
+            unimplemented!()
+        }
+        async fn schema_fingerprint(&self) -> Result<String, db_core::AdapterError> {
+            unimplemented!()
+        }
+        async fn execute(
+            &self,
+            _sql: &str,
+            _page_size: Option<i64>,
+        ) -> Result<Vec<QueryExecutionResult>, db_core::AdapterError> {
+            unimplemented!()
+        }
+        async fn query_page(
+            &self,
+            _sql: &str,
+            _limit: i64,
+            _offset: i64,
+            _with_count: bool,
+        ) -> Result<QueryExecutionResult, db_core::AdapterError> {
+            unimplemented!()
+        }
+        async fn preview(
+            &self,
+            _schema: &str,
+            _table: &str,
+            _limit: i64,
+            _offset: i64,
+            _filters: &[db_core::TableFilter],
+        ) -> Result<QueryExecutionResult, db_core::AdapterError> {
+            unimplemented!()
+        }
+    }
+
+    struct StubDoc;
+
+    #[async_trait::async_trait]
+    impl DocumentSession for StubDoc {
+        async fn introspect(&self) -> Result<DatabaseSchema, db_core::AdapterError> {
+            unimplemented!()
+        }
+        async fn schema_fingerprint(&self) -> Result<String, db_core::AdapterError> {
+            unimplemented!()
+        }
+        async fn find(
+            &self,
+            _req: &db_core::FindRequest,
+        ) -> Result<db_core::DocumentPage, db_core::AdapterError> {
+            unimplemented!()
+        }
+        async fn sample_fields(
+            &self,
+            _ns: &db_core::Namespace,
+            _size: u32,
+        ) -> Result<db_core::FieldSample, db_core::AdapterError> {
+            unimplemented!()
+        }
+        async fn run(
+            &self,
+            _database: &str,
+            _text: &str,
+            _page_size: i64,
+        ) -> Result<Vec<db_core::DocumentCommandResult>, db_core::AdapterError> {
+            unimplemented!()
+        }
+        async fn insert(
+            &self,
+            _ns: &db_core::Namespace,
+            _document: &str,
+        ) -> Result<db_core::DocValue, db_core::AdapterError> {
+            unimplemented!()
+        }
+        async fn replace(
+            &self,
+            _ns: &db_core::Namespace,
+            _original: &str,
+            _replacement: &str,
+        ) -> Result<(), db_core::AdapterError> {
+            unimplemented!()
+        }
+        async fn delete(
+            &self,
+            _ns: &db_core::Namespace,
+            _ids: &[String],
+        ) -> Result<u64, db_core::AdapterError> {
+            unimplemented!()
+        }
+        async fn create_collection(
+            &self,
+            _ns: &db_core::Namespace,
+        ) -> Result<(), db_core::AdapterError> {
+            unimplemented!()
+        }
+        async fn drop_collection(
+            &self,
+            _ns: &db_core::Namespace,
+        ) -> Result<(), db_core::AdapterError> {
+            unimplemented!()
+        }
+        async fn create_index(
+            &self,
+            _ns: &db_core::Namespace,
+            _draft: &db_core::IndexDraft,
+        ) -> Result<String, db_core::AdapterError> {
+            unimplemented!()
+        }
+        async fn drop_index(
+            &self,
+            _ns: &db_core::Namespace,
+            _name: &str,
+        ) -> Result<(), db_core::AdapterError> {
+            unimplemented!()
+        }
+        async fn export(
+            &self,
+            _req: &db_core::DocumentExportRequest,
+        ) -> Result<Vec<u8>, db_core::AdapterError> {
+            unimplemented!()
+        }
+    }
+
+    #[test]
+    fn relational_commands_refuse_a_document_session() {
+        let err = relational(LiveSession::Document(Arc::new(StubDoc))).err();
+        assert!(err.unwrap().contains("document database"));
+        assert!(relational(LiveSession::Relational(Arc::new(StubSql))).is_ok());
+    }
+
+    #[test]
+    fn document_commands_refuse_a_sql_session() {
+        let err = document(LiveSession::Relational(Arc::new(StubSql))).err();
+        assert!(err.unwrap().contains("SQL database"));
+        assert!(document(LiveSession::Document(Arc::new(StubDoc))).is_ok());
     }
 
     #[test]

@@ -998,6 +998,7 @@ dependencies = [
 name = "db-desktop"
 version = "0.1.29"
 dependencies = [
+ "async-trait",
  "chrono",
  "db-core",
  "db-mssql",
