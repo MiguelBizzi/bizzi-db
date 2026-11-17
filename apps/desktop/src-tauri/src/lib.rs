@@ -9,11 +9,11 @@ use std::sync::{Arc, Mutex};
 
 use db_core::{
     connect_config_from_profile, dialect_label, history_item_from_result,
-    new_connection_requires_password, overlay_schema, profile_from_save_input,
+    new_connection_requires_password, overlay_schema, paradigm_of, profile_from_save_input,
     resolve_connection_password, schema_cache_is_fresh, ssh_secret_key, ssh_tunnel_from_profile,
     ssh_tunnel_from_save, validate_folder_name, validate_save_input, ActivityLogItem, Adapter,
     AppSettings, ConnectionFolder, ConnectionProfile, ConnectionStatus, DatabaseDialect,
-    DatabaseSchema, DocumentAdapter, DocumentSession, ExecuteQueryRequest, PostgresSql,
+    DatabaseSchema, DocumentAdapter, DocumentSession, ExecuteQueryRequest, Paradigm, PostgresSql,
     QueryExecuteResponse, QueryExecutionResult, QueryPageRequest, RoutineSource,
     RoutineSourceRequest, SaveConnectionInput, SaveFolderInput, SavedQuery, SchemaSyncRequest,
     SchemaSyncResponse, Session, SqlDialect, SqlRange, SshAuthMethod, TablePreviewRequest,
@@ -57,7 +57,7 @@ enum EngineKind {
         adapter: &'static dyn Adapter,
         sql: &'static dyn SqlDialect,
     },
-    // No document engine is registered until its adapter lands.
+    // Constructed once the MongoDB adapter registers.
     #[allow(dead_code)]
     Document {
         adapter: &'static dyn DocumentAdapter,
@@ -109,8 +109,9 @@ fn document(live: LiveSession) -> Result<Arc<dyn DocumentSession>, String> {
     }
 }
 
-/// Every supported engine is registered here. `adapter_for` and `sql_dialect_for`
-/// both read this list, so an engine cannot connect with another engine's splitter.
+/// Every supported engine is registered here. `adapter_for`, `sql_dialect_for` and
+/// `document_adapter_for` all read this list, so an engine cannot connect with another
+/// engine's splitter.
 static REGISTERED_ENGINES: &[RegisteredEngine] = &[
     RegisteredEngine {
         dialect: DatabaseDialect::PostgreSQL,
@@ -154,7 +155,6 @@ fn not_sql(dialect: DatabaseDialect) -> String {
     )
 }
 
-#[allow(dead_code)]
 fn adapter_for(dialect: DatabaseDialect) -> Result<&'static dyn Adapter, String> {
     match engine_for(dialect)? {
         EngineKind::Relational { adapter, .. } => Ok(*adapter),
@@ -169,7 +169,6 @@ fn sql_dialect_for(dialect: DatabaseDialect) -> Result<&'static dyn SqlDialect, 
     }
 }
 
-#[allow(dead_code)]
 fn document_adapter_for(dialect: DatabaseDialect) -> Result<&'static dyn DocumentAdapter, String> {
     match engine_for(dialect)? {
         EngineKind::Document { adapter } => Ok(*adapter),
@@ -398,9 +397,13 @@ async fn connections_test(
         password,
         _tunnel.as_ref().map(SshTunnel::local_port),
     );
-    let probe = match engine_for(profile.dialect)? {
-        EngineKind::Relational { adapter, .. } => adapter.test_connection(&cfg).await,
-        EngineKind::Document { adapter } => adapter.test_connection(&cfg).await,
+    let probe = match paradigm_of(profile.dialect) {
+        Paradigm::Relational => adapter_for(profile.dialect)?.test_connection(&cfg).await,
+        Paradigm::Document => {
+            document_adapter_for(profile.dialect)?
+                .test_connection(&cfg)
+                .await
+        }
     };
     match probe {
         Ok((latency_ms, version)) => Ok(TestConnectionResult {
@@ -451,13 +454,19 @@ async fn connections_connect(
         password,
         tunnel.as_ref().map(SshTunnel::local_port),
     );
-    let session = match engine_for(profile.dialect)? {
-        EngineKind::Relational { adapter, .. } => {
-            LiveSession::Relational(Arc::from(adapter.connect(&cfg).await.map_err(map_err)?))
-        }
-        EngineKind::Document { adapter } => {
-            LiveSession::Document(Arc::from(adapter.connect(&cfg).await.map_err(map_err)?))
-        }
+    let session = match paradigm_of(profile.dialect) {
+        Paradigm::Relational => LiveSession::Relational(Arc::from(
+            adapter_for(profile.dialect)?
+                .connect(&cfg)
+                .await
+                .map_err(map_err)?,
+        )),
+        Paradigm::Document => LiveSession::Document(Arc::from(
+            document_adapter_for(profile.dialect)?
+                .connect(&cfg)
+                .await
+                .map_err(map_err)?,
+        )),
     };
     state.sessions.lock().await.insert(id.clone(), session);
     if let Some(tunnel) = tunnel {
@@ -487,6 +496,7 @@ async fn session_for(state: &AppState, id: &str) -> Result<Arc<dyn Session>, Str
     relational(live_session_for(state, id).await?)
 }
 
+// Called by document commands once the MongoDB adapter registers.
 #[allow(dead_code)]
 async fn document_session_for(
     state: &AppState,
@@ -989,7 +999,6 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use db_core::{paradigm_of, DocumentSession, Paradigm};
 
     fn failing_probe() -> Result<(), StorageError> {
         Err(StorageError::msg("x"))
