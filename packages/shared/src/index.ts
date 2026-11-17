@@ -380,6 +380,7 @@ export interface ConnectionProfile {
   sshUser: string;
   sshAuth: SshAuthMethod;
   sshKeyPath?: string | null;
+  params?: Record<string, string>;
 }
 
 export interface SaveConnectionInput {
@@ -403,6 +404,7 @@ export interface SaveConnectionInput {
   sshKeyPath?: string | null;
   sshPassword: string;
   sshPassphrase: string;
+  params?: Record<string, string>;
 }
 
 export interface TestConnectionResult {

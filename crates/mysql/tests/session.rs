@@ -23,6 +23,7 @@ fn mysql_config(ssl: SslMode) -> ConnectConfig {
         password: std::env::var("TEST_MYSQL_PASSWORD").unwrap_or_else(|_| "mysql".into()),
         ssl_mode: ssl,
         pool_size: 2,
+        params: Default::default(),
     }
 }
 

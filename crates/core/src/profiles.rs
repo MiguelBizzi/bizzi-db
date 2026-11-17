@@ -5,6 +5,7 @@ use crate::types::{
     HistoryStatus, QueryExecutionResult, SaveConnectionInput, SshAuthMethod,
 };
 
+use crate::engines::validate_params;
 pub use crate::engines::{database_required, dialect_is_supported, dialect_label};
 
 pub const MIN_POOL_SIZE: u32 = 1;
@@ -44,6 +45,7 @@ pub fn validate_save_input(
     if input.user.trim().is_empty() {
         return Err("Username is required".into());
     }
+    validate_params(input.dialect, &input.params, input.ssh_enabled)?;
     validate_ssh_save_input(input, keychain_enabled)?;
     Ok(())
 }
@@ -199,6 +201,7 @@ pub fn connect_config_from_profile(
         password,
         ssl_mode: profile.ssl_mode,
         pool_size: profile.pool_size,
+        params: profile.params.clone(),
     }
 }
 
@@ -258,6 +261,7 @@ pub fn profile_from_save_input(input: SaveConnectionInput, id: String) -> Connec
                 Some(trimmed)
             }
         }),
+        params: input.params,
     }
 }
 
@@ -322,6 +326,7 @@ mod tests {
             ssh_key_path: None,
             ssh_password: String::new(),
             ssh_passphrase: String::new(),
+            params: Default::default(),
         }
     }
 

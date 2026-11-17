@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use async_trait::async_trait;
 
 use crate::types::{
@@ -14,6 +16,7 @@ pub struct ConnectConfig {
     pub password: String,
     pub ssl_mode: SslMode,
     pub pool_size: u32,
+    pub params: BTreeMap<String, String>,
 }
 
 impl std::fmt::Debug for ConnectConfig {
@@ -27,6 +30,7 @@ impl std::fmt::Debug for ConnectConfig {
             .field("password", &"***")
             .field("ssl_mode", &self.ssl_mode)
             .field("pool_size", &self.pool_size)
+            .field("params", &self.params)
             .finish()
     }
 }
@@ -153,6 +157,7 @@ pub fn schema_cache_is_fresh(
 mod tests {
     use super::{schema_cache_is_fresh, ConnectConfig, SshTunnelAuth, SshTunnelConfig};
     use crate::types::{DatabaseDialect, SslMode};
+    use std::collections::BTreeMap;
 
     fn sample() -> ConnectConfig {
         ConnectConfig {
@@ -164,6 +169,7 @@ mod tests {
             password: "s3cret-value".into(),
             ssl_mode: SslMode::Require,
             pool_size: 8,
+            params: BTreeMap::from([("authSource".to_string(), "admin".to_string())]),
         }
     }
 
@@ -173,6 +179,7 @@ mod tests {
         assert!(!rendered.contains("s3cret-value"));
         assert!(rendered.contains("***"));
         assert!(rendered.contains("db.example.com"));
+        assert!(rendered.contains("authSource"));
     }
 
     #[test]

@@ -90,7 +90,12 @@ impl Storage {
         self.ensure_connection_folder_id_column()?;
         self.ensure_connection_sort_order_column()?;
         self.ensure_ssl_mode_column()?;
-        self.ensure_ssh_columns()
+        self.ensure_ssh_columns()?;
+        self.ensure_column(
+            "connections",
+            "params",
+            "ALTER TABLE connections ADD COLUMN params TEXT NOT NULL DEFAULT '{}'",
+        )
     }
 
     fn ensure_connection_folder_id_column(&self) -> Result<(), StorageError> {
@@ -400,7 +405,7 @@ impl Storage {
         let mut stmt = self
             .conn
             .prepare(
-                "SELECT id, name, dialect, host, port, database_name, user_name, ssl, pool_size, environment, folder_id, sort_order, ssl_mode, ssh_enabled, ssh_host, ssh_port, ssh_user, ssh_auth, ssh_key_path
+                "SELECT id, name, dialect, host, port, database_name, user_name, ssl, pool_size, environment, folder_id, sort_order, ssl_mode, ssh_enabled, ssh_host, ssh_port, ssh_user, ssh_auth, ssh_key_path, params
                  FROM connections ORDER BY sort_order, name, id",
             )
             .map_err(|e| StorageError::msg(e.to_string()))?;
@@ -416,8 +421,8 @@ impl Storage {
         let previous = self.get_connection(&profile.id)?;
         self.conn
             .execute(
-                "INSERT INTO connections (id, name, dialect, host, port, database_name, user_name, ssl, pool_size, environment, folder_id, ssl_mode, ssh_enabled, ssh_host, ssh_port, ssh_user, ssh_auth, ssh_key_path)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
+                "INSERT INTO connections (id, name, dialect, host, port, database_name, user_name, ssl, pool_size, environment, folder_id, ssl_mode, ssh_enabled, ssh_host, ssh_port, ssh_user, ssh_auth, ssh_key_path, params)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
                  ON CONFLICT(id) DO UPDATE SET
                    name=excluded.name,
                    dialect=excluded.dialect,
@@ -435,7 +440,8 @@ impl Storage {
                    ssh_port=excluded.ssh_port,
                    ssh_user=excluded.ssh_user,
                    ssh_auth=excluded.ssh_auth,
-                   ssh_key_path=excluded.ssh_key_path",
+                   ssh_key_path=excluded.ssh_key_path,
+                   params=excluded.params",
                 params![
                     profile.id,
                     profile.name,
@@ -455,6 +461,8 @@ impl Storage {
                     profile.ssh_user,
                     ssh_auth_str(profile.ssh_auth),
                     profile.ssh_key_path,
+                    serde_json::to_string(&profile.params)
+                        .map_err(|e| StorageError::msg(e.to_string()))?,
                 ],
             )
             .map_err(|e| StorageError::msg(e.to_string()))?;
@@ -468,7 +476,7 @@ impl Storage {
     pub fn get_connection(&self, id: &str) -> Result<Option<ConnectionProfile>, StorageError> {
         self.conn
             .query_row(
-                "SELECT id, name, dialect, host, port, database_name, user_name, ssl, pool_size, environment, folder_id, sort_order, ssl_mode, ssh_enabled, ssh_host, ssh_port, ssh_user, ssh_auth, ssh_key_path
+                "SELECT id, name, dialect, host, port, database_name, user_name, ssl, pool_size, environment, folder_id, sort_order, ssl_mode, ssh_enabled, ssh_host, ssh_port, ssh_user, ssh_auth, ssh_key_path, params
                  FROM connections WHERE id = ?1",
                 [id],
                 map_connection,
@@ -800,6 +808,7 @@ fn map_connection(row: &Row<'_>) -> rusqlite::Result<ConnectionProfile> {
         ssh_user: row.get(16)?,
         ssh_auth: parse_ssh_auth(&row.get::<_, String>(17)?),
         ssh_key_path: row.get(18)?,
+        params: serde_json::from_str(&row.get::<_, String>(19)?).unwrap_or_default(),
     })
 }
 
@@ -807,6 +816,7 @@ fn map_connection(row: &Row<'_>) -> rusqlite::Result<ConnectionProfile> {
 mod tests {
     use super::*;
     use db_core::ConnectionStatus;
+    use std::collections::BTreeMap;
 
     #[test]
     fn connection_and_history_round_trip() {
@@ -831,6 +841,7 @@ mod tests {
             ssh_user: String::new(),
             ssh_auth: SshAuthMethod::Password,
             ssh_key_path: None,
+            params: BTreeMap::new(),
         };
         db.upsert_connection(&profile).unwrap();
         let listed = db.list_connections().unwrap();
@@ -906,6 +917,7 @@ mod tests {
             ssh_user: String::new(),
             ssh_auth: SshAuthMethod::Password,
             ssh_key_path: None,
+            params: BTreeMap::new(),
         }
     }
 
@@ -1030,6 +1042,30 @@ mod tests {
         assert_eq!(loaded.ssh_user, "jump");
         assert_eq!(loaded.ssh_auth, SshAuthMethod::PrivateKey);
         assert_eq!(loaded.ssh_key_path.as_deref(), Some("/tmp/id_ed25519"));
+    }
+
+    #[test]
+    fn connection_params_round_trip() {
+        let db = Storage::open_in_memory().unwrap();
+        let mut profile = sample_profile("m1");
+        profile.params = BTreeMap::from([("authSource".to_string(), "admin".to_string())]);
+        db.upsert_connection(&profile).unwrap();
+        let loaded = db.get_connection("m1").unwrap().unwrap();
+        assert_eq!(loaded.params, profile.params);
+    }
+
+    #[test]
+    fn old_rows_load_with_empty_params() {
+        let db = Storage::open_in_memory().unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO connections (id, name, dialect, host, port, database_name, user_name, ssl, pool_size, environment)
+                 VALUES ('c1','Old','PostgreSQL','h',5432,'app','u',0,4,'development')",
+                [],
+            )
+            .unwrap();
+        let loaded = db.get_connection("c1").unwrap().unwrap();
+        assert!(loaded.params.is_empty());
     }
 
     #[test]
