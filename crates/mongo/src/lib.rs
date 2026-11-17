@@ -1,7 +1,10 @@
 mod client;
 mod error;
+mod export;
 mod json;
 mod objects;
+mod run;
+mod sample;
 mod session;
 mod shell;
 mod split;

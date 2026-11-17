@@ -1128,6 +1128,7 @@ name = "db-mongo"
 version = "0.1.29"
 dependencies = [
  "async-trait",
+ "chrono",
  "db-core",
  "futures-util",
  "mongodb",
@@ -1135,6 +1136,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.8",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
