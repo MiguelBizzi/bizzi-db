@@ -3,6 +3,7 @@
 //! Enabled with the `conformance` feature so engine crates can call it from
 //! their ignored live tests without pulling it into the default library build.
 
+use crate::document::{DocValue, DocumentPage, DocumentSession, FindRequest, Namespace};
 use crate::query_error::QueryErrorCategory;
 use crate::types::{FilterOperator, TableFilter};
 use crate::Session;
@@ -178,4 +179,150 @@ async fn expect_category(
         ));
     }
     Ok(())
+}
+
+/// What the document seed looks like to a session test.
+pub struct DocumentSeed {
+    pub database: &'static str,
+    pub collection: &'static str,
+    pub text_field: &'static str,
+    /// Matches `text_field` of at least one document, case-insensitively.
+    pub text_like: &'static str,
+    pub min_documents: u64,
+    /// A filter the server or the parser rejects as malformed.
+    pub bad_filter: &'static str,
+}
+
+pub async fn assert_document_session(
+    session: &dyn DocumentSession,
+    seed: &DocumentSeed,
+) -> Result<(), String> {
+    let schema = session.introspect().await.map_err(|err| err.to_string())?;
+    if !schema
+        .collections
+        .iter()
+        .any(|c| c.database == seed.database && c.name == seed.collection)
+    {
+        return Err(format!(
+            "introspection did not find {}.{}",
+            seed.database, seed.collection
+        ));
+    }
+
+    let all = find(session, seed, "", 10, 0).await?;
+    if all.documents.is_empty() || all.documents.len() > 10 {
+        return Err(format!(
+            "expected a page of 1..=10 documents, got {}",
+            all.documents.len()
+        ));
+    }
+    let total = all.total.ok_or("find did not count documents")?;
+    if total < seed.min_documents {
+        return Err(format!(
+            "{total} documents in {}.{}, expected at least {}",
+            seed.database, seed.collection, seed.min_documents
+        ));
+    }
+
+    let regex = format!(
+        "{{ {}: {{ $regex: {}, $options: \"i\" }} }}",
+        seed.text_field,
+        serde_json::to_string(seed.text_like).map_err(|err| err.to_string())?
+    );
+    if find(session, seed, &regex, 10, 0)
+        .await?
+        .documents
+        .is_empty()
+    {
+        return Err(format!("{regex} matched no documents"));
+    }
+
+    let first = find(session, seed, "", 2, 0).await?;
+    let second = find(session, seed, "", 2, 1).await?;
+    if first.documents.len() != 2 || second.documents.len() != 2 {
+        return Err("paging with limit 2 did not return two documents".into());
+    }
+    if first.documents == second.documents {
+        return Err("skip 1 returned the same page as skip 0".into());
+    }
+
+    let bad = session
+        .find(&request(seed, seed.bad_filter, 10, 0))
+        .await
+        .map_err(|err| err.to_string())?;
+    let info = bad
+        .error_info
+        .ok_or_else(|| format!("expected an error for {}", seed.bad_filter))?;
+    if info.category != QueryErrorCategory::Syntax {
+        return Err(format!(
+            "{} was {:?}, expected Syntax",
+            seed.bad_filter, info.category
+        ));
+    }
+
+    let ns = Namespace {
+        database: seed.database.into(),
+        collection: seed.collection.into(),
+    };
+    let before = session
+        .schema_fingerprint()
+        .await
+        .map_err(|err| err.to_string())?;
+    let id = session
+        .insert(
+            &ns,
+            &format!("{{ \"{}\": \"conformance\" }}", seed.text_field),
+        )
+        .await
+        .map_err(|err| err.to_string())?;
+    let DocValue::ObjectId { v } = id else {
+        return Err(format!("insert returned {id:?}, expected an ObjectId"));
+    };
+    let deleted = session
+        .delete(&ns, &[format!("{{ \"$oid\": \"{v}\" }}")])
+        .await
+        .map_err(|err| err.to_string())?;
+    if deleted != 1 {
+        return Err(format!("deleted {deleted} documents, expected 1"));
+    }
+    let after = session
+        .schema_fingerprint()
+        .await
+        .map_err(|err| err.to_string())?;
+    if before != after {
+        return Err("fingerprint changed after an insert and a delete".into());
+    }
+    Ok(())
+}
+
+fn request(seed: &DocumentSeed, filter: &str, limit: i64, skip: i64) -> FindRequest {
+    FindRequest {
+        connection_id: String::new(),
+        ns: Namespace {
+            database: seed.database.into(),
+            collection: seed.collection.into(),
+        },
+        filter: filter.into(),
+        projection: String::new(),
+        sort: "{ _id: 1 }".into(),
+        limit,
+        skip,
+    }
+}
+
+async fn find(
+    session: &dyn DocumentSession,
+    seed: &DocumentSeed,
+    filter: &str,
+    limit: i64,
+    skip: i64,
+) -> Result<DocumentPage, String> {
+    let page = session
+        .find(&request(seed, filter, limit, skip))
+        .await
+        .map_err(|err| err.to_string())?;
+    match page.error {
+        Some(error) => Err(format!("find {filter:?} failed: {error}")),
+        None => Ok(page),
+    }
 }

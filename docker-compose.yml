@@ -66,7 +66,29 @@ services:
       retries: 120
       start_period: 60s
 
+  mongo:
+    image: mongo:8.0
+    container_name: db-manager-mongo
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MONGO_PORT:-27018}:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: mongo
+    volumes:
+      - mongo-data:/data/db
+      - ./docker/mongo/init:/docker-entrypoint-initdb.d:ro
+    # The init scripts run against a mongod bound to 127.0.0.1 only, so pinging
+    # the container's own address passes only once seeding is done.
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --host \"$$(hostname)\" --eval \"db.adminCommand('ping').ok\""]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
+
 volumes:
   postgres-data:
   mysql-data:
   mssql-data:
+  mongo-data:
