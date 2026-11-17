@@ -822,6 +822,8 @@ async fn introspect(session: &PostgresSession) -> Result<DatabaseSchema, Adapter
         total_size_mb: (total_size as f64) / (1024.0 * 1024.0),
         active_connections,
         queries_per_second: 0.0,
+        paradigm: db_core::Paradigm::Relational,
+        collections: vec![],
     })
 }
 

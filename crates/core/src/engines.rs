@@ -4,9 +4,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::DatabaseDialect;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Paradigm {
+    #[default]
     Relational,
     Document,
 }

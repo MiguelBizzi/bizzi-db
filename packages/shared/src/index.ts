@@ -172,6 +172,8 @@ export interface DatabaseSchema {
   totalSizeMb: number;
   activeConnections: number;
   queriesPerSecond: number;
+  paradigm?: Paradigm;
+  collections?: CollectionSchema[];
 }
 
 export type TabType =
@@ -182,7 +184,9 @@ export type TabType =
   | 'activity_log'
   | 'schema_designer'
   | 'function_designer'
-  | 'view_designer';
+  | 'view_designer'
+  | 'collection_documents'
+  | 'document_query';
 
 export interface WorkspaceTab {
   id: string;
@@ -466,3 +470,130 @@ export interface WorkspaceState {
 }
 
 export const DEFAULT_PREVIEW_LIMIT = 100;
+
+export type Paradigm = 'relational' | 'document';
+
+/** Numbers are strings so JavaScript never rounds them; object entries are
+ *  pairs so key order survives. */
+export type DocValue =
+  | { t: 'null' }
+  | { t: 'bool'; v: boolean }
+  | { t: 'int32'; v: string }
+  | { t: 'int64'; v: string }
+  | { t: 'double'; v: string }
+  | { t: 'decimal128'; v: string }
+  | { t: 'string'; v: string }
+  | { t: 'objectId'; v: string }
+  /** ISO-8601 UTC, millisecond precision, `Z` suffix. */
+  | { t: 'date'; v: string }
+  | { t: 'binary'; subtype: number; base64: string }
+  | { t: 'timestamp'; seconds: number; increment: number }
+  | { t: 'regex'; pattern: string; options: string }
+  | { t: 'object'; entries: [string, DocValue][] }
+  | { t: 'array'; items: DocValue[] }
+  | { t: 'minKey' }
+  | { t: 'maxKey' }
+  | { t: 'undefined' }
+  /** Code, symbol and DBPointer, as canonical EJSON text. */
+  | { t: 'other'; ejson: string };
+
+export interface Namespace {
+  database: string;
+  collection: string;
+}
+
+export type CollectionKind = 'collection' | 'view' | 'timeseries';
+
+export interface DocumentIndex {
+  name: string;
+  /** Field and direction or type: `"1"`, `"-1"`, `"text"`, `"2dsphere"`, `"hashed"`. */
+  keys: [string, string][];
+  unique: boolean;
+  sparse: boolean;
+  hidden: boolean;
+  ttlSeconds?: number | null;
+  partialFilter?: string | null;
+}
+
+export interface CollectionSchema {
+  /** `"<db>.<coll>"`. */
+  id: string;
+  database: string;
+  name: string;
+  kind: CollectionKind;
+  viewOn?: string | null;
+  capped: boolean;
+  documentCount?: number | null;
+  sizeMb?: number | null;
+  indexes: DocumentIndex[];
+}
+
+export interface IndexDraft {
+  name?: string | null;
+  keys: [string, string][];
+  unique: boolean;
+  sparse: boolean;
+  hidden: boolean;
+  ttlSeconds?: number | null;
+  /** Empty means no partial filter. */
+  partialFilter: string;
+}
+
+/** `filter`, `projection` and `sort` are shell-syntax documents; empty means `{}`. */
+export interface FindRequest {
+  connectionId: string;
+  ns: Namespace;
+  filter: string;
+  projection: string;
+  sort: string;
+  limit: number;
+  skip: number;
+}
+
+export interface DocumentPage {
+  documents: DocValue[];
+  /** Absent when the count did not finish in time. */
+  total?: number | null;
+  executionTimeMs: number;
+  error?: string | null;
+  errorInfo?: QueryErrorInfo | null;
+}
+
+export interface DocumentCommandResult {
+  id: string;
+  command: string;
+  timestamp: string;
+  executionTimeMs: number;
+  documents?: DocValue[] | null;
+  value?: DocValue | null;
+  affected?: number | null;
+  error?: string | null;
+  errorInfo?: QueryErrorInfo | null;
+}
+
+export interface FieldSummary {
+  path: string;
+  /** BSON type name and how many sampled documents had it. */
+  types: [string, number][];
+  presentIn: number;
+}
+
+export interface FieldSample {
+  sampled: number;
+  fields: FieldSummary[];
+}
+
+export type DocumentExportFormat = 'jsonArray' | 'ndjson' | 'csv';
+
+export type ExtJsonMode = 'relaxed' | 'canonical';
+
+export interface DocumentExportRequest {
+  connectionId: string;
+  ns: Namespace;
+  filter: string;
+  projection: string;
+  sort: string;
+  format: DocumentExportFormat;
+  mode: ExtJsonMode;
+  fileName: string;
+}

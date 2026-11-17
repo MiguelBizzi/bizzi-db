@@ -1,6 +1,7 @@
 mod adapter;
 #[cfg(feature = "conformance")]
 pub mod conformance;
+mod document;
 mod engines;
 mod profiles;
 mod query_error;
@@ -10,6 +11,11 @@ mod types;
 pub use adapter::{
     schema_cache_is_fresh, Adapter, AdapterError, ConnectConfig, Session, SshTunnelAuth,
     SshTunnelConfig,
+};
+pub use document::{
+    CollectionKind, CollectionSchema, DocValue, DocumentAdapter, DocumentCommandResult,
+    DocumentExportFormat, DocumentExportRequest, DocumentIndex, DocumentPage, DocumentSession,
+    ExtJsonMode, FieldSample, FieldSummary, FindRequest, IndexDraft, Namespace,
 };
 pub use engines::{
     dialect_from_label, engine_specs, paradigm_of, validate_params, EngineSpec, Paradigm,

@@ -560,6 +560,8 @@ mod tests {
                 total_size_mb: 0.0,
                 active_connections: 0,
                 queries_per_second: 0.0,
+                paradigm: crate::Paradigm::Relational,
+                collections: vec![],
             },
             &profile(),
         );
