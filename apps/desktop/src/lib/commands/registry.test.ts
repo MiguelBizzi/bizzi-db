@@ -137,6 +137,7 @@ describe('COMMANDS registry invariants', () => {
         'edit.toggleComment',
         'edit.find',
         'edit.insertRow',
+        'edit.editDocument',
         'edit.deleteRows',
         'edit.chooseReferencedRow',
         'file.closeTab',
@@ -757,5 +758,75 @@ describe('currentPlatform', () => {
       if (original) Object.defineProperty(globalThis, 'navigator', original);
       else delete g.navigator;
     }
+  });
+});
+
+describe('paradigm gating', () => {
+  const doc = (over: Partial<CommandContext> = {}) =>
+    ctx({ connectionOpen: true, paradigm: 'document', ...over });
+  const rel = (over: Partial<CommandContext> = {}) =>
+    ctx({ connectionOpen: true, paradigm: 'relational', ...over });
+  const on = (id: string, c: CommandContext) => isCommandEnabled(commandById(id), c);
+  const label = (id: string, c: CommandContext) => {
+    const cmd = commandById(id);
+    return cmd.dynamicLabel ? cmd.dynamicLabel(c) : cmd.label;
+  };
+
+  test('edit.editDocument needs one selected document in a collection tab', () => {
+    const cmd = commandById('edit.editDocument');
+    expect(cmd.label).toBe('Edit Document…');
+    expect(cmd.accelerator).toBe('CmdOrCtrl+Alt+E');
+    expect(on('edit.editDocument', doc({ activeTabType: 'collection_documents', selectedRowCount: 1 }))).toBe(true);
+    expect(on('edit.editDocument', doc({ activeTabType: 'collection_documents', selectedRowCount: 2 }))).toBe(false);
+    expect(on('edit.editDocument', doc({ activeTabType: 'collection_documents', selectedRowCount: 0 }))).toBe(false);
+    expect(on('edit.editDocument', rel({ activeTabType: 'table_data', selectedRowCount: 1 }))).toBe(false);
+  });
+
+  test('New Table becomes New Collection for document engines', () => {
+    expect(label('file.newTable', doc())).toBe('New Collection…');
+    expect(label('file.newTable', rel())).toBe('New Table…');
+    expect(label('file.newTable', ctx())).toBe('New Table…');
+  });
+
+  test('views, functions and the ERD are disabled for document engines', () => {
+    for (const id of ['file.newView', 'file.newFunction', 'view.erd']) {
+      expect(on(id, doc())).toBe(false);
+      expect(on(id, rel())).toBe(true);
+    }
+  });
+
+  test('New Index works on collection tabs', () => {
+    expect(on('file.newIndex', doc({ activeTabType: 'collection_documents' }))).toBe(true);
+    expect(on('file.newIndex', rel({ activeTabType: 'table_data' }))).toBe(true);
+    expect(on('file.newIndex', doc({ activeTabType: 'document_query' }))).toBe(false);
+  });
+
+  test('grid commands extend to collection tabs with document labels', () => {
+    const c = doc({ activeTabType: 'collection_documents', selectedRowCount: 1 });
+    expect(on('edit.insertRow', c)).toBe(true);
+    expect(on('edit.find', c)).toBe(true);
+    expect(on('edit.deleteRows', c)).toBe(true);
+    expect(on('edit.deleteRows', doc({ activeTabType: 'collection_documents' }))).toBe(false);
+    expect(on('conn.refreshTable', c)).toBe(true);
+    expect(label('edit.insertRow', c)).toBe('Insert Document…');
+    expect(label('edit.deleteRows', c)).toBe('Delete Documents');
+    expect(label('edit.find', c)).toBe('Filter Documents…');
+    expect(label('conn.refreshTable', c)).toBe('Refresh Collection');
+    const t = rel({ activeTabType: 'table_data' });
+    expect(label('edit.insertRow', t)).toBe('Insert Row');
+    expect(label('edit.deleteRows', t)).toBe('Delete Selected Rows');
+    expect(label('edit.find', t)).toBe('Find in Table…');
+    expect(label('conn.refreshTable', t)).toBe('Refresh Table');
+  });
+
+  test('query commands also run on document query tabs', () => {
+    const q = doc({ activeTabType: 'document_query' });
+    for (const id of ['query.run', 'query.runAll', 'file.saveQuery', 'edit.toggleComment']) {
+      expect(on(id, q)).toBe(true);
+    }
+    for (const id of ['edit.formatSql', 'query.commit', 'query.review']) {
+      expect(on(id, doc({ activeTabType: 'document_query' }))).toBe(id === 'query.review');
+    }
+    expect(on('edit.find', q)).toBe(false);
   });
 });

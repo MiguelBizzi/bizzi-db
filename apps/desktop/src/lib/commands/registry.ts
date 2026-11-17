@@ -23,6 +23,10 @@ const paneHasTabs =
     ctx.paneTabCount >= min;
 const tabActive = (ctx: CommandContext): boolean => ctx.activeTabType !== null;
 const tableDataActive = (ctx: CommandContext): boolean => ctx.activeTabType === 'table_data';
+const collectionActive = (ctx: CommandContext): boolean => ctx.activeTabType === 'collection_documents';
+const queryEditorActive = (ctx: CommandContext): boolean =>
+  ctx.activeTabType === 'sql_editor' || ctx.activeTabType === 'document_query';
+const isDocument = (ctx: CommandContext): boolean => ctx.paradigm === 'document';
 const hasPendingChanges = (ctx: CommandContext): boolean => ctx.pendingCount > 0;
 
 /** `view.tab.1`…`view.tab.8` select that tab; `view.tab.9` selects the last (browser convention). */
@@ -43,13 +47,19 @@ export const COMMANDS: readonly Command[] = [
   { id: 'app.quit', label: 'Quit', linuxAccelerator: 'CmdOrCtrl+Q', enabled: () => true, allowInModal: true },
   { id: 'file.newQuery', label: 'New Query Tab', accelerator: 'CmdOrCtrl+T', enabled: connectionOpen },
   { id: 'file.newConnection', label: 'New Connection…', accelerator: 'CmdOrCtrl+N', enabled: () => true },
-  { id: 'file.newTable', label: 'New Table…', accelerator: 'CmdOrCtrl+Shift+N', enabled: connectionOpen },
-  { id: 'file.newView', label: 'New View…', accelerator: 'CmdOrCtrl+Alt+V', enabled: connectionOpen },
+  {
+    id: 'file.newTable',
+    label: 'New Table…',
+    dynamicLabel: (ctx) => (isDocument(ctx) ? 'New Collection…' : 'New Table…'),
+    accelerator: 'CmdOrCtrl+Shift+N',
+    enabled: connectionOpen,
+  },
+  { id: 'file.newView', label: 'New View…', accelerator: 'CmdOrCtrl+Alt+V', enabled: (ctx) => ctx.connectionOpen && !isDocument(ctx) },
   {
     id: 'file.newFunction',
     label: 'New Function…',
     accelerator: 'CmdOrCtrl+Alt+F',
-    enabled: (ctx) => ctx.connectionOpen && ctx.capabilities.routines,
+    enabled: (ctx) => ctx.connectionOpen && !isDocument(ctx) && ctx.capabilities.routines,
   },
   {
     id: 'file.newIndex',
@@ -57,9 +67,11 @@ export const COMMANDS: readonly Command[] = [
     accelerator: 'CmdOrCtrl+Shift+I',
     enabled: (ctx) =>
       ctx.connectionOpen &&
-      (ctx.activeTabType === 'table_data' || ctx.activeTabType === 'schema_designer'),
+      (ctx.activeTabType === 'table_data' ||
+        ctx.activeTabType === 'schema_designer' ||
+        collectionActive(ctx)),
   },
-  { id: 'file.saveQuery', label: 'Save Query…', accelerator: 'CmdOrCtrl+S', enabled: sqlEditorActive },
+  { id: 'file.saveQuery', label: 'Save Query…', accelerator: 'CmdOrCtrl+S', enabled: queryEditorActive },
   {
     id: 'file.export',
     label: 'Export Results…',
@@ -83,14 +95,35 @@ export const COMMANDS: readonly Command[] = [
     allowInModal: true,
   },
   // Grid commands share their keys with text editing (⌘F, ⌘I, ⌘⌫), so they yield to a focused input.
-  { id: 'edit.find', label: 'Find in Table…', accelerator: 'CmdOrCtrl+F', enabled: tableDataActive, typingConflict: true },
-  { id: 'edit.insertRow', label: 'Insert Row', accelerator: 'CmdOrCtrl+I', enabled: tableDataActive, typingConflict: true },
+  {
+    id: 'edit.find',
+    label: 'Find in Table…',
+    dynamicLabel: (ctx) => (collectionActive(ctx) ? 'Filter Documents…' : 'Find in Table…'),
+    accelerator: 'CmdOrCtrl+F',
+    enabled: (ctx) => tableDataActive(ctx) || collectionActive(ctx),
+    typingConflict: true,
+  },
+  {
+    id: 'edit.insertRow',
+    label: 'Insert Row',
+    dynamicLabel: (ctx) => (collectionActive(ctx) ? 'Insert Document…' : 'Insert Row'),
+    accelerator: 'CmdOrCtrl+I',
+    enabled: (ctx) => tableDataActive(ctx) || collectionActive(ctx),
+    typingConflict: true,
+  },
+  {
+    id: 'edit.editDocument',
+    label: 'Edit Document…',
+    accelerator: 'CmdOrCtrl+Alt+E',
+    enabled: (ctx) => collectionActive(ctx) && ctx.selectedRowCount === 1,
+  },
   {
     id: 'edit.deleteRows',
     label: 'Delete Selected Rows',
+    dynamicLabel: (ctx) => (collectionActive(ctx) ? 'Delete Documents' : 'Delete Selected Rows'),
     accelerator: 'CmdOrCtrl+Backspace',
     nonMacAccelerator: 'Delete',
-    enabled: (ctx) => tableDataActive(ctx) && ctx.selectedRowCount > 0,
+    enabled: (ctx) => (tableDataActive(ctx) || collectionActive(ctx)) && ctx.selectedRowCount > 0,
     typingConflict: true,
   },
   // Its target is a focused foreign key field (Insert Row drawer) or the grid's active cell,
@@ -103,15 +136,15 @@ export const COMMANDS: readonly Command[] = [
     allowInModal: true,
   },
   { id: 'edit.formatSql', label: 'Format SQL', accelerator: 'CmdOrCtrl+Shift+F', enabled: sqlEditorActive },
-  { id: 'edit.toggleComment', label: 'Toggle Comment', accelerator: 'CmdOrCtrl+/', enabled: sqlEditorActive },
+  { id: 'edit.toggleComment', label: 'Toggle Comment', accelerator: 'CmdOrCtrl+/', enabled: queryEditorActive },
   {
     id: 'query.run',
     label: 'Run Statement',
     dynamicLabel: (ctx) => (ctx.sqlSelectionPresent ? 'Run Selection' : 'Run Statement'),
     accelerator: 'CmdOrCtrl+Enter',
-    enabled: sqlEditorActive,
+    enabled: queryEditorActive,
   },
-  { id: 'query.runAll', label: 'Run All', accelerator: 'CmdOrCtrl+Shift+Enter', enabled: sqlEditorActive },
+  { id: 'query.runAll', label: 'Run All', accelerator: 'CmdOrCtrl+Shift+Enter', enabled: queryEditorActive },
   {
     id: 'query.commit',
     label: 'Commit Pending Changes',
@@ -137,9 +170,10 @@ export const COMMANDS: readonly Command[] = [
   {
     id: 'conn.refreshTable',
     label: 'Refresh Table',
+    dynamicLabel: (ctx) => (collectionActive(ctx) ? 'Refresh Collection' : 'Refresh Table'),
     accelerator: 'CmdOrCtrl+R',
     nonMacAccelerator: 'F5',
-    enabled: tableDataActive,
+    enabled: (ctx) => tableDataActive(ctx) || collectionActive(ctx),
   },
   {
     id: 'view.palette',
@@ -150,7 +184,7 @@ export const COMMANDS: readonly Command[] = [
     allowInModal: true,
   },
   { id: 'view.toggleSidebar', label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+B', enabled: connectionOpen },
-  { id: 'view.erd', label: 'Schema Diagram (ERD)', accelerator: 'CmdOrCtrl+Shift+E', enabled: connectionOpen },
+  { id: 'view.erd', label: 'Schema Diagram (ERD)', accelerator: 'CmdOrCtrl+Shift+E', enabled: (ctx) => ctx.connectionOpen && !isDocument(ctx) },
   { id: 'view.metrics', label: 'Database Metrics', accelerator: 'CmdOrCtrl+Shift+M', enabled: connectionOpen },
   { id: 'view.activity', label: 'Activity Log', accelerator: 'CmdOrCtrl+Shift+L', enabled: connectionOpen },
   { id: 'view.nextTab', label: 'Next Tab', accelerator: 'CmdOrCtrl+Shift+]', nonMacAccelerator: 'CmdOrCtrl+Tab', enabled: paneHasTabs(2) },

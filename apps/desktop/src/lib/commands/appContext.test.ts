@@ -26,6 +26,7 @@ describe('deriveCommandContext', () => {
       pendingCount: 3,
       connectionOpen: true,
       modalOpen: false,
+      paradigm: null,
     });
   });
 
@@ -51,5 +52,11 @@ describe('deriveCommandContext', () => {
     expect(deriveCommandContext({ ...base, modals: { palette: false, settings: false } }).modalOpen).toBe(false);
     expect(deriveCommandContext({ ...base, modals: { palette: false, settings: true } }).modalOpen).toBe(true);
     expect(deriveCommandContext({ ...base, modals: { confirm: true } }).modalOpen).toBe(true);
+  });
+
+  test('paradigm is null without one and passes through otherwise', () => {
+    expect(deriveCommandContext(base).paradigm).toBeNull();
+    expect(deriveCommandContext({ ...base, paradigm: 'document' }).paradigm).toBe('document');
+    expect(deriveCommandContext({ ...base, paradigm: 'relational' }).paradigm).toBe('relational');
   });
 });

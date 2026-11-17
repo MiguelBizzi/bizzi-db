@@ -104,7 +104,7 @@ import {
   type RoutineTarget,
 } from "./lib/routineTabs";
 import { tabObjectKind } from "./lib/tabIcon";
-import { dialectModule } from "@db/database";
+import { dialectModule, engineMeta } from "@db/database";
 import { objectDdlFor, tableDdlFor } from "./lib/ddl/registry";
 import { planScript } from "./lib/ddl/types";
 import {
@@ -2355,6 +2355,9 @@ export default function App() {
         closedTabCount: closedTabs.length,
         routines: dialectModule(currentDatabase?.dialect ?? "PostgreSQL")
           ?.capabilities.routines,
+        paradigm: currentDatabase
+          ? engineMeta(currentDatabase.dialect)?.paradigm
+          : undefined,
         modals: {
           isCommandPaletteOpen,
           isSettingsOpen,
@@ -2433,6 +2436,7 @@ export default function App() {
         }
         handleNewIndex(table);
       },
+      "edit.editDocument": () => {},
       "file.closeWindow": () => getCurrentWindow().close(),
       "app.quit": () => getCurrentWindow().close(),
       "file.closeTab": () => handleCloseTab(activePaneId, activeTabId),

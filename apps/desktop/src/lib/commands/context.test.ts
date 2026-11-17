@@ -56,6 +56,7 @@ describe('EMPTY_CONTEXT', () => {
       selectedRowCount: 0,
       pendingCount: 0,
       connectionOpen: false,
+      paradigm: null,
       modalOpen: false,
       textInputFocused: false,
       foreignKeyTarget: false,

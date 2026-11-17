@@ -1,3 +1,4 @@
+import type { Paradigm } from '@db/shared';
 import type { WorkspaceTab } from '../../types';
 import { EMPTY_CONTEXT, type CommandContext } from './context';
 
@@ -14,6 +15,7 @@ export interface AppContextInput {
   modals: Record<string, boolean>;
   /** When false, New Function is disabled. Omitted means the engine has routines. */
   routines?: boolean;
+  paradigm?: Paradigm;
 }
 
 /** The app-level part of the command context (pure). Local scopes and focus are merged later. */
@@ -27,6 +29,7 @@ export function deriveCommandContext(input: AppContextInput): CommandContext {
     closedTabCount: input.closedTabCount,
     pendingCount: input.pendingCount,
     connectionOpen: Boolean(input.currentDbId),
+    paradigm: input.paradigm ?? null,
     modalOpen: Object.values(input.modals).some(Boolean),
     capabilities: { routines: input.routines !== false },
   };
