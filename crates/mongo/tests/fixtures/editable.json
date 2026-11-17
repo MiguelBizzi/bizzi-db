@@ -1,0 +1,510 @@
+[
+  {
+    "name": "null",
+    "value": {
+      "t": "null"
+    },
+    "text": "null"
+  },
+  {
+    "name": "bool true",
+    "value": {
+      "t": "bool",
+      "v": true
+    },
+    "text": "true"
+  },
+  {
+    "name": "bool false",
+    "value": {
+      "t": "bool",
+      "v": false
+    },
+    "text": "false"
+  },
+  {
+    "name": "int32",
+    "value": {
+      "t": "int32",
+      "v": "5"
+    },
+    "text": "5"
+  },
+  {
+    "name": "int32 min",
+    "value": {
+      "t": "int32",
+      "v": "-2147483648"
+    },
+    "text": "-2147483648"
+  },
+  {
+    "name": "int32 max",
+    "value": {
+      "t": "int32",
+      "v": "2147483647"
+    },
+    "text": "2147483647"
+  },
+  {
+    "name": "int64 small is always wrapped",
+    "value": {
+      "t": "int64",
+      "v": "5"
+    },
+    "text": "{\"$numberLong\": \"5\"}"
+  },
+  {
+    "name": "int64 beyond JS safe integer",
+    "value": {
+      "t": "int64",
+      "v": "9007199254740993"
+    },
+    "text": "{\"$numberLong\": \"9007199254740993\"}"
+  },
+  {
+    "name": "double whole keeps .0",
+    "value": {
+      "t": "double",
+      "v": "5.0"
+    },
+    "text": "5.0"
+  },
+  {
+    "name": "double fraction",
+    "value": {
+      "t": "double",
+      "v": "0.1"
+    },
+    "text": "0.1"
+  },
+  {
+    "name": "double negative zero",
+    "value": {
+      "t": "double",
+      "v": "-0.0"
+    },
+    "text": "-0.0"
+  },
+  {
+    "name": "double large uses exponent",
+    "value": {
+      "t": "double",
+      "v": "1e300"
+    },
+    "text": "1e300"
+  },
+  {
+    "name": "double small uses exponent",
+    "value": {
+      "t": "double",
+      "v": "1.5e-7"
+    },
+    "text": "1.5e-7"
+  },
+  {
+    "name": "double NaN",
+    "value": {
+      "t": "double",
+      "v": "NaN"
+    },
+    "text": "{\"$numberDouble\": \"NaN\"}"
+  },
+  {
+    "name": "double Infinity",
+    "value": {
+      "t": "double",
+      "v": "Infinity"
+    },
+    "text": "{\"$numberDouble\": \"Infinity\"}"
+  },
+  {
+    "name": "double -Infinity",
+    "value": {
+      "t": "double",
+      "v": "-Infinity"
+    },
+    "text": "{\"$numberDouble\": \"-Infinity\"}"
+  },
+  {
+    "name": "decimal128 keeps trailing zero",
+    "value": {
+      "t": "decimal128",
+      "v": "1.10"
+    },
+    "text": "{\"$numberDecimal\": \"1.10\"}"
+  },
+  {
+    "name": "string with JSON escapes",
+    "value": {
+      "t": "string",
+      "v": "quote \" backslash \\ slash / nl \n cr \r tab \t bs \b ff \f bell \u0007 us \u001f del "
+    },
+    "text": "\"quote \\\" backslash \\\\ slash / nl \\n cr \\r tab \\t bs \\b ff \\f bell \\u0007 us \\u001f del \""
+  },
+  {
+    "name": "string non-ASCII stays UTF-8",
+    "value": {
+      "t": "string",
+      "v": "café ☕ 日本 😀"
+    },
+    "text": "\"café ☕ 日本 😀\""
+  },
+  {
+    "name": "empty string",
+    "value": {
+      "t": "string",
+      "v": ""
+    },
+    "text": "\"\""
+  },
+  {
+    "name": "objectId",
+    "value": {
+      "t": "objectId",
+      "v": "507f1f77bcf86cd799439011"
+    },
+    "text": "{\"$oid\": \"507f1f77bcf86cd799439011\"}"
+  },
+  {
+    "name": "date",
+    "value": {
+      "t": "date",
+      "v": "2024-01-02T03:04:05.006Z"
+    },
+    "text": "{\"$date\": \"2024-01-02T03:04:05.006Z\"}"
+  },
+  {
+    "name": "date whole second keeps .000",
+    "value": {
+      "t": "date",
+      "v": "2024-01-02T03:04:05.000Z"
+    },
+    "text": "{\"$date\": \"2024-01-02T03:04:05.000Z\"}"
+  },
+  {
+    "name": "date before epoch",
+    "value": {
+      "t": "date",
+      "v": "1969-12-31T23:59:59.999Z"
+    },
+    "text": "{\"$date\": \"1969-12-31T23:59:59.999Z\"}"
+  },
+  {
+    "name": "date year 0",
+    "value": {
+      "t": "date",
+      "v": "0000-01-01T00:00:00.000Z"
+    },
+    "text": "{\"$date\": \"0000-01-01T00:00:00.000Z\"}"
+  },
+  {
+    "name": "date year 9999",
+    "value": {
+      "t": "date",
+      "v": "9999-12-31T23:59:59.999Z"
+    },
+    "text": "{\"$date\": \"9999-12-31T23:59:59.999Z\"}"
+  },
+  {
+    "name": "date after 9999 falls back to other",
+    "value": {
+      "t": "other",
+      "ejson": "{\"$date\": {\"$numberLong\": \"253402300800000\"}}"
+    },
+    "text": "{\"$date\": {\"$numberLong\": \"253402300800000\"}}"
+  },
+  {
+    "name": "date before year 0 falls back to other",
+    "value": {
+      "t": "other",
+      "ejson": "{\"$date\": {\"$numberLong\": \"-62167219200001\"}}"
+    },
+    "text": "{\"$date\": {\"$numberLong\": \"-62167219200001\"}}"
+  },
+  {
+    "name": "binary generic",
+    "value": {
+      "t": "binary",
+      "subtype": 0,
+      "base64": "AQID"
+    },
+    "text": "{\"$binary\": {\"base64\": \"AQID\", \"subType\": \"00\"}}"
+  },
+  {
+    "name": "binary uuid",
+    "value": {
+      "t": "binary",
+      "subtype": 4,
+      "base64": "c//SZESzTGmQ6OfR38A11A=="
+    },
+    "text": "{\"$binary\": {\"base64\": \"c//SZESzTGmQ6OfR38A11A==\", \"subType\": \"04\"}}"
+  },
+  {
+    "name": "binary user defined",
+    "value": {
+      "t": "binary",
+      "subtype": 128,
+      "base64": ""
+    },
+    "text": "{\"$binary\": {\"base64\": \"\", \"subType\": \"80\"}}"
+  },
+  {
+    "name": "timestamp",
+    "value": {
+      "t": "timestamp",
+      "seconds": 1700000000,
+      "increment": 7
+    },
+    "text": "{\"$timestamp\": {\"t\": 1700000000, \"i\": 7}}"
+  },
+  {
+    "name": "regex",
+    "value": {
+      "t": "regex",
+      "pattern": "^a\\.b$",
+      "options": "im"
+    },
+    "text": "{\"$regularExpression\": {\"pattern\": \"^a\\\\.b$\", \"options\": \"im\"}}"
+  },
+  {
+    "name": "minKey",
+    "value": {
+      "t": "minKey"
+    },
+    "text": "{\"$minKey\": 1}"
+  },
+  {
+    "name": "maxKey",
+    "value": {
+      "t": "maxKey"
+    },
+    "text": "{\"$maxKey\": 1}"
+  },
+  {
+    "name": "undefined",
+    "value": {
+      "t": "undefined"
+    },
+    "text": "{\"$undefined\": true}"
+  },
+  {
+    "name": "code",
+    "value": {
+      "t": "other",
+      "ejson": "{\"$code\": \"function () { return 1; }\"}"
+    },
+    "text": "{\"$code\": \"function () { return 1; }\"}"
+  },
+  {
+    "name": "code with scope keeps scope order",
+    "value": {
+      "t": "other",
+      "ejson": "{\"$code\": \"x + y\", \"$scope\": {\"y\": 1, \"x\": {\"$numberLong\": \"2\"}}}"
+    },
+    "text": "{\"$code\": \"x + y\", \"$scope\": {\"y\": 1, \"x\": {\"$numberLong\": \"2\"}}}"
+  },
+  {
+    "name": "symbol",
+    "value": {
+      "t": "other",
+      "ejson": "{\"$symbol\": \"sym\"}"
+    },
+    "text": "{\"$symbol\": \"sym\"}"
+  },
+  {
+    "name": "dbPointer",
+    "value": {
+      "t": "other",
+      "ejson": "{\"$dbPointer\": {\"$ref\": \"db.coll\", \"$id\": {\"$oid\": \"507f1f77bcf86cd799439011\"}}}"
+    },
+    "text": "{\"$dbPointer\": {\"$ref\": \"db.coll\", \"$id\": {\"$oid\": \"507f1f77bcf86cd799439011\"}}}"
+  },
+  {
+    "name": "empty object",
+    "value": {
+      "t": "object",
+      "entries": []
+    },
+    "text": "{}"
+  },
+  {
+    "name": "empty array",
+    "value": {
+      "t": "array",
+      "items": []
+    },
+    "text": "[]"
+  },
+  {
+    "name": "unknown dollar key is a plain object",
+    "value": {
+      "t": "object",
+      "entries": [
+        [
+          "$x",
+          {
+            "t": "int32",
+            "v": "1"
+          }
+        ]
+      ]
+    },
+    "text": "{\n  \"$x\": 1\n}"
+  },
+  {
+    "name": "integer-like keys keep text order",
+    "value": {
+      "t": "object",
+      "entries": [
+        [
+          "10",
+          {
+            "t": "int32",
+            "v": "1"
+          }
+        ],
+        [
+          "2",
+          {
+            "t": "int32",
+            "v": "2"
+          }
+        ]
+      ]
+    },
+    "text": "{\n  \"10\": 1,\n  \"2\": 2\n}"
+  },
+  {
+    "name": "document",
+    "value": {
+      "t": "object",
+      "entries": [
+        [
+          "_id",
+          {
+            "t": "objectId",
+            "v": "507f1f77bcf86cd799439011"
+          }
+        ],
+        [
+          "10",
+          {
+            "t": "int32",
+            "v": "1"
+          }
+        ],
+        [
+          "2",
+          {
+            "t": "int64",
+            "v": "2"
+          }
+        ],
+        [
+          "a.b",
+          {
+            "t": "bool",
+            "v": true
+          }
+        ],
+        [
+          "$x",
+          {
+            "t": "double",
+            "v": "5.0"
+          }
+        ],
+        [
+          "",
+          {
+            "t": "string",
+            "v": ""
+          }
+        ],
+        [
+          "ключ",
+          {
+            "t": "string",
+            "v": "значение"
+          }
+        ],
+        [
+          "nested",
+          {
+            "t": "object",
+            "entries": [
+              [
+                "inner",
+                {
+                  "t": "object",
+                  "entries": [
+                    [
+                      "deep",
+                      {
+                        "t": "null"
+                      }
+                    ]
+                  ]
+                }
+              ],
+              [
+                "empty",
+                {
+                  "t": "object",
+                  "entries": []
+                }
+              ]
+            ]
+          }
+        ],
+        [
+          "list",
+          {
+            "t": "array",
+            "items": [
+              {
+                "t": "int32",
+                "v": "1"
+              },
+              {
+                "t": "int64",
+                "v": "2"
+              },
+              {
+                "t": "array",
+                "items": [
+                  {
+                    "t": "double",
+                    "v": "3.5"
+                  },
+                  {
+                    "t": "array",
+                    "items": []
+                  }
+                ]
+              },
+              {
+                "t": "object",
+                "entries": [
+                  [
+                    "k",
+                    {
+                      "t": "string",
+                      "v": "v"
+                    }
+                  ]
+                ]
+              },
+              {
+                "t": "date",
+                "v": "2024-01-02T03:04:05.006Z"
+              }
+            ]
+          }
+        ]
+      ]
+    },
+    "text": "{\n  \"_id\": {\"$oid\": \"507f1f77bcf86cd799439011\"},\n  \"10\": 1,\n  \"2\": {\"$numberLong\": \"2\"},\n  \"a.b\": true,\n  \"$x\": 5.0,\n  \"\": \"\",\n  \"ключ\": \"значение\",\n  \"nested\": {\n    \"inner\": {\n      \"deep\": null\n    },\n    \"empty\": {}\n  },\n  \"list\": [\n    1,\n    {\"$numberLong\": \"2\"},\n    [\n      3.5,\n      []\n    ],\n    {\n      \"k\": \"v\"\n    },\n    {\"$date\": \"2024-01-02T03:04:05.006Z\"}\n  ]\n}"
+  }
+]
