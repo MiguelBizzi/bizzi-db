@@ -197,7 +197,9 @@ async fn reader_sees_unknown_counts_not_errors() {
         let stats = client
             .database(&collection.database)
             .collection::<Document>(&collection.name)
-            .aggregate(vec![doc! { "$collStats": { "count": {} } }])
+            .aggregate(vec![
+                doc! { "$collStats": { "count": {}, "storageStats": {} } },
+            ])
             .await;
         let refused = match stats {
             Ok(cursor) => cursor.try_collect::<Vec<_>>().await.is_err(),
@@ -209,4 +211,21 @@ async fn reader_sees_unknown_counts_not_errors() {
             assert!(collection.document_count.is_some(), "{}", collection.id);
         }
     }
+}
+
+#[tokio::test]
+#[ignore = "requires local MongoDB (docker compose up -d --wait mongo)"]
+async fn introspect_survives_refused_stats_and_indexes() {
+    let session = connect(&config("limited", "limited", "")).await;
+    let schema = session.introspect().await.expect("introspect as limited");
+    let users = find(&schema, "shop", "users");
+    assert_eq!(users.kind, CollectionKind::Collection);
+    assert_eq!(users.document_count, None);
+    assert_eq!(users.size_mb, None);
+    assert!(users.indexes.is_empty());
+    assert!(schema.collections.iter().all(|c| c.database == "shop"));
+
+    let first = session.schema_fingerprint().await.expect("fingerprint");
+    let second = session.schema_fingerprint().await.expect("fingerprint");
+    assert_eq!(first, second);
 }

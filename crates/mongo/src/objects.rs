@@ -4,8 +4,8 @@ use db_core::{
 };
 use futures_util::{stream, StreamExt, TryStreamExt};
 use mongodb::bson::{doc, Bson, Document};
-use mongodb::error::Result;
-use mongodb::Client;
+use mongodb::error::{ErrorKind, Result};
+use mongodb::{Client, Database};
 use sha2::{Digest, Sha256};
 
 const SYSTEM_DATABASES: &[&str] = &["admin", "local", "config"];
@@ -189,27 +189,56 @@ async fn database_names(client: &Client, default_db: Option<&str>) -> Result<Vec
     Ok(user_databases(names))
 }
 
+const UNAUTHORIZED: i32 = 13;
+
+fn is_unauthorized(err: &mongodb::error::Error) -> bool {
+    matches!(err.kind.as_ref(), ErrorKind::Command(c) if c.code == UNAUTHORIZED)
+}
+
+/// A privilege the user lacks hides that part of the schema; network and
+/// server failures still fail introspection.
+fn unless_unauthorized<T: Default>(result: Result<T>) -> Result<T> {
+    match result {
+        Err(err) if is_unauthorized(&err) => Ok(T::default()),
+        other => other,
+    }
+}
+
+async fn cursor(db: &Database, command: Document) -> Result<Vec<Document>> {
+    db.run_cursor_command(command).await?.try_collect().await
+}
+
+/// The full listing comes first because it carries kinds and options. A user
+/// with only collection-level privileges is refused it and gets names alone
+/// (`authorizedCollections` needs `nameOnly`), listed as plain collections.
+async fn list_collections(db: &Database) -> Result<Vec<Document>> {
+    match cursor(db, doc! { "listCollections": 1 }).await {
+        Err(err) if is_unauthorized(&err) => {
+            cursor(
+                db,
+                doc! { "listCollections": 1, "authorizedCollections": true, "nameOnly": true },
+            )
+            .await
+        }
+        other => other,
+    }
+}
+
 async fn list(client: &Client, default_db: Option<&str>) -> Result<Vec<Listed>> {
     let mut all = Vec::new();
     for database in database_names(client, default_db).await? {
         let db = client.database(&database);
-        let listings: Vec<Document> = db
-            .run_cursor_command(doc! { "listCollections": 1 })
-            .await?
-            .try_collect()
-            .await?;
-        for listing in listings {
+        for listing in list_collections(&db).await? {
             let Ok(name) = listing.get_str("name") else {
                 continue;
             };
             // Views have no indexes of their own; listIndexes refuses them.
+            // A refused listIndexes leaves the collection with none, which the
+            // fingerprint sees the same way on every call for that user.
             let specs = if listing.get_str("type") == Ok("view") || name.starts_with("system.") {
                 Vec::new()
             } else {
-                db.run_cursor_command(doc! { "listIndexes": name })
-                    .await?
-                    .try_collect()
-                    .await?
+                unless_unauthorized(cursor(&db, doc! { "listIndexes": name }).await)?
             };
             all.extend(listed(&database, &listing, specs));
         }
@@ -340,6 +369,42 @@ mod tests {
         b.index_specs
             .push(doc! { "v": 2, "key": { "name": 1 }, "name": "name_1" });
         assert_ne!(one, fingerprint(&[(&events).into(), (&b).into()]));
+    }
+
+    fn command_error(code: i32, code_name: &str) -> mongodb::error::Error {
+        let command: mongodb::error::CommandError = mongodb::bson::from_document(doc! {
+            "code": code, "codeName": code_name, "errmsg": "x",
+        })
+        .unwrap();
+        mongodb::error::ErrorKind::Command(command).into()
+    }
+
+    #[test]
+    fn only_unauthorized_is_tolerated() {
+        assert!(is_unauthorized(&command_error(13, "Unauthorized")));
+        assert!(!is_unauthorized(&command_error(26, "NamespaceNotFound")));
+        let io = std::io::Error::new(std::io::ErrorKind::ConnectionReset, "reset");
+        let io: mongodb::error::Error =
+            mongodb::error::ErrorKind::Io(std::sync::Arc::new(io)).into();
+        assert!(!is_unauthorized(&io));
+
+        let refused: Result<Vec<Document>> = Err(command_error(13, "Unauthorized"));
+        assert_eq!(
+            unless_unauthorized(refused).unwrap(),
+            Vec::<Document>::new()
+        );
+        let failed: Result<Vec<Document>> = Err(io);
+        assert!(unless_unauthorized(failed).is_err());
+    }
+
+    #[test]
+    fn name_only_listing_is_a_plain_collection() {
+        let schema = listed("shop", &doc! { "name": "users" }, vec![])
+            .unwrap()
+            .schema;
+        assert_eq!(schema.kind, CollectionKind::Collection);
+        assert!(!schema.capped);
+        assert_eq!(schema.view_on, None);
     }
 
     #[test]

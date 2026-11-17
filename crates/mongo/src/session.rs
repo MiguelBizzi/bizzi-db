@@ -112,7 +112,7 @@ impl MongoSession {
             .collection(&ns.collection)
     }
 
-    /// `None` when counting did not finish within `COUNT_TIMEOUT`.
+    /// `None` when counting failed or timed out (`COUNT_TIMEOUT`).
     async fn total(&self, coll: &Collection<Document>, filter: &Document) -> Option<u64> {
         if filter.is_empty() {
             if let Ok(n) = coll.estimated_document_count().await {
