@@ -112,6 +112,10 @@ import {
 } from "./lib/document/documentTabs";
 import { DropCollectionModal } from "./components/DocumentView/DropCollectionModal";
 import { CollectionView } from "./components/DocumentView/CollectionView";
+import {
+  retainTabEdits,
+  type DocumentEdits,
+} from "./lib/document/documentEdits";
 import { dialectModule, engineMeta } from "@db/database";
 import { objectDdlFor, tableDdlFor } from "./lib/ddl/registry";
 import { planScript } from "./lib/ddl/types";
@@ -230,6 +234,8 @@ const ROOT_PANE_ID = "pane_root";
 // Lets the workspace paint before the drawer slides in after an update.
 const WHATS_NEW_DELAY_MS = 700;
 
+const NO_DOCUMENT_EDITS: DocumentEdits = {};
+
 // Loaded on demand so launch does not parse every release's notes.
 async function loadChangelog(): Promise<ChangelogEntry[]> {
   return (await import("./lib/changelog.data")).CHANGELOG;
@@ -272,6 +278,10 @@ export default function App() {
   >({});
   const [pendingByTable, setPendingByTable] = useState<
     Record<string, PendingModifications>
+  >({});
+  /** Unsaved document tree edits per collection tab; dropped when the tab closes. */
+  const [documentEditsByTab, setDocumentEditsByTab] = useState<
+    Readonly<Record<string, DocumentEdits>>
   >({});
   /** Staged schema edits and deletes, for every connection; see currentSchemaChanges. */
   const [schemaQueue, setSchemaQueue] = useState<StagedSchemaChange[]>([]);
@@ -924,6 +934,23 @@ export default function App() {
     () => setInsertDocumentForCollectionId(null),
     [],
   );
+  useEffect(() => {
+    setDocumentEditsByTab((prev) =>
+      retainTabEdits(
+        prev,
+        tabs.map((tab) => tab.id),
+      ),
+    );
+  }, [tabs]);
+  const updateDocumentEdits = useCallback(
+    (tabId: string, update: (prev: DocumentEdits) => DocumentEdits) =>
+      setDocumentEditsByTab((prev) => ({
+        ...prev,
+        [tabId]: update(prev[tabId] ?? NO_DOCUMENT_EDITS),
+      })),
+    [],
+  );
+
   const handleInsertDocumentInCollection = (collection: CollectionSchema) => {
     handleOpenCollection(collection);
     setInsertDocumentForCollectionId(collection.id);
@@ -2118,6 +2145,8 @@ export default function App() {
             collection={collection}
             isFocusedPane={tab.id === activeTabId}
             onSchemaChanged={() => void refreshSchemas()}
+            edits={documentEditsByTab[tab.id] ?? NO_DOCUMENT_EDITS}
+            onEditsChange={(update) => updateDocumentEdits(tab.id, update)}
             insertRequested={insertDocumentForCollectionId === collection.id}
             onInsertRequestHandled={clearInsertDocumentRequest}
           />

@@ -28,6 +28,7 @@ import { DocumentList } from './DocumentList';
 import { FieldsPanel } from './FieldsPanel';
 import type { ShellInputHandle } from './ShellInput';
 import { useDocumentEdits } from './useDocumentEdits';
+import type { DocumentEdits } from '../../lib/document/documentEdits';
 
 const EMPTY_INPUTS: FindInputs = { filter: '', projection: '', sort: '' };
 
@@ -42,6 +43,8 @@ interface CollectionViewProps {
   isFocusedPane: boolean;
   /** Called after the view changes the collection's schema or its document count. */
   onSchemaChanged: () => void;
+  edits: DocumentEdits;
+  onEditsChange: (update: (prev: DocumentEdits) => DocumentEdits) => void;
   /** The sidebar's Insert Document… opened this tab; the view opens the insert drawer once. */
   insertRequested?: boolean;
   onInsertRequestHandled?: () => void;
@@ -60,6 +63,8 @@ export function CollectionView({
   collection,
   isFocusedPane,
   onSchemaChanged,
+  edits,
+  onEditsChange,
   insertRequested,
   onInsertRequestHandled,
 }: CollectionViewProps) {
@@ -121,24 +126,26 @@ export function CollectionView({
     setQuery((prev) => ({ ...prev, revision: prev.revision + 1 }));
   }, []);
 
-  const loadedDocuments = loaded && !loaded.page.error ? loaded.page.documents : null;
+  const loadedDocuments = useMemo(() => loaded?.page.documents ?? [], [loaded]);
+  // Edits are kept per document with the original they were made on, so paging, filtering and
+  // refreshing do not lose them and need no confirmation.
   const docEdits = useDocumentEdits({
     connectionId,
     ns,
+    edits,
+    setEdits: onEditsChange,
     documents: loadedDocuments,
     reload,
     onCountChanged: onSchemaChanged,
   });
-  const { guard } = docEdits;
 
-  const apply = () =>
-    guard(() => {
-      setQuery((prev) => ({ ...prev, inputs: draftRef.current, skip: 0, revision: prev.revision + 1 }));
-    });
+  const apply = () => {
+    setQuery((prev) => ({ ...prev, inputs: draftRef.current, skip: 0, revision: prev.revision + 1 }));
+  };
 
-  const refresh = () => guard(reload);
+  const refresh = reload;
 
-  const goTo = (skip: number) => guard(() => setQuery((prev) => ({ ...prev, skip: Math.max(0, skip) })));
+  const goTo = (skip: number) => setQuery((prev) => ({ ...prev, skip: Math.max(0, skip) }));
 
   useEffect(() => {
     if (!insertRequested) return;
@@ -305,6 +312,18 @@ export function CollectionView({
         <div className="min-w-0 truncate">
           {page && !errorResult ? pageRangeLabel(shownQuery.skip, shown, total) : '—'}
           {selected.length > 0 && ` (${selected.length} selected)`}
+          {docEdits.offPageCount > 0 && (
+            <span className="ml-3 text-amber-400">
+              {docEdits.offPageCount} unsaved {docEdits.offPageCount === 1 ? 'edit' : 'edits'} on other pages
+              <button
+                type="button"
+                onClick={docEdits.discardOffPage}
+                className="ml-1.5 underline underline-offset-2 hover:text-amber-300"
+              >
+                Discard
+              </button>
+            </span>
+          )}
           {page && !errorResult && <span className="ml-3 opacity-70">{page.executionTimeMs} ms</span>}
         </div>
         <div className="flex items-center gap-3 shrink-0">
@@ -317,7 +336,7 @@ export function CollectionView({
               value={String(query.pageSize)}
               options={PAGE_SIZE_OPTIONS}
               onChange={(value) => {
-                guard(() => setQuery((prev) => ({ ...prev, pageSize: Number(value), skip: 0 })));
+                setQuery((prev) => ({ ...prev, pageSize: Number(value), skip: 0 }));
               }}
               aria-label="Documents per page"
               disabled={loading}

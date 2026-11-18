@@ -5,15 +5,13 @@ import {
   DocEditError,
   addField,
   addFieldTarget,
-  convertScalar,
+  commitInlineEdit,
   getValue,
   insertItem,
   removeField,
-  renameField,
   rowEditCapabilities,
   scalarText,
   scalarTypeOf,
-  setValue,
   uniqueFieldKey,
 } from '../../lib/document/docEdit';
 import { ensureExpanded, flattenTree, treeKey, type TreePath, type TreeRow } from '../../lib/document/docTree';
@@ -176,13 +174,7 @@ export function DocumentList({
     if (!current) return null;
     try {
       const { docIndex, path, spec } = current;
-      let doc = documents[docIndex];
-      let target = path;
-      if (spec.mode !== 'value' && values.key !== spec.initial.key) {
-        doc = renameField(doc, path, values.key);
-        target = [...path.slice(0, -1), values.key];
-      }
-      if (spec.mode !== 'rename') doc = setValue(doc, target, convertScalar(values.text, values.type));
+      const { doc, path: target } = commitInlineEdit(documents[docIndex], path, spec.mode, spec.initial.key, values);
       onChange(docIndex, doc);
       setEdit(null);
       setActiveRow({ docIndex, path: target });

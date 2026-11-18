@@ -23,11 +23,23 @@ export function withEdits(docs: DocValue[], edits: DocumentEdits): DocValue[] {
   });
 }
 
-/** Returns `edits` itself when nothing is dropped, so a reload does not re-render for nothing. */
-export function retainEdits(edits: DocumentEdits, docs: DocValue[]): DocumentEdits {
+/**
+ * Edits whose document the page does not show. A reload never drops them: a save under a sort can
+ * move another edited document to a different page.
+ */
+export function offPageEditCount(docs: DocValue[], edits: DocumentEdits): number {
   const present = new Set(docs.map(documentSelectionKey));
-  const kept = Object.entries(edits).filter(([key]) => present.has(key));
-  return kept.length === Object.keys(edits).length ? edits : Object.fromEntries(kept);
+  return Object.keys(edits).filter((key) => !present.has(key)).length;
+}
+
+/** Returns `byTab` itself when every tab is still open. */
+export function retainTabEdits(
+  byTab: Readonly<Record<string, DocumentEdits>>,
+  openTabIds: readonly string[],
+): Readonly<Record<string, DocumentEdits>> {
+  const open = new Set(openTabIds);
+  const kept = Object.entries(byTab).filter(([id]) => open.has(id));
+  return kept.length === Object.keys(byTab).length ? byTab : Object.fromEntries(kept);
 }
 
 export function dirtyIndices(docs: DocValue[], edits: DocumentEdits): number[] {

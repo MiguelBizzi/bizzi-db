@@ -7,7 +7,8 @@ import {
   idFilter,
   isConflictError,
   recordEdit,
-  retainEdits,
+  offPageEditCount,
+  retainTabEdits,
   withEdits,
   type DocumentEdits,
 } from './documentEdits';
@@ -43,11 +44,22 @@ describe('document edits', () => {
     expect(withEdits([b], edits)).toEqual([b]);
   });
 
-  test('retainEdits drops documents the page no longer has', () => {
+  test('reload keeps dirty edits for documents off the page', () => {
     const changed = obj(['_id', oid('507f1f77bcf86cd799439011')], ['name', str('Grace')]);
     const edits = recordEdit({}, keyA, a, changed);
-    expect(retainEdits(edits, [a, b])).toBe(edits);
-    expect(retainEdits(edits, [b])).toEqual({});
+    // A sorted page that shifted after a save no longer shows A.
+    expect(withEdits([b], edits)).toEqual([b]);
+    expect(dirtyIndices([b], edits)).toEqual([]);
+    expect(offPageEditCount([b], edits)).toBe(1);
+    expect(offPageEditCount([b, a], edits)).toBe(0);
+    expect(edits[keyA]).toEqual({ original: a, edited: changed });
+  });
+
+  test('retainTabEdits drops the edits of closed tabs', () => {
+    const changed = obj(['_id', oid('507f1f77bcf86cd799439011')], ['name', str('Grace')]);
+    const byTab = { t1: recordEdit({}, keyA, a, changed), t2: {} };
+    expect(retainTabEdits(byTab, ['t1', 't2', 't3'])).toBe(byTab);
+    expect(retainTabEdits(byTab, ['t1'])).toEqual({ t1: byTab.t1 });
   });
 
   test('conflict errors are recognised by the server message', () => {

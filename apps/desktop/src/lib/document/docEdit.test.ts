@@ -4,6 +4,7 @@ import {
   DocEditError,
   addField,
   addFieldTarget,
+  commitInlineEdit,
   convertScalar,
   getValue,
   insertItem,
@@ -121,6 +122,63 @@ describe('tree edits', () => {
   });
 });
 
+describe('formatEditable after an edit', () => {
+  test('integral Double, Decimal128 and Date stay as they were', () => {
+    const doc = obj(
+      ['_id', oid],
+      ['name', str('Ada')],
+      ['score', { t: 'double', v: '5.0' }],
+      ['price', { t: 'decimal128', v: '0.10' }],
+      ['born', { t: 'date', v: '1815-12-10T00:00:00.000Z' }],
+    );
+    const text = formatEditable(setValue(doc, ['name'], str('Grace')));
+    expect(text).toContain('"score": 5.0');
+    expect(text).toContain('"price": {"$numberDecimal": "0.10"}');
+    expect(text).toContain('"born": {"$date": "1815-12-10T00:00:00.000Z"}');
+  });
+
+  test('odd keys keep their order and spelling', () => {
+    const doc = obj(['10', int32('1')], ['2', int32('2')], ['a.b', int32('3')], ['$x', int32('4')], ['', int32('5')], ['plain', int32('6')]);
+    const oddKeys = ['10', '2', 'a.b', '$x', ''];
+    expect(keys(setValue(doc, ['a.b'], str('x')))).toEqual([...oddKeys, 'plain']);
+    expect(keys(setValue(doc, [''], str('x')))).toEqual([...oddKeys, 'plain']);
+    expect(keys(renameField(doc, ['plain'], 'renamed'))).toEqual([...oddKeys, 'renamed']);
+    const added = addField(doc, [], 'new', str('n'), '$x');
+    expect(keys(added)).toEqual(['10', '2', 'a.b', '$x', 'new', '', 'plain']);
+    expect(formatEditable(added)).toBe(
+      '{\n  "10": 1,\n  "2": 2,\n  "a.b": 3,\n  "$x": 4,\n  "new": "n",\n  "": 5,\n  "plain": 6\n}',
+    );
+  });
+});
+
+describe('commitInlineEdit', () => {
+  test('a value that parses is applied', () => {
+    const result = commitInlineEdit(user, ['address', 'city'], 'value', 'city', {
+      key: 'city',
+      text: 'Paris',
+      type: 'string',
+    });
+    expect(getValue(result.doc, ['address', 'city'])).toEqual(str('Paris'));
+    expect(result.path).toEqual(['address', 'city']);
+  });
+
+  test('a new field is renamed and set in one step', () => {
+    const withNew = addField(user, [], 'newField', str(''));
+    const result = commitInlineEdit(withNew, ['newField'], 'field', 'newField', { key: 'age', text: '36', type: 'int32' });
+    expect(getValue(result.doc, ['age'])).toEqual(int32('36'));
+    expect(result.path).toEqual(['age']);
+  });
+
+  test('a value that does not parse throws and leaves the document alone', () => {
+    expect(() =>
+      commitInlineEdit(user, ['name'], 'value', 'name', { key: 'name', text: 'abc', type: 'int32' }),
+    ).toThrow(DocEditError);
+    expect(() =>
+      commitInlineEdit(user, ['name'], 'rename', 'name', { key: 'credits', text: '', type: 'string' }),
+    ).toThrow(/already/);
+  });
+});
+
 describe('convertScalar', () => {
   test('convertScalar int32 range', () => {
     expect(convertScalar('2147483647', 'int32')).toEqual(int32('2147483647'));
@@ -149,7 +207,10 @@ describe('convertScalar', () => {
       t: 'date',
       v: '2024-01-02T02:04:05.000Z',
     });
+    expect(convertScalar('0050-03-04', 'date')).toEqual({ t: 'date', v: '0050-03-04T00:00:00.000Z' });
+    expect(convertScalar('0099-12-31T23:59:59Z', 'date')).toEqual({ t: 'date', v: '0099-12-31T23:59:59.000Z' });
     expect(() => convertScalar('2024-13-02', 'date')).toThrow(DocEditError);
+    expect(() => convertScalar('2023-02-29', 'date')).toThrow(DocEditError);
     expect(() => convertScalar('yesterday', 'date')).toThrow(DocEditError);
   });
 

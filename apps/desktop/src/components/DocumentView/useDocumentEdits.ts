@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { documentsDelete, documentsFind, documentsInsert, documentsReplace } from '@db/core';
 import type { DocValue, Namespace } from '@db/shared';
 import { documentSelectionKey } from '../../lib/document/collectionView';
@@ -9,8 +9,8 @@ import {
   dirtyIndices,
   idFilter,
   isConflictError,
+  offPageEditCount,
   recordEdit,
-  retainEdits,
   withEdits,
   type DocumentEdits,
 } from '../../lib/document/documentEdits';
@@ -28,8 +28,13 @@ interface EditorState extends DocumentEditorRequest {
 interface Options {
   connectionId: string;
   ns: Namespace;
-  /** The loaded page; `null` while it failed or has not loaded, so edits are not pruned against it. */
-  documents: DocValue[] | null;
+  /**
+   * Unsaved tree edits, owned by App per tab so switching tabs (which unmounts this view) keeps
+   * them. Only Save, Discard and Delete remove entries; a reload never does.
+   */
+  edits: DocumentEdits;
+  setEdits: (update: (prev: DocumentEdits) => DocumentEdits) => void;
+  documents: DocValue[];
   /** Loads the current page again without asking about unsaved edits. */
   reload: () => void;
   /** Inserts and deletes change the document count the sidebar shows. */
@@ -38,21 +43,14 @@ interface Options {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-export function useDocumentEdits({ connectionId, ns, documents, reload, onCountChanged }: Options) {
-  const [edits, setEdits] = useState<DocumentEdits>({});
+export function useDocumentEdits({ connectionId, ns, edits, setEdits, documents: page, reload, onCountChanged }: Options) {
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [deleteKeys, setDeleteKeys] = useState<string[] | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const page = useMemo(() => documents ?? [], [documents]);
-
-  useEffect(() => {
-    if (documents) setEdits((prev) => retainEdits(prev, documents));
-  }, [documents]);
-
   const shown = useMemo(() => withEdits(page, edits), [page, edits]);
   const dirty = useMemo(() => dirtyIndices(page, edits), [page, edits]);
-  const dirtyCount = Object.keys(edits).length;
+  const offPageCount = useMemo(() => offPageEditCount(page, edits), [page, edits]);
   const savingIndex = savingKey === null ? null : page.findIndex((doc) => documentSelectionKey(doc) === savingKey);
 
   const drop = (keys: readonly string[]) =>
@@ -105,19 +103,9 @@ export function useDocumentEdits({ connectionId, ns, documents, reload, onCountC
     }
   };
 
-  /** Runs `action` now, or once the user agrees to drop unsaved tree edits. */
-  const guard = (action: () => void) => {
-    if (dirtyCount === 0) {
-      action();
-      return;
-    }
-    toast(`${plural(dirtyCount, 'document')} ${dirtyCount === 1 ? 'has' : 'have'} unsaved edits.`, 'default', 8000, {
-      label: 'Discard and continue',
-      run: () => {
-        setEdits({});
-        action();
-      },
-    });
+  const discardOffPage = () => {
+    const present = new Set(page.map(documentSelectionKey));
+    drop(Object.keys(edits).filter((key) => !present.has(key)));
   };
 
   const openEdit = (docIndex: number) => {
@@ -230,7 +218,8 @@ export function useDocumentEdits({ connectionId, ns, documents, reload, onCountC
     change,
     save,
     discard,
-    guard,
+    offPageCount,
+    discardOffPage,
     editor,
     openEdit,
     openInsert,

@@ -257,8 +257,11 @@ function dateText(text: string): string {
   const [, y, mo, d, h = '0', mi = '0', s = '0', frac = '', zone = 'Z'] = match;
   const parts = [y, mo, d, h, mi, s].map(Number);
   const ms = Number(frac.slice(0, 3).padEnd(3, '0'));
-  const local = Date.UTC(parts[0], parts[1] - 1, parts[2], parts[3], parts[4], parts[5], ms);
-  const check = new Date(local);
+  // `Date.UTC` reads years 0–99 as 1900–1999; `setUTCFullYear` takes the year as given.
+  const check = new Date(0);
+  check.setUTCFullYear(parts[0], parts[1] - 1, parts[2]);
+  check.setUTCHours(parts[3], parts[4], parts[5], ms);
+  const local = check.getTime();
   if (
     check.getUTCFullYear() !== parts[0] ||
     check.getUTCMonth() !== parts[1] - 1 ||
@@ -335,4 +338,26 @@ export function rowEditCapabilities(doc: DocValue, path: TreePath): RowEditCapab
     remove: true,
     duplicate: typeof last === 'number',
   };
+}
+
+/**
+ * The document after an inline edit commits: a rename (for `rename` and `field`) and then the
+ * value (for `value` and `field`). Throws `DocEditError` when the key or the value is refused, so
+ * the editor stays open with the message instead of losing what was typed.
+ */
+export function commitInlineEdit(
+  doc: DocValue,
+  path: TreePath,
+  mode: 'rename' | 'value' | 'field',
+  initialKey: string,
+  values: { key: string; text: string; type: ScalarType },
+): { doc: DocValue; path: TreePath } {
+  let next = doc;
+  let target = path;
+  if (mode !== 'value' && values.key !== initialKey) {
+    next = renameField(next, path, values.key);
+    target = [...path.slice(0, -1), values.key];
+  }
+  if (mode !== 'rename') next = setValue(next, target, convertScalar(values.text, values.type));
+  return { doc: next, path: target };
 }

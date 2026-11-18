@@ -58,7 +58,7 @@ export interface InlineEditorSpec {
 }
 
 interface InlineEditorProps extends InlineEditorSpec {
-  /** Returns an error message to keep the editor open, or `null` once applied. */
+  /** Returns an error message to keep the editor open, or `null` once applied. Blur commits too. */
   onCommit: (values: InlineEditValues) => string | null;
   onCancel: () => void;
 }
@@ -103,8 +103,9 @@ function InlineEditor({ mode, initial, onCommit, onCancel }: InlineEditorProps) 
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
       onBlur={(event) => {
-        // Moving between the key, type and value controls stays inside the editor.
-        if (!rootRef.current?.contains(event.relatedTarget as Node | null)) onCancel();
+        // Moving between the key, type and value controls stays inside the editor. Leaving it
+        // (for example to click Save) commits, and a value that does not parse keeps its error.
+        if (!rootRef.current?.contains(event.relatedTarget as Node | null)) setError(onCommit(values));
       }}
     >
       {mode !== 'value' && (
