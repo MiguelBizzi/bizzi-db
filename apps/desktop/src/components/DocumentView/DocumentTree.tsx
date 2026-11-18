@@ -51,7 +51,6 @@ interface DocumentTreeRowProps {
   onSelect: (row: TreeRow, event: MouseEvent) => void;
 }
 
-/** One line of the document tree: key, type badge and a one-line preview of the value. */
 export function DocumentTreeRow({ row, selected, onToggle, onSelect }: DocumentTreeRowProps) {
   const label = typeLabel(row.value);
   const isDocument = row.depth === 0;

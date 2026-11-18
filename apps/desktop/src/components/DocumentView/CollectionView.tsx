@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { documentsFind } from '@db/core';
@@ -7,10 +7,13 @@ import {
   DEFAULT_DOCUMENT_PAGE_SIZE,
   DOCUMENT_PAGE_SIZES,
   canPageForward,
+  documentSelectionKey,
   insertFieldFilter,
   pageErrorResult,
   pageRangeLabel,
+  retainSelection,
   selectDocument,
+  selectedIndices,
   type FindInputs,
 } from '../../lib/document/collectionView';
 import { registerScope, type CommandScope } from '../../lib/commands/commandBus';
@@ -56,11 +59,13 @@ export function CollectionView({ connectionId, collection, isFocusedPane }: Coll
     pageSize: DEFAULT_DOCUMENT_PAGE_SIZE,
     revision: 0,
   });
-  const [page, setPage] = useState<DocumentPage | null>(null);
+  // The page keeps the query that produced it, so a request in flight never pairs the shown
+  // documents with the new query's skip or inputs.
+  const [loaded, setLoaded] = useState<{ page: DocumentPage; query: Query } | null>(null);
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState<DocumentViewMode>('list');
   const [fieldsOpen, setFieldsOpen] = useState(false);
-  const [selected, setSelected] = useState<number[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
   const filterRef = useRef<ShellInputHandle>(null);
   const requestRef = useRef(0);
   const ns = { database: collection.database, collection: collection.name };
@@ -85,8 +90,8 @@ export function CollectionView({ connectionId, collection, isFocusedPane }: Coll
       .then((next) => {
         // A slower earlier request must not overwrite the page the user asked for last.
         if (request !== requestRef.current) return;
-        setPage(next);
-        setSelected((prev) => prev.filter((i) => i < next.documents.length));
+        setLoaded({ page: next, query });
+        setSelected((prev) => retainSelection(prev, next.documents));
         setLoading(false);
       });
   }, [connectionId, collection.database, collection.name, query]);
@@ -97,7 +102,6 @@ export function CollectionView({ connectionId, collection, isFocusedPane }: Coll
   };
 
   const apply = useCallback(() => {
-    setSelected([]);
     setQuery((prev) => ({ ...prev, inputs: draftRef.current, skip: 0, revision: prev.revision + 1 }));
   }, []);
 
@@ -106,7 +110,6 @@ export function CollectionView({ connectionId, collection, isFocusedPane }: Coll
   }, []);
 
   const goTo = (skip: number) => {
-    setSelected([]);
     setQuery((prev) => ({ ...prev, skip: Math.max(0, skip) }));
   };
 
@@ -151,11 +154,23 @@ export function CollectionView({ connectionId, collection, isFocusedPane }: Coll
     filterRef.current?.setText(text, caret);
   };
 
-  const documents = page?.documents ?? [];
+  const page = loaded?.page ?? null;
+  const shownQuery = loaded?.query ?? query;
+  const documents = useMemo(() => page?.documents ?? [], [page]);
   const total = page ? (page.total ?? null) : null;
-  const errorResult = page ? pageErrorResult(page, query.inputs) : null;
+  const errorResult = page ? pageErrorResult(page, shownQuery.inputs) : null;
   const shown = documents.length;
-  const listKey = JSON.stringify([query.inputs, query.skip, query.pageSize]);
+  const listKey = JSON.stringify([shownQuery.inputs, shownQuery.skip, shownQuery.pageSize]);
+  const selectedRows = useMemo(() => selectedIndices(selected, documents), [selected, documents]);
+
+  const selectRow = (index: number, toggle: boolean) => {
+    // The old page stays on screen while the next one loads; a click there would select a
+    // document the new page may not show.
+    if (loading) return;
+    const key = documentSelectionKey(documents[index]);
+    if (key === undefined) return;
+    setSelected((prev) => selectDocument(prev, key, toggle));
+  };
 
   return (
     <div className="flex flex-col h-full min-h-0 min-w-0 bg-background overflow-hidden">
@@ -190,9 +205,9 @@ export function CollectionView({ connectionId, collection, isFocusedPane }: Coll
           )}
           {page && !errorResult && shown === 0 && (
             <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-              {query.skip > 0
+              {shownQuery.skip > 0
                 ? 'No more documents.'
-                : query.inputs.filter.trim()
+                : shownQuery.inputs.filter.trim()
                   ? 'No documents match the filter.'
                   : 'This collection is empty.'}
             </div>
@@ -201,8 +216,8 @@ export function CollectionView({ connectionId, collection, isFocusedPane }: Coll
             <DocumentList
               key={listKey}
               documents={documents}
-              selected={selected}
-              onSelect={(index, toggle) => setSelected((prev) => selectDocument(prev, index, toggle))}
+              selected={selectedRows}
+              onSelect={selectRow}
               aria-label={`Documents in ${collection.name}`}
             />
           )}
@@ -224,7 +239,7 @@ export function CollectionView({ connectionId, collection, isFocusedPane }: Coll
 
       <div className="px-3 py-1.5 bg-card border-t border-border text-xs font-mono text-muted-foreground flex items-center justify-between gap-3 shrink-0">
         <div className="min-w-0 truncate">
-          {page && !errorResult ? pageRangeLabel(query.skip, shown, total) : '—'}
+          {page && !errorResult ? pageRangeLabel(shownQuery.skip, shown, total) : '—'}
           {selected.length > 0 && ` (${selected.length} selected)`}
           {page && !errorResult && <span className="ml-3 opacity-70">{page.executionTimeMs} ms</span>}
         </div>
@@ -238,7 +253,6 @@ export function CollectionView({ connectionId, collection, isFocusedPane }: Coll
               value={String(query.pageSize)}
               options={PAGE_SIZE_OPTIONS}
               onChange={(value) => {
-                setSelected([]);
                 setQuery((prev) => ({ ...prev, pageSize: Number(value), skip: 0 }));
               }}
               aria-label="Documents per page"
@@ -248,8 +262,8 @@ export function CollectionView({ connectionId, collection, isFocusedPane }: Coll
           <div className="flex items-center gap-0.5">
             <button
               type="button"
-              onClick={() => goTo(query.skip - query.pageSize)}
-              disabled={query.skip === 0 || loading}
+              onClick={() => goTo(shownQuery.skip - shownQuery.pageSize)}
+              disabled={shownQuery.skip === 0 || loading}
               title="Previous page"
               aria-label="Previous page"
               className="p-1 rounded-md hover:bg-accent text-foreground disabled:opacity-30 disabled:pointer-events-none"
@@ -258,8 +272,13 @@ export function CollectionView({ connectionId, collection, isFocusedPane }: Coll
             </button>
             <button
               type="button"
-              onClick={() => goTo(query.skip + query.pageSize)}
-              disabled={!page || Boolean(errorResult) || loading || !canPageForward(query.skip, shown, query.pageSize, total)}
+              onClick={() => goTo(shownQuery.skip + shownQuery.pageSize)}
+              disabled={
+                !page ||
+                Boolean(errorResult) ||
+                loading ||
+                !canPageForward(shownQuery.skip, shown, shownQuery.pageSize, total)
+              }
               title="Next page"
               aria-label="Next page"
               className="p-1 rounded-md hover:bg-accent text-foreground disabled:opacity-30 disabled:pointer-events-none"

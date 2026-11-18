@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import type { DocumentPage } from '@db/shared';
+import type { DocValue, DocumentPage } from '@db/shared';
 import {
   canPageForward,
+  documentSelectionKey,
+  retainSelection,
+  selectedIndices,
   insertFieldFilter,
   pageErrorResult,
   pageRangeLabel,
@@ -31,12 +34,40 @@ describe('insertFieldFilter', () => {
 
 describe('selectDocument', () => {
   test('a plain click selects only that document', () => {
-    expect(selectDocument([1, 2], 4, false)).toEqual([4]);
+    expect(selectDocument(['a', 'b'], 'd', false)).toEqual(['d']);
   });
 
   test('a modifier click toggles it in the selection', () => {
-    expect(selectDocument([1], 3, true)).toEqual([1, 3]);
-    expect(selectDocument([1, 3], 1, true)).toEqual([3]);
+    expect(selectDocument(['a'], 'c', true)).toEqual(['a', 'c']);
+    expect(selectDocument(['a', 'c'], 'a', true)).toEqual(['c']);
+  });
+});
+
+describe('document selection by id', () => {
+  const doc = (id: number): DocValue => ({ t: 'object', entries: [['_id', { t: 'int32', v: String(id) }]] });
+  const noId: DocValue = { t: 'object', entries: [['name', { t: 'string', v: 'x' }]] };
+
+  test('selection survives a refresh by id', () => {
+    const selected = [documentSelectionKey(doc(2))!];
+    const refreshed = [doc(9), doc(1), doc(2)];
+    expect(retainSelection(selected, refreshed)).toEqual(selected);
+    expect(selectedIndices(selected, refreshed)).toEqual([2]);
+  });
+
+  test('selection drops ids missing from the new page', () => {
+    const selected = [documentSelectionKey(doc(1))!, documentSelectionKey(doc(2))!];
+    expect(retainSelection(selected, [doc(2), doc(3)])).toEqual([documentSelectionKey(doc(2))]);
+  });
+
+  test('documents without _id are not selectable', () => {
+    expect(documentSelectionKey(noId)).toBeUndefined();
+    expect(selectedIndices([documentSelectionKey(doc(1))!], [noId, doc(1)])).toEqual([1]);
+  });
+
+  test('keys tell apart ids of different types', () => {
+    expect(documentSelectionKey(doc(1))).not.toBe(
+      documentSelectionKey({ t: 'object', entries: [['_id', { t: 'int64', v: '1' }]] }),
+    );
   });
 });
 

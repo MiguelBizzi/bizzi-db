@@ -21,8 +21,8 @@ interface DocumentListProps {
  */
 export function DocumentList({ documents, selected, onSelect, 'aria-label': ariaLabel }: DocumentListProps) {
   const portRef = useRef<HTMLDivElement>(null);
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
-  const rows = useMemo(() => flattenTree(documents, expanded), [documents, expanded]);
+  const [toggled, setToggled] = useState<ReadonlySet<string>>(() => new Set());
+  const rows = useMemo(() => flattenTree(documents, toggled), [documents, toggled]);
   const range = useGridWindow({
     portRef,
     rowCount: rows.length,
@@ -35,7 +35,7 @@ export function DocumentList({ documents, selected, onSelect, 'aria-label': aria
 
   const toggle = (row: TreeRow) => {
     const key = treeKey(row.docIndex, row.path);
-    setExpanded((prev) => {
+    setToggled((prev) => {
       const next = new Set(prev);
       if (!next.delete(key)) next.add(key);
       return next;

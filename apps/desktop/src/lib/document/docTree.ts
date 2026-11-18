@@ -137,7 +137,6 @@ function truncate(text: string, max: number): string {
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** One line summary of a value, at most `max` characters. */
 export function previewText(v: DocValue, max = 80): string {
   switch (v.t) {
     case 'object':
@@ -189,16 +188,16 @@ function isExpandable(v: DocValue): boolean {
 }
 
 /**
- * The visible rows of a page of documents. A key in `expanded` flips its node from the default:
+ * The visible rows of a page of documents. A key in `toggled` flips its node from the default:
  * documents start open, nested values start closed.
  */
-export function flattenTree(docs: DocValue[], expanded: ReadonlySet<string>): TreeRow[] {
+export function flattenTree(docs: DocValue[], toggled: ReadonlySet<string>): TreeRow[] {
   const rows: TreeRow[] = [];
   const visit = (docIndex: number, path: TreePath, key: string, value: DocValue) => {
     const depth = path.length;
     const expandable = isExpandable(value);
-    const toggled = expanded.has(treeKey(docIndex, path));
-    const open = expandable && (depth === 0 ? !toggled : toggled);
+    const flipped = toggled.has(treeKey(docIndex, path));
+    const open = expandable && (depth === 0 ? !flipped : flipped);
     rows.push({ docIndex, path, depth, key, value, expandable, expanded: open });
     if (!open) return;
     if (value.t === 'object') {

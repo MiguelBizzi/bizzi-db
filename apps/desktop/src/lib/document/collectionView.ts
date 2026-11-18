@@ -1,4 +1,5 @@
-import type { DocumentPage, QueryExecutionResult } from '@db/shared';
+import type { DocValue, DocumentPage, QueryExecutionResult } from '@db/shared';
+import { documentId, formatEditable } from './docTree';
 
 export const DOCUMENT_PAGE_SIZES = [20, 50, 100] as const;
 export const DEFAULT_DOCUMENT_PAGE_SIZE = 50;
@@ -12,10 +13,35 @@ export function insertFieldFilter(filter: string, path: string): { text: string;
   return { text, caret: text.length - 1 };
 }
 
-/** Selected document indices after a click; `toggle` is a ⌘/Ctrl-click. */
-export function selectDocument(selected: readonly number[], index: number, toggle: boolean): number[] {
-  if (!toggle) return [index];
-  return selected.includes(index) ? selected.filter((i) => i !== index) : [...selected, index];
+/**
+ * Selection is keyed by `_id` so a refresh that reorders, inserts or deletes documents cannot move
+ * it onto another document. `undefined` means the document has no `_id` and cannot be selected,
+ * since edits and deletes address documents by id.
+ */
+export function documentSelectionKey(doc: DocValue): string | undefined {
+  const id = documentId(doc);
+  return id ? formatEditable(id) : undefined;
+}
+
+/** Selection keys after a click; `toggle` is a ⌘/Ctrl-click. */
+export function selectDocument(selected: readonly string[], key: string, toggle: boolean): string[] {
+  if (!toggle) return [key];
+  return selected.includes(key) ? selected.filter((k) => k !== key) : [...selected, key];
+}
+
+export function retainSelection(selected: readonly string[], docs: DocValue[]): string[] {
+  const present = new Set(docs.map(documentSelectionKey));
+  return selected.filter((key) => present.has(key));
+}
+
+export function selectedIndices(selected: readonly string[], docs: DocValue[]): number[] {
+  const keys = new Set(selected);
+  const indices: number[] = [];
+  docs.forEach((doc, i) => {
+    const key = documentSelectionKey(doc);
+    if (key !== undefined && keys.has(key)) indices.push(i);
+  });
+  return indices;
 }
 
 /** `total` is `null` when the count did not finish in time. */
