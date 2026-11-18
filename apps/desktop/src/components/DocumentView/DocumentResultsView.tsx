@@ -20,7 +20,6 @@ interface DocumentResultsViewProps {
   /** The text that was run, which error positions refer to. */
   runText: string;
   isLoading: boolean;
-  /** Names the exported file. */
   exportName: string;
   onJump: (position: QueryErrorPosition) => void;
 }
@@ -138,6 +137,7 @@ export function DocumentResultsView({ results, runText, isLoading, exportName, o
               <div className="p-3">
                 <QueryErrorCard
                   onJump={onJump}
+                  fallbackHeading="Command failed"
                   result={{
                     id: result.id,
                     query: runText,

@@ -34,9 +34,18 @@ export interface DocumentQueryState {
   text: string;
   /** Where `text` starts in the editor. */
   offset: number;
+  /** The database runs go to; only meaningful once `databasePicked`, until then it follows the schema. */
+  database: string;
+  databasePicked: boolean;
 }
 
-export const EMPTY_DOCUMENT_QUERY_STATE: DocumentQueryState = { results: [], text: '', offset: 0 };
+export const EMPTY_DOCUMENT_QUERY_STATE: DocumentQueryState = {
+  results: [],
+  text: '',
+  offset: 0,
+  database: '',
+  databasePicked: false,
+};
 
 export function defaultQueryDatabase(
   profileDatabase: string,

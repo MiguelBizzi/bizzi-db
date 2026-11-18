@@ -6,16 +6,21 @@ const SUGGESTED_TAGS = ['Core', 'Analytics', 'Revenue', 'Inventory', 'Performanc
 
 interface SaveQueryModalProps {
   sql: string;
-  /** Heading, e.g. "Save SQL Query". */
   title: string;
+  /** Label above the code preview, e.g. "SQL Code Preview". */
+  previewLabel: string;
+  /** Starts the comment line a default title is taken from: `--` for SQL, `//` for shell text. */
+  commentPrefix: string;
   onSave: (title: string, description: string, tags: string[]) => void;
   onClose: () => void;
 }
 
-export function SaveQueryModal({ sql, title, onSave, onClose }: SaveQueryModalProps) {
-  const [saveTitle, setSaveTitle] = useState(
-    () => sql.trim().split('\n')[0].replace(/^(--|\/\/)\s*/, '').slice(0, 40) || 'New Saved Query'
-  );
+export function SaveQueryModal({ sql, title, previewLabel, commentPrefix, onSave, onClose }: SaveQueryModalProps) {
+  const [saveTitle, setSaveTitle] = useState(() => {
+    const first = sql.trim().split('\n')[0];
+    const title = first.startsWith(commentPrefix) ? first.slice(commentPrefix.length).trimStart() : first;
+    return title.slice(0, 40) || 'New Saved Query';
+  });
   const [saveDescription, setSaveDescription] = useState('');
   const [saveTags, setSaveTags] = useState<string[]>(['Analytics']);
   const [newTagInput, setNewTagInput] = useState('');
@@ -130,7 +135,7 @@ export function SaveQueryModal({ sql, title, onSave, onClose }: SaveQueryModalPr
           </div>
 
           <div>
-            <label className="block text-muted-foreground font-medium mb-1 font-mono">Code Preview</label>
+            <label className="block text-muted-foreground font-medium mb-1 font-mono">{previewLabel}</label>
             <div className="p-3 bg-background border border-border rounded-lg font-mono text-[11px] text-primary max-h-28 overflow-y-auto whitespace-pre-wrap">
               {sql}
             </div>

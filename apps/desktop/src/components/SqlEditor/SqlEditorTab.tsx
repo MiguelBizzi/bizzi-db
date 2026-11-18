@@ -716,6 +716,8 @@ export const SqlEditorTab: React.FC<SqlEditorTabProps> = ({
           <SaveQueryModal
             sql={sql}
             title="Save SQL Query"
+            previewLabel="SQL Code Preview"
+            commentPrefix="--"
             onSave={(title, description, tags) => {
               onBookmarkQuery(title, sql, description, tags);
               setIsSaveModalOpen(false);

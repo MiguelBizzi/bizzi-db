@@ -8,10 +8,12 @@ interface QueryErrorCardProps {
   result: QueryExecutionResult;
   /** Makes the line and column a button that moves the editor caret there. */
   onJump?: (position: QueryErrorPosition) => void;
+  /** Heading when the error has no structured category. */
+  fallbackHeading?: string;
 }
 
 /** What the database said went wrong with a query, and where. */
-export function QueryErrorCard({ result, onJump }: QueryErrorCardProps) {
+export function QueryErrorCard({ result, onJump, fallbackHeading = 'SQL Execution Error' }: QueryErrorCardProps) {
   const info = result.errorInfo;
   const excerpt = info ? errorExcerpt(result.query, info.position) : null;
   const facts = info ? errorFacts(info) : [];
@@ -20,7 +22,7 @@ export function QueryErrorCard({ result, onJump }: QueryErrorCardProps) {
     <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/40 text-red-400 space-y-3 font-mono text-xs shadow-lg select-text">
       <div className="flex items-center gap-2 font-bold text-red-400">
         <AlertCircle className="w-5 h-5 shrink-0" />
-        <span>{info ? categoryLabel(info.category) : 'SQL Execution Error'}</span>
+        <span>{info ? categoryLabel(info.category) : fallbackHeading}</span>
         <span className="ml-auto flex items-center gap-1.5">
           {(info?.code || info?.vendorCode != null) && (
             <span className="text-[11px] font-normal text-red-400/80">

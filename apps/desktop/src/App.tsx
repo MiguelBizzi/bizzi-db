@@ -117,6 +117,7 @@ import {
 } from "./lib/document/documentResults";
 import { DropCollectionModal } from "./components/DocumentView/DropCollectionModal";
 import { CollectionView } from "./components/DocumentView/CollectionView";
+import { savedQueriesFor } from "./lib/savedQueries";
 import { DocumentQueryTab } from "./components/DocumentView/DocumentQueryTab";
 import {
   retainTabEdits,
@@ -2269,7 +2270,7 @@ export default function App() {
               onOpenTable: handleSelectTableData,
             }}
             currentDatabase={currentDatabase}
-            savedQueries={savedQueries}
+            savedQueries={savedQueriesFor(savedQueries, profiles, currentDatabase.id)}
             onExecuteQuery={async (sql, options) => {
               const res = await queryExecute({
                 connectionId: currentDatabase.id,
@@ -2326,7 +2327,7 @@ export default function App() {
               profiles.find((p) => p.id === currentDatabase.id)?.database ?? ""
             }
             collections={currentDatabase.collections ?? []}
-            savedQueries={savedQueries}
+            savedQueries={savedQueriesFor(savedQueries, profiles, currentDatabase.id)}
             state={documentQueryStates[tab.id] ?? EMPTY_DOCUMENT_QUERY_STATE}
             onStateChange={(next) =>
               setDocumentQueryStates((prev) => ({ ...prev, [tab.id]: next }))
@@ -2876,7 +2877,7 @@ export default function App() {
           onClose={() => setIsCommandPaletteOpen(false)}
           databases={databases}
           currentDatabase={currentDatabase}
-          savedQueries={savedQueries}
+          savedQueries={savedQueriesFor(savedQueries, profiles, currentDatabase?.id)}
           onSelectTable={handleSelectTableData}
           onSelectQuery={(sql, title) =>
             handleOpenNewQueryTab(sql, undefined, title)
