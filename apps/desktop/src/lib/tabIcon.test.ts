@@ -34,4 +34,21 @@ describe('tabObjectKind', () => {
     expect(tabObjectKind(tab({ tableId: 'gone' }), database)).toBe('table');
     expect(tabObjectKind(tab({ tableId: 'public.users' }), undefined)).toBe('table');
   });
+
+  test('collection tabs follow the collection kind', () => {
+    const db = {
+      tables: [],
+      collections: [
+        { id: 'shop.users', kind: 'collection' },
+        { id: 'shop.active', kind: 'view' },
+        { id: 'shop.metrics', kind: 'timeseries' },
+      ],
+    } as unknown as Pick<DatabaseSchema, 'tables' | 'collections'>;
+    const coll = (tableId: string) => tab({ type: 'collection_documents', tableId });
+    expect(tabObjectKind(coll('shop.users'), db)).toBe('collection');
+    expect(tabObjectKind(coll('shop.active'), db)).toBe('view');
+    expect(tabObjectKind(coll('shop.metrics'), db)).toBe('timeseries');
+    expect(tabObjectKind(coll('shop.gone'), db)).toBe('collection');
+    expect(tabObjectKind(coll('shop.users'), undefined)).toBe('collection');
+  });
 });

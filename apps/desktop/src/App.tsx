@@ -40,6 +40,7 @@ import { Toaster } from "./components/ui/Toaster";
 import {
   DatabaseSchema,
   RoutineDefinition,
+  CollectionSchema,
   TableSchema,
   WorkspaceTab,
   SavedQuery,
@@ -61,6 +62,7 @@ import {
   connectionsList,
   connectionsMove,
   connectionsSave,
+  collectionDrop,
   connectionsTest,
   foldersDelete,
   foldersList,
@@ -104,6 +106,11 @@ import {
   type RoutineTarget,
 } from "./lib/routineTabs";
 import { tabObjectKind } from "./lib/tabIcon";
+import {
+  closableCollectionTabIds,
+  newCollectionTab,
+} from "./lib/document/documentTabs";
+import { DropCollectionModal } from "./components/DocumentView/DropCollectionModal";
 import { dialectModule, engineMeta } from "@db/database";
 import { objectDdlFor, tableDdlFor } from "./lib/ddl/registry";
 import { planScript } from "./lib/ddl/types";
@@ -359,6 +366,9 @@ export default function App() {
   const [routineToDrop, setRoutineToDrop] = useState<RoutineDefinition | null>(
     null,
   );
+  const [collectionToDrop, setCollectionToDrop] =
+    useState<CollectionSchema | null>(null);
+  const [droppingCollection, setDroppingCollection] = useState(false);
   const [tableActionConfirm, setTableActionConfirm] = useState<{
     table: TableSchema;
     action: "truncate" | "drop";
@@ -884,6 +894,46 @@ export default function App() {
     void enqueueSchemaCheck();
   };
 
+  const findCollection = (collectionId?: string): CollectionSchema | undefined =>
+    collectionId
+      ? currentDatabase?.collections?.find((c) => c.id === collectionId)
+      : undefined;
+
+  const handleOpenCollection = (collection: CollectionSchema) => {
+    if (!currentDatabase) return;
+    revealTabInPane(
+      activePaneId,
+      (tab) =>
+        tab.type === "collection_documents" && tab.tableId === collection.id,
+      () => newCollectionTab(collection, currentDatabase.id),
+    );
+    void enqueueSchemaCheck();
+  };
+
+  const handleInsertDocumentInCollection = handleOpenCollection;
+  const handleNewCollectionIndex = handleOpenCollection;
+
+  const handleConfirmDropCollection = async () => {
+    const collection = collectionToDrop;
+    if (!collection || !currentDatabase || droppingCollection) return;
+    setDroppingCollection(true);
+    try {
+      await collectionDrop(currentDatabase.id, {
+        database: collection.database,
+        collection: collection.name,
+      });
+      const closing = new Set(closableCollectionTabIds(tabs, collection.id));
+      closeTabsWhere((tab) => closing.has(tab.id));
+      setCollectionToDrop(null);
+      toast.success(`Dropped ${collection.id}`);
+      await refreshSchemas();
+    } catch (error) {
+      toast.error(invokeErrorMessage(error, "Could not drop the collection"));
+    } finally {
+      setDroppingCollection(false);
+    }
+  };
+
   const handleSelectTableSchema = (table: TableSchema) => {
     revealTabInPane(
       activePaneId,
@@ -1239,6 +1289,12 @@ export default function App() {
       }
       if (tab.type === "view_designer" && tab.tableId) {
         return tableIds.has(tab.tableId);
+      }
+      if (tab.type === "collection_documents") {
+        return Boolean(
+          tab.tableId &&
+            currentDatabase.collections?.some((c) => c.id === tab.tableId),
+        );
       }
       if (tab.type === "function_designer" && tab.routineId) {
         return Boolean(
@@ -2026,6 +2082,21 @@ export default function App() {
     }
 
     switch (tab.type) {
+      case "collection_documents": {
+        const collection = findCollection(tab.tableId);
+        if (!collection) {
+          return (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+              Collection not found in the current schema.
+            </div>
+          );
+        }
+        return (
+          <div key={tab.id} className="p-4 text-sm font-mono">
+            {collection.id} ({collection.kind})
+          </div>
+        );
+      }
       case "table_data": {
         const table = findTable(tab.tableId, tab.title);
         if (!table) {
@@ -2368,6 +2439,7 @@ export default function App() {
           isActivityLogOpen,
           tableActionConfirm: Boolean(tableActionConfirm),
           routineToDrop: Boolean(routineToDrop),
+          collectionToDrop: Boolean(collectionToDrop),
         },
       }),
     [
@@ -2386,6 +2458,7 @@ export default function App() {
       isActivityLogOpen,
       tableActionConfirm,
       routineToDrop,
+      collectionToDrop,
       currentDatabase?.dialect,
     ],
   );
@@ -2567,7 +2640,8 @@ export default function App() {
                   onToggleCollapsed={toggleSidebar}
                   currentDatabase={currentDatabase}
                   activeTableId={
-                    activeTab?.type === "table_data"
+                    activeTab?.type === "table_data" ||
+                    activeTab?.type === "collection_documents"
                       ? activeTab.tableId
                       : undefined
                   }
@@ -2585,6 +2659,12 @@ export default function App() {
                     onOpenSql: handleOpenRoutineSql,
                     onCopyName: handleCopyRoutineSignature,
                     onDrop: setRoutineToDrop,
+                  }}
+                  collectionHandlers={{
+                    onOpen: handleOpenCollection,
+                    onInsertDocument: handleInsertDocumentInCollection,
+                    onNewIndex: handleNewCollectionIndex,
+                    onDrop: setCollectionToDrop,
                   }}
                   onOpenTableSql={handleOpenTableSql}
                   onCopyTableSchema={handleCopyTableSchema}
@@ -2723,6 +2803,13 @@ export default function App() {
             onStage={stageSchema}
           />
         )}
+
+        <DropCollectionModal
+          collection={collectionToDrop}
+          busy={droppingCollection}
+          onClose={() => setCollectionToDrop(null)}
+          onConfirm={() => void handleConfirmDropCollection()}
+        />
 
         <ConfirmTableActionModal
           table={tableActionConfirm?.table ?? null}
