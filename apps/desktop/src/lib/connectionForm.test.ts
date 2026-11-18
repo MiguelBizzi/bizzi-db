@@ -341,6 +341,20 @@ describe('MongoDB connection form', () => {
     expect(visibleConnectionFields(mongo, { params: {} })).toContain('port');
   });
 
+  test('a cleared port does not block an SRV profile', () => {
+    const form = {
+      ...defaultConnectionForm(),
+      dialect: 'MongoDB' as const,
+      port: Number.NaN,
+      username: '',
+      databaseName: '',
+      params: { srv: 'true' },
+    };
+    const options = { passwordRequired: false, keychainEnabled: false };
+    expect(connectionFormErrors(form, options).port).toBeUndefined();
+    expect(connectionFormErrors({ ...form, params: {} }, options).port).toBeDefined();
+  });
+
   test('relational engines always show every base field', () => {
     expect(visibleConnectionFields(postgres, { params: { srv: 'true' } })).toEqual([
       'host',

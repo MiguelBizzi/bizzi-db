@@ -275,6 +275,8 @@ mod tests {
         assert!(validate_params(DatabaseDialect::MongoDB, &long, false).is_err());
         let control = BTreeMap::from([("authSource".into(), "ad\nmin".into())]);
         assert!(validate_params(DatabaseDialect::MongoDB, &control, false).is_err());
+        let bracketed = BTreeMap::from([("hosts".into(), "[::1]:27018,b:27019".into())]);
+        assert!(validate_params(DatabaseDialect::MongoDB, &bracketed, false).is_ok());
         let bad_host = BTreeMap::from([("hosts".into(), "nohostport".into())]);
         assert!(validate_params(DatabaseDialect::MongoDB, &bad_host, false).is_err());
     }

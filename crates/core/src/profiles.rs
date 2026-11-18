@@ -5,8 +5,8 @@ use crate::types::{
     HistoryStatus, QueryExecutionResult, SaveConnectionInput, SshAuthMethod,
 };
 
-use crate::engines::{paradigm_of, validate_params, Paradigm};
 pub use crate::engines::{database_required, dialect_is_supported, dialect_label};
+use crate::engines::{paradigm_of, validate_params, Paradigm};
 
 pub const MIN_POOL_SIZE: u32 = 1;
 pub const MAX_POOL_SIZE: u32 = 32;
@@ -217,9 +217,7 @@ pub fn password_required(dialect: DatabaseDialect, user: &str) -> bool {
 }
 
 pub fn new_connection_requires_password(input: &SaveConnectionInput) -> bool {
-    input.password.is_empty()
-        && input.id.is_none()
-        && password_required(input.dialect, &input.user)
+    input.password.is_empty() && input.id.is_none() && password_required(input.dialect, &input.user)
 }
 
 /// The password for a saved profile; a missing secret is only an error when one is required.

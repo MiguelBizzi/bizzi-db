@@ -23,10 +23,11 @@ pub use engines::{
 };
 pub use profiles::{
     clamp_pool_size, connect_config_from_profile, database_required, dialect_is_supported,
-    dialect_label, history_item_from_result, new_connection_requires_password, overlay_schema, password_required,
-    profile_from_save_input, resolve_connection_password, resolve_optional_secret, resolve_stored_password, ssh_secret_key,
-    ssh_tunnel_from_profile, ssh_tunnel_from_save, validate_folder_name, validate_save_input,
-    validate_ssh_save_input, MAX_POOL_SIZE, MIN_POOL_SIZE,
+    dialect_label, history_item_from_result, new_connection_requires_password, overlay_schema,
+    password_required, profile_from_save_input, resolve_connection_password,
+    resolve_optional_secret, resolve_stored_password, ssh_secret_key, ssh_tunnel_from_profile,
+    ssh_tunnel_from_save, validate_folder_name, validate_save_input, validate_ssh_save_input,
+    MAX_POOL_SIZE, MIN_POOL_SIZE,
 };
 pub use query_error::*;
 pub use sql::{

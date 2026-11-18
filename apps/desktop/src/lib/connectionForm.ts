@@ -129,7 +129,8 @@ export function connectionFormErrors(
   const next: Partial<Record<ConnectionFormField, string>> = {};
   if (!values.name.trim()) next.name = 'Required';
   if (!values.host.trim()) next.host = 'Required';
-  if (!Number.isFinite(values.port) || values.port < 1 || values.port > 65535) {
+  const portVisible = visibleConnectionFields(engineMeta(values.dialect), values).includes('port');
+  if (portVisible && (!Number.isFinite(values.port) || values.port < 1 || values.port > 65535)) {
     next.port = 'Enter a port from 1 to 65535';
   }
   const databaseOptional = engineMeta(values.dialect)?.databaseOptional === true;
@@ -202,7 +203,7 @@ export function connectionFormToInput(
     name: values.name.trim(),
     dialect: values.dialect,
     host: values.host.trim(),
-    port: values.port,
+    port: Number.isFinite(values.port) ? values.port : (engineMeta(values.dialect)?.defaultPort ?? 0),
     database: values.databaseName.trim(),
     user: values.username.trim(),
     password: values.password,

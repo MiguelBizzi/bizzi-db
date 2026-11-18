@@ -244,6 +244,13 @@ mod tests {
     }
 
     #[test]
+    fn bracketed_ipv6_seed_host_parses() {
+        let c = cfg(&[("hosts", "[::1]:27018")]);
+        let opts = client_options(&c, None).unwrap();
+        assert_eq!(opts.hosts, [addr("db.example", 27017), addr("::1", 27018)]);
+    }
+
+    #[test]
     fn extra_hosts_added() {
         let c = cfg(&[
             ("hosts", " b:27018, c:27019 ,"),

@@ -11,14 +11,14 @@ use std::sync::{Arc, Mutex};
 use db_core::{
     connect_config_from_profile, dialect_label, history_item_from_result,
     new_connection_requires_password, overlay_schema, paradigm_of, profile_from_save_input,
-    resolve_connection_password, resolve_stored_password, schema_cache_is_fresh, ssh_secret_key, ssh_tunnel_from_profile,
-    ssh_tunnel_from_save, validate_folder_name, validate_save_input, ActivityLogItem, Adapter,
-    AppSettings, ConnectionFolder, ConnectionProfile, ConnectionStatus, DatabaseDialect,
-    DatabaseSchema, DocumentAdapter, DocumentSession, ExecuteQueryRequest, Paradigm, PostgresSql,
-    QueryExecuteResponse, QueryExecutionResult, QueryPageRequest, RoutineSource,
-    RoutineSourceRequest, SaveConnectionInput, SaveFolderInput, SavedQuery, SchemaSyncRequest,
-    SchemaSyncResponse, Session, SqlDialect, SqlRange, SshAuthMethod, TablePreviewRequest,
-    TestConnectionResult, WorkspaceState,
+    resolve_connection_password, resolve_stored_password, schema_cache_is_fresh, ssh_secret_key,
+    ssh_tunnel_from_profile, ssh_tunnel_from_save, validate_folder_name, validate_save_input,
+    ActivityLogItem, Adapter, AppSettings, ConnectionFolder, ConnectionProfile, ConnectionStatus,
+    DatabaseDialect, DatabaseSchema, DocumentAdapter, DocumentSession, ExecuteQueryRequest,
+    Paradigm, PostgresSql, QueryExecuteResponse, QueryExecutionResult, QueryPageRequest,
+    RoutineSource, RoutineSourceRequest, SaveConnectionInput, SaveFolderInput, SavedQuery,
+    SchemaSyncRequest, SchemaSyncResponse, Session, SqlDialect, SqlRange, SshAuthMethod,
+    TablePreviewRequest, TestConnectionResult, WorkspaceState,
 };
 use db_mongo::MongoAdapter;
 use db_mssql::MssqlAdapter;

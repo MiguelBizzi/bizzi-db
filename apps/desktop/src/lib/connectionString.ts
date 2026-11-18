@@ -170,7 +170,9 @@ function parseDocumentUri(raw: string, meta: EngineModule): ParseConnectionStrin
   const params: Record<string, string> = {};
   if (srv) params.srv = 'true';
   if (others.length > 0) {
-    params.hosts = others.map((e) => `${e.host}:${e.port ?? meta.defaultPort}`).join(',');
+    params.hosts = others
+      .map((e) => `${e.host.includes(':') ? `[${e.host}]` : e.host}:${e.port ?? meta.defaultPort}`)
+      .join(',');
   }
 
   const queryParams = new Map(

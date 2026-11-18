@@ -344,6 +344,11 @@ describe('parseConnectionString for MongoDB', () => {
     });
   });
 
+  test('keeps brackets around IPv6 seed hosts', () => {
+    const result = parseConnectionString('mongodb://a,[::1]:27018/');
+    expect(result.ok && !result.empty && result.value.params.hosts).toBe('[::1]:27018');
+  });
+
   test('maps tls options to the SSL mode and drops default booleans', () => {
     const insecure = parseConnectionString(
       'mongodb://localhost/?tls=true&tlsAllowInvalidCertificates=true&directConnection=false',
