@@ -5,7 +5,7 @@ use crate::types::{
     HistoryStatus, QueryExecutionResult, SaveConnectionInput, SshAuthMethod,
 };
 
-use crate::engines::validate_params;
+use crate::engines::{paradigm_of, validate_params, Paradigm};
 pub use crate::engines::{database_required, dialect_is_supported, dialect_label};
 
 pub const MIN_POOL_SIZE: u32 = 1;
@@ -188,6 +188,12 @@ pub fn connect_config_from_profile(
     password: String,
     tunnel_port: Option<u16>,
 ) -> ConnectConfig {
+    let mut params = profile.params.clone();
+    // A tunnel reaches one host; replica-set discovery would hand the driver
+    // member addresses that only resolve inside the remote network.
+    if tunnel_port.is_some() && paradigm_of(profile.dialect) == Paradigm::Document {
+        params.insert("directConnection".into(), "true".into());
+    }
     ConnectConfig {
         dialect: profile.dialect,
         host: if tunnel_port.is_some() {
@@ -201,7 +207,7 @@ pub fn connect_config_from_profile(
         password,
         ssl_mode: profile.ssl_mode,
         pool_size: profile.pool_size,
-        params: profile.params.clone(),
+        params,
     }
 }
 
@@ -539,6 +545,19 @@ mod tests {
         assert_eq!(tunneled.host, "127.0.0.1");
         assert_eq!(tunneled.port, 61_001);
         assert_eq!(tunneled.password, "secret");
+    }
+
+    #[test]
+    fn tunnelled_document_profile_forces_direct_connection() {
+        let mut mongo = profile();
+        mongo.dialect = DatabaseDialect::MongoDB;
+        let direct = connect_config_from_profile(&mongo, "s".into(), None);
+        assert!(!direct.params.contains_key("directConnection"));
+        let tunnelled = connect_config_from_profile(&mongo, "s".into(), Some(61_001));
+        assert_eq!(tunnelled.params["directConnection"], "true");
+
+        let relational = connect_config_from_profile(&profile(), "s".into(), Some(61_001));
+        assert!(relational.params.is_empty());
     }
 
     #[test]

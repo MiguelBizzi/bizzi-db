@@ -141,7 +141,7 @@ const ENGINES: &[EngineSpec] = &[
     EngineSpec {
         dialect: DatabaseDialect::MongoDB,
         label: "MongoDB",
-        supported: false,
+        supported: true,
         database_required: false,
         default_port: 27017,
         paradigm: Paradigm::Document,
@@ -247,6 +247,11 @@ mod tests {
     }
 
     #[test]
+    fn mongodb_is_supported() {
+        assert!(engine_spec(DatabaseDialect::MongoDB).unwrap().supported);
+    }
+
+    #[test]
     fn relational_engines_reject_params() {
         let p = BTreeMap::from([("srv".into(), "true".into())]);
         assert!(validate_params(DatabaseDialect::PostgreSQL, &p, false).is_err());
@@ -321,6 +326,6 @@ mod tests {
         assert!(!database_required(DatabaseDialect::MySQL));
         assert!(database_required(DatabaseDialect::SQLite));
         assert!(!database_required(DatabaseDialect::MongoDB));
-        assert!(!dialect_is_supported(DatabaseDialect::MongoDB));
+        assert!(dialect_is_supported(DatabaseDialect::MongoDB));
     }
 }

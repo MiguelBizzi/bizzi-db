@@ -1096,6 +1096,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "db-core",
+ "db-mongo",
  "db-mssql",
  "db-mysql",
  "db-postgres",

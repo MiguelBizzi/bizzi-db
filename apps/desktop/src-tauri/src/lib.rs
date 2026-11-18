@@ -1,4 +1,5 @@
 mod crash_log;
+mod documents;
 mod platform;
 mod ssh_tunnel;
 mod update_channel;
@@ -19,6 +20,7 @@ use db_core::{
     SchemaSyncResponse, Session, SqlDialect, SqlRange, SshAuthMethod, TablePreviewRequest,
     TestConnectionResult, WorkspaceState,
 };
+use db_mongo::MongoAdapter;
 use db_mssql::MssqlAdapter;
 use db_mssql::TSqlSql;
 use db_mysql::MySqlSql;
@@ -27,6 +29,11 @@ use db_postgres::PostgresAdapter;
 use db_storage::{
     keychain_unavailable_message, DualSecretStore, FileSecrets, KeychainSecrets, Storage,
     StorageError,
+};
+use documents::{
+    collection_create, collection_drop, collection_index_create, collection_index_drop,
+    document_statement_ranges, documents_delete, documents_export, documents_find,
+    documents_insert, documents_replace, documents_run, documents_sample_fields,
 };
 use ssh_tunnel::SshTunnel;
 use tauri::{AppHandle, Manager, State};
@@ -48,6 +55,7 @@ fn map_err(err: impl std::fmt::Display) -> String {
 static POSTGRES_ADAPTER: PostgresAdapter = PostgresAdapter;
 static MYSQL_ADAPTER: MysqlAdapter = MysqlAdapter;
 static MSSQL_ADAPTER: MssqlAdapter = MssqlAdapter;
+static MONGO_ADAPTER: MongoAdapter = MongoAdapter;
 static POSTGRES_SQL: PostgresSql = PostgresSql;
 static MYSQL_SQL: MySqlSql = MySqlSql;
 static TSQL_SQL: TSqlSql = TSqlSql;
@@ -57,8 +65,6 @@ enum EngineKind {
         adapter: &'static dyn Adapter,
         sql: &'static dyn SqlDialect,
     },
-    // Constructed once the MongoDB adapter registers.
-    #[allow(dead_code)]
     Document {
         adapter: &'static dyn DocumentAdapter,
     },
@@ -132,6 +138,12 @@ static REGISTERED_ENGINES: &[RegisteredEngine] = &[
         kind: EngineKind::Relational {
             adapter: &MSSQL_ADAPTER,
             sql: &TSQL_SQL,
+        },
+    },
+    RegisteredEngine {
+        dialect: DatabaseDialect::MongoDB,
+        kind: EngineKind::Document {
+            adapter: &MONGO_ADAPTER,
         },
     },
 ];
@@ -496,8 +508,6 @@ async fn session_for(state: &AppState, id: &str) -> Result<Arc<dyn Session>, Str
     relational(live_session_for(state, id).await?)
 }
 
-// Called by document commands once the MongoDB adapter registers.
-#[allow(dead_code)]
 async fn document_session_for(
     state: &AppState,
     id: &str,
@@ -984,7 +994,19 @@ pub fn run() {
             app_update_channel,
             export_save_file,
             export_save_bytes,
-            export_reveal
+            export_reveal,
+            documents_find,
+            documents_sample_fields,
+            documents_run,
+            documents_insert,
+            documents_replace,
+            documents_delete,
+            documents_export,
+            document_statement_ranges,
+            collection_create,
+            collection_drop,
+            collection_index_create,
+            collection_index_drop
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -1027,6 +1049,11 @@ mod tests {
                 .count();
             if spec.supported {
                 assert_eq!(found, 1, "{}", spec.label);
+                let kind_paradigm = match engine_for(spec.dialect).unwrap() {
+                    EngineKind::Relational { .. } => Paradigm::Relational,
+                    EngineKind::Document { .. } => Paradigm::Document,
+                };
+                assert_eq!(kind_paradigm, paradigm_of(spec.dialect), "{}", spec.label);
                 match paradigm_of(spec.dialect) {
                     Paradigm::Relational => {
                         assert!(adapter_for(spec.dialect).is_ok(), "{}", spec.label);
@@ -1053,6 +1080,16 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn mongodb_is_supported_and_registered() {
+        assert!(db_core::dialect_is_supported(DatabaseDialect::MongoDB));
+        assert!(document_adapter_for(DatabaseDialect::MongoDB).is_ok());
+        let sql = adapter_for(DatabaseDialect::MongoDB).err().unwrap();
+        assert!(sql.contains("is a document database; SQL is not available"));
+        let dialect = sql_dialect_for(DatabaseDialect::MongoDB).err().unwrap();
+        assert!(dialect.contains("is a document database; SQL is not available"));
     }
 
     struct StubSql;
