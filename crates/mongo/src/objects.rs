@@ -190,6 +190,7 @@ async fn database_names(client: &Client, default_db: Option<&str>) -> Result<Vec
 }
 
 const UNAUTHORIZED: i32 = 13;
+const NAMESPACE_NOT_FOUND: i32 = 26;
 
 fn is_unauthorized(err: &mongodb::error::Error) -> bool {
     matches!(err.kind.as_ref(), ErrorKind::Command(c) if c.code == UNAUTHORIZED)
@@ -201,6 +202,18 @@ fn unless_unauthorized<T: Default>(result: Result<T>) -> Result<T> {
     match result {
         Err(err) if is_unauthorized(&err) => Ok(T::default()),
         other => other,
+    }
+}
+
+/// `None` when the collection was dropped after `listCollections` named it
+/// (servers running `$out` create and drop `tmp.agg_out.*` all the time), so
+/// it is left out instead of failing the whole schema.
+fn index_listing(result: Result<Vec<Document>>) -> Result<Option<Vec<Document>>> {
+    match result {
+        Err(err) if matches!(err.kind.as_ref(), ErrorKind::Command(c) if c.code == NAMESPACE_NOT_FOUND) => {
+            Ok(None)
+        }
+        other => unless_unauthorized(other).map(Some),
     }
 }
 
@@ -225,12 +238,17 @@ async fn list_collections(db: &Database) -> Result<Vec<Document>> {
 }
 
 async fn list(client: &Client, default_db: Option<&str>) -> Result<Vec<Listed>> {
-    let mut all = Vec::new();
+    let mut listings = Vec::new();
     for database in database_names(client, default_db).await? {
         let db = client.database(&database);
         for listing in list_collections(&db).await? {
+            listings.push((database.clone(), listing));
+        }
+    }
+    let results: Vec<Result<Option<Listed>>> = stream::iter(listings)
+        .map(|(database, listing)| async move {
             let Ok(name) = listing.get_str("name") else {
-                continue;
+                return Ok(None);
             };
             // Views have no indexes of their own; listIndexes refuses them.
             // A refused listIndexes leaves the collection with none, which the
@@ -238,11 +256,21 @@ async fn list(client: &Client, default_db: Option<&str>) -> Result<Vec<Listed>> 
             let specs = if listing.get_str("type") == Ok("view") || name.starts_with("system.") {
                 Vec::new()
             } else {
-                unless_unauthorized(cursor(&db, doc! { "listIndexes": name }).await)?
+                let db = client.database(&database);
+                match index_listing(cursor(&db, doc! { "listIndexes": name }).await)? {
+                    Some(specs) => specs,
+                    None => return Ok(None),
+                }
             };
-            all.extend(listed(&database, &listing, specs));
-        }
-    }
+            Ok(listed(&database, &listing, specs))
+        })
+        .buffer_unordered(STATS_CONCURRENCY)
+        .collect()
+        .await;
+    let mut all = results
+        .into_iter()
+        .filter_map(Result::transpose)
+        .collect::<Result<Vec<Listed>>>()?;
     all.sort_by(|a, b| a.schema.id.cmp(&b.schema.id));
     Ok(all)
 }
@@ -395,6 +423,21 @@ mod tests {
         );
         let failed: Result<Vec<Document>> = Err(io);
         assert!(unless_unauthorized(failed).is_err());
+    }
+
+    #[test]
+    fn collection_dropped_before_list_indexes_is_skipped() {
+        let gone: Result<Vec<Document>> = Err(command_error(26, "NamespaceNotFound"));
+        assert_eq!(index_listing(gone).unwrap(), None);
+
+        let refused: Result<Vec<Document>> = Err(command_error(13, "Unauthorized"));
+        assert_eq!(index_listing(refused).unwrap(), Some(vec![]));
+
+        let specs = vec![doc! { "key": { "_id": 1 }, "name": "_id_" }];
+        assert_eq!(index_listing(Ok(specs.clone())).unwrap(), Some(specs));
+
+        let other: Result<Vec<Document>> = Err(command_error(8000, "AtlasError"));
+        assert!(index_listing(other).is_err());
     }
 
     #[test]
