@@ -74,7 +74,7 @@ interface DocumentExportMenuProps {
   exportTriggerRef?: RefObject<(() => void) | null>;
 }
 
-/** A row export menu, or, given `documentTarget`, a menu that streams a collection query to a file. */
+/** A row export menu, or, given `documentTarget`, a menu that exports a collection query; the export is built in memory, then saved. */
 export function DataExportMenu(props: RowExportMenuProps | DocumentExportMenuProps) {
   if ('documentTarget' in props) return <DocumentExportMenu {...props} />;
   return <RowExportMenu {...props} />;
