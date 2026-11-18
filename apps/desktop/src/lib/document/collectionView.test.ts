@@ -2,14 +2,37 @@ import { describe, expect, test } from 'bun:test';
 import type { DocValue, DocumentPage } from '@db/shared';
 import {
   canPageForward,
+  collectionIndexesManageable,
+  collectionWritable,
   documentSelectionKey,
   retainSelection,
   selectedIndices,
   insertFieldFilter,
   pageErrorResult,
   pageRangeLabel,
+  readOnlyBadge,
   selectDocument,
 } from './collectionView';
+
+describe('collection kinds', () => {
+  test('documents are writable only in a plain collection; views and time-series are read-only', () => {
+    expect(collectionWritable({ kind: 'collection' })).toBe(true);
+    expect(collectionWritable({ kind: 'view' })).toBe(false);
+    expect(collectionWritable({ kind: 'timeseries' })).toBe(false);
+  });
+
+  test('indexes are managed on collections and time-series (secondary indexes) but not on views', () => {
+    expect(collectionIndexesManageable({ kind: 'collection' })).toBe(true);
+    expect(collectionIndexesManageable({ kind: 'timeseries' })).toBe(true);
+    expect(collectionIndexesManageable({ kind: 'view' })).toBe(false);
+  });
+
+  test('the toolbar badge names what is read-only, and a plain collection has none', () => {
+    expect(readOnlyBadge({ kind: 'view' })).toBe('Read-only view');
+    expect(readOnlyBadge({ kind: 'timeseries' })).toBe('Read-only time series');
+    expect(readOnlyBadge({ kind: 'collection' })).toBeNull();
+  });
+});
 
 describe('insertFieldFilter', () => {
   test('starts a filter when it is empty', () => {

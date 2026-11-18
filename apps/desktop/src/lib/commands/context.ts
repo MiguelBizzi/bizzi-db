@@ -22,6 +22,10 @@ export interface CommandContext {
   sqlSelectionPresent: boolean;
   sqlResultPresent: boolean;
   closedTabCount: number;
+  /** Set by a collection tab whose documents cannot be written here (a view or time-series). */
+  collectionReadOnly: boolean;
+  /** Set by a collection tab that cannot take indexes (a view). */
+  collectionIndexesReadOnly: boolean;
   capabilities: CommandCapabilities;
 }
 
@@ -39,6 +43,8 @@ export const EMPTY_CONTEXT: CommandContext = {
   sqlSelectionPresent: false,
   sqlResultPresent: false,
   closedTabCount: 0,
+  collectionReadOnly: false,
+  collectionIndexesReadOnly: false,
   capabilities: { routines: true },
 };
 

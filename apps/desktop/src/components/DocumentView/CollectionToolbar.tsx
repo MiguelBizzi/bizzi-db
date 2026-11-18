@@ -1,5 +1,5 @@
 import type { ReactNode, Ref, RefObject } from 'react';
-import { Braces, ListTree, Play, RefreshCw, TableProperties } from 'lucide-react';
+import { Braces, ListTree, Lock, Play, RefreshCw, TableProperties } from 'lucide-react';
 import type { FindInputs } from '../../lib/document/collectionView';
 import { shortcutLabel } from '../../lib/commands/shortcutLabel';
 import { DataExportMenu } from '../DataExport/DataExportMenu';
@@ -21,6 +21,8 @@ interface CollectionToolbarProps {
   loading: boolean;
   exportTarget: DocumentExportTarget | null;
   exportTriggerRef: RefObject<(() => void) | null>;
+  /** `readOnlyBadge` of the collection; `null` shows no badge. */
+  readOnlyLabel: string | null;
 }
 
 const MODES: { id: DocumentViewMode; label: string; Icon: typeof ListTree }[] = [
@@ -59,6 +61,7 @@ export function CollectionToolbar({
   loading,
   exportTarget,
   exportTriggerRef,
+  readOnlyLabel,
 }: CollectionToolbarProps) {
   return (
     <div className="bg-card border-b border-border p-2.5 flex flex-col gap-2 shrink-0">
@@ -109,6 +112,12 @@ export function CollectionToolbar({
         </Labelled>
 
         <div className="flex items-center gap-2 ml-auto">
+          {readOnlyLabel && (
+            <span className="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-[11px] font-medium text-amber-400">
+              <Lock className="w-3 h-3" aria-hidden="true" />
+              {readOnlyLabel}
+            </span>
+          )}
           <div role="radiogroup" aria-label="View" className="flex items-center p-0.5 rounded-lg bg-background border border-border">
             {MODES.map(({ id, label, Icon }) => (
               <button

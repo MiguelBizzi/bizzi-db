@@ -1,8 +1,27 @@
-import type { DocValue, DocumentPage, QueryExecutionResult } from '@db/shared';
+import type { CollectionSchema, DocValue, DocumentPage, QueryExecutionResult } from '@db/shared';
 import { documentId, formatEditable } from './docTree';
 
 export const DOCUMENT_PAGE_SIZES = [20, 50, 100] as const;
 export const DEFAULT_DOCUMENT_PAGE_SIZE = 50;
+
+/**
+ * A view has no documents of its own, and a time-series collection refuses whole-document
+ * replaces, so both are read-only here.
+ */
+export function collectionWritable(collection: Pick<CollectionSchema, 'kind'>): boolean {
+  return collection.kind === 'collection';
+}
+
+export function readOnlyBadge(collection: Pick<CollectionSchema, 'kind'>): string | null {
+  if (collection.kind === 'view') return 'Read-only view';
+  if (collection.kind === 'timeseries') return 'Read-only time series';
+  return null;
+}
+
+/** Time-series collections take secondary indexes; a view has no indexes of its own. */
+export function collectionIndexesManageable(collection: Pick<CollectionSchema, 'kind'>): boolean {
+  return collection.kind !== 'view';
+}
 
 /** The filter with `"<path>": ` added and the caret where its value goes, just before the `}`. */
 export function insertFieldFilter(filter: string, path: string): { text: string; caret: number } {

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Code, Copy, Edit3, Eraser, FilePlus2, ListTree, Table, Trash2 } from 'lucide-react';
 import type { CollectionSchema, TableSchema } from '../types';
 import { shortcutLabel } from '../lib/commands/shortcutLabel';
+import { collectionIndexesManageable, collectionWritable } from '../lib/document/collectionView';
 import {
   tableActionDescriptors,
   type TableActionId,
@@ -68,13 +69,13 @@ export interface CollectionMenuHandlers {
   onDrop: (collection: CollectionSchema) => void;
 }
 
-/** Views and time series cannot take documents or ordinary indexes from here, so those entries are disabled. */
 export function collectionMenuItems(
   collection: CollectionSchema,
   handlers: CollectionMenuHandlers,
   opts?: { disabled?: boolean }
 ): ContextMenuItem[] {
-  const writable = collection.kind === 'collection' && !opts?.disabled;
+  const writable = collectionWritable(collection) && !opts?.disabled;
+  const indexable = collectionIndexesManageable(collection) && !opts?.disabled;
   return [
     {
       id: 'open',
@@ -95,7 +96,7 @@ export function collectionMenuItems(
       label: 'New Index…',
       hint: shortcutLabel('file.newIndex'),
       icon: <ListTree className="w-3.5 h-3.5" />,
-      disabled: !writable,
+      disabled: !indexable,
       onSelect: () => handlers.onNewIndex(collection),
     },
     { id: 'sep-drop', label: '', separator: true },

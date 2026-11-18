@@ -39,11 +39,22 @@ interface Options {
   reload: () => void;
   /** Inserts and deletes change the document count the sidebar shows. */
   onCountChanged: () => void;
+  /** `collectionWritable` of the collection; false refuses every edit, insert and delete. */
+  writable: boolean;
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-export function useDocumentEdits({ connectionId, ns, edits, setEdits, documents: page, reload, onCountChanged }: Options) {
+export function useDocumentEdits({
+  connectionId,
+  ns,
+  edits,
+  setEdits,
+  documents: page,
+  reload,
+  onCountChanged,
+  writable,
+}: Options) {
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [deleteKeys, setDeleteKeys] = useState<string[] | null>(null);
@@ -62,6 +73,7 @@ export function useDocumentEdits({ connectionId, ns, edits, setEdits, documents:
   };
 
   const change = (docIndex: number, next: DocValue) => {
+    if (!writable) return;
     const key = keyAt(docIndex);
     if (key === undefined) {
       toast.error('This document has no _id, so it cannot be edited.');
@@ -109,6 +121,7 @@ export function useDocumentEdits({ connectionId, ns, edits, setEdits, documents:
   };
 
   const openEdit = (docIndex: number) => {
+    if (!writable) return;
     const doc = page[docIndex];
     const key = keyAt(docIndex);
     if (!doc || key === undefined) {
@@ -126,9 +139,12 @@ export function useDocumentEdits({ connectionId, ns, edits, setEdits, documents:
     });
   };
 
-  const openInsert = () => setEditor({ mode: 'insert', text: newDocumentTemplate(), revision: 0 });
+  const openInsert = () => {
+    if (writable) setEditor({ mode: 'insert', text: newDocumentTemplate(), revision: 0 });
+  };
 
   const openClone = (docIndex: number) => {
+    if (!writable) return;
     const doc = shown[docIndex];
     if (doc) setEditor({ mode: 'clone', text: cloneText(doc), revision: 0 });
   };
@@ -185,7 +201,7 @@ export function useDocumentEdits({ connectionId, ns, edits, setEdits, documents:
   };
 
   const askDelete = (keys: string[]) => {
-    if (keys.length > 0) setDeleteKeys(keys);
+    if (writable && keys.length > 0) setDeleteKeys(keys);
   };
 
   const askDeleteAt = (docIndex: number) => {

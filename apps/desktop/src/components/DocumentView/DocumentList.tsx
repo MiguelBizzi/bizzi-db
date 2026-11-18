@@ -42,6 +42,8 @@ interface DocumentListProps {
   onSave: (docIndex: number) => void;
   onDiscard: (docIndex: number) => void;
   actions: DocumentActions;
+  /** Views and time-series: no inline edits, and the menu offers no writes. */
+  readOnly?: boolean;
   'aria-label'?: string;
 }
 
@@ -71,6 +73,7 @@ export function DocumentList({
   onSave,
   onDiscard,
   actions,
+  readOnly = false,
   'aria-label': ariaLabel,
 }: DocumentListProps) {
   const portRef = useRef<HTMLDivElement>(null);
@@ -125,7 +128,7 @@ export function DocumentList({
 
   const startValueEdit = (docIndex: number, path: TreePath) => {
     const doc = documents[docIndex];
-    if (!doc || !rowEditCapabilities(doc, path).editValue) return;
+    if (readOnly || !doc || !rowEditCapabilities(doc, path).editValue) return;
     const value = getValue(doc, path);
     const type = scalarTypeOf(value);
     if (!type) return;
@@ -210,15 +213,20 @@ export function DocumentList({
       {
         id: 'edit-value',
         label: 'Edit Value',
-        disabled: !can.editValue,
+        disabled: readOnly || !can.editValue,
         onSelect: () => startValueEdit(row.docIndex, row.path),
       },
-      { id: 'add', label: addsItem ? 'Add Item' : 'Add Field', onSelect: () => guarded(() => startAdd(row)) },
-      { id: 'rename', label: 'Rename Field', disabled: !can.rename, onSelect: () => startRename(row) },
+      {
+        id: 'add',
+        label: addsItem ? 'Add Item' : 'Add Field',
+        disabled: readOnly,
+        onSelect: () => guarded(() => startAdd(row)),
+      },
+      { id: 'rename', label: 'Rename Field', disabled: readOnly || !can.rename, onSelect: () => startRename(row) },
       {
         id: 'duplicate',
         label: 'Duplicate Item',
-        disabled: !can.duplicate,
+        disabled: readOnly || !can.duplicate,
         onSelect: () =>
           apply(row.docIndex, (d) =>
             insertItem(d, row.path.slice(0, -1), Number(last) + 1, getValue(d, row.path)),
@@ -228,7 +236,7 @@ export function DocumentList({
         id: 'remove',
         label: parentIsArray ? 'Remove Item' : 'Remove Field',
         danger: true,
-        disabled: !can.remove,
+        disabled: readOnly || !can.remove,
         onSelect: () => apply(row.docIndex, (d) => removeField(d, row.path)),
       },
       { id: 'sep', label: '', separator: true },
@@ -236,14 +244,16 @@ export function DocumentList({
         id: 'edit-document',
         label: 'Edit Document…',
         hint: shortcutLabel('edit.editDocument'),
+        disabled: readOnly,
         onSelect: () => actions.edit(row.docIndex),
       },
-      { id: 'clone', label: 'Clone Document…', onSelect: () => actions.clone(row.docIndex) },
+      { id: 'clone', label: 'Clone Document…', disabled: readOnly, onSelect: () => actions.clone(row.docIndex) },
       {
         id: 'delete',
         label: 'Delete Document…',
         hint: shortcutLabel('edit.deleteRows'),
         danger: true,
+        disabled: readOnly,
         onSelect: () => actions.remove(row.docIndex),
       },
     ];

@@ -8,10 +8,13 @@ import {
   DEFAULT_DOCUMENT_PAGE_SIZE,
   DOCUMENT_PAGE_SIZES,
   canPageForward,
+  collectionIndexesManageable,
+  collectionWritable,
   documentSelectionKey,
   insertFieldFilter,
   pageErrorResult,
   pageRangeLabel,
+  readOnlyBadge,
   retainSelection,
   selectDocument,
   selectedIndices,
@@ -141,6 +144,8 @@ export function CollectionView({
     setQuery((prev) => ({ ...prev, revision: prev.revision + 1 }));
   }, []);
 
+  const writable = collectionWritable(collection);
+  const indexesManageable = collectionIndexesManageable(collection);
   const loadedDocuments = useMemo(() => loaded?.page.documents ?? [], [loaded]);
   // Edits are kept per document with the original they were made on, so paging, filtering and
   // refreshing do not lose them and need no confirmation.
@@ -152,6 +157,7 @@ export function CollectionView({
     documents: loadedDocuments,
     reload,
     onCountChanged: onSchemaChanged,
+    writable,
   });
 
   const apply = () => {
@@ -173,6 +179,7 @@ export function CollectionView({
   useEffect(() => {
     if (!indexRequested) return;
     setSection('indexes');
+    // CollectionIndexes ignores the request for a view, which has no indexes of its own.
     setCreateIndexPending(true);
     onIndexRequestHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -216,6 +223,9 @@ export function CollectionView({
   const overlayOpenRef = useRef(docEdits.overlayOpen);
   const overlayOpen = docEdits.overlayOpen || indexOverlayOpen;
   overlayOpenRef.current = overlayOpen;
+  const readOnlyContext = { collectionReadOnly: !writable, collectionIndexesReadOnly: !indexesManageable };
+  const readOnlyContextRef = useRef(readOnlyContext);
+  readOnlyContextRef.current = readOnlyContext;
 
   useEffect(() => {
     const scope = registerScope('collection:' + scopeId, {
@@ -228,7 +238,11 @@ export function CollectionView({
     });
     // Only the focused pane's view is active, whatever order the panes mount in.
     scope.setActive(isFocusedPaneRef.current);
-    scope.setContext({ selectedRowCount: selectedCountRef.current, modalOpen: overlayOpenRef.current });
+    scope.setContext({
+      selectedRowCount: selectedCountRef.current,
+      modalOpen: overlayOpenRef.current,
+      ...readOnlyContextRef.current,
+    });
     if (isFocusedPaneRef.current) scope.claim();
     scopeRef.current = scope;
     return () => {
@@ -252,11 +266,14 @@ export function CollectionView({
     scopeRef.current?.setContext({ modalOpen: overlayOpen });
   }, [overlayOpen]);
 
+  useEffect(() => {
+    scopeRef.current?.setContext({ collectionReadOnly: !writable, collectionIndexesReadOnly: !indexesManageable });
+  }, [writable, indexesManageable]);
+
   const pickPath = (path: string) => {
     const { text, caret } = insertFieldFilter(draftRef.current.filter, path);
     filterRef.current?.setText(text, caret);
   };
-
 
   const selectRow = (index: number, toggle: boolean) => {
     // The old page stays on screen while the next one loads; a click there would select a
@@ -316,6 +333,7 @@ export function CollectionView({
         loading={loading}
         exportTarget={exportTarget}
         exportTriggerRef={exportTriggerRef}
+        readOnlyLabel={readOnlyBadge(collection)}
       />
 
       <div className="flex flex-1 min-h-0">
@@ -355,6 +373,7 @@ export function CollectionView({
               onSave={(index) => void docEdits.save(index)}
               onDiscard={docEdits.discard}
               actions={{ edit: docEdits.openEdit, clone: docEdits.openClone, remove: docEdits.askDeleteAt }}
+              readOnly={!writable}
               aria-label={`Documents in ${collection.name}`}
             />
           )}

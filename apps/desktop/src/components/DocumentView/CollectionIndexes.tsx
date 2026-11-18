@@ -4,6 +4,7 @@ import { collectionIndexCreate, collectionIndexDrop } from '@db/core';
 import type { DocumentCapabilities } from '@db/database';
 import type { CollectionSchema, DocumentIndex, IndexDraft } from '@db/shared';
 import { invokeErrorMessage } from '../../lib/invokeError';
+import { collectionIndexesManageable } from '../../lib/document/collectionView';
 import { indexKeysLabel } from '../../lib/document/indexDraft';
 import { shortcutLabel } from '../../lib/commands/shortcutLabel';
 import { toast } from '../../lib/toast';
@@ -51,12 +52,13 @@ export function CollectionIndexes({
   const [toDrop, setToDrop] = useState<DocumentIndex | null>(null);
   const [dropping, setDropping] = useState(false);
   const ns = { database: collection.database, collection: collection.name };
+  const manageable = collectionIndexesManageable(collection);
 
   useEffect(() => {
     if (!createRequested) return;
-    setDrawerOpen(true);
+    if (manageable) setDrawerOpen(true);
     onCreateHandled();
-  }, [createRequested, onCreateHandled]);
+  }, [createRequested, onCreateHandled, manageable]);
 
   const overlayOpen = drawerOpen || toDrop !== null;
   useEffect(() => {
@@ -98,14 +100,16 @@ export function CollectionIndexes({
         <span className="text-xs text-muted-foreground">
           {collection.indexes.length} {collection.indexes.length === 1 ? 'index' : 'indexes'}
         </span>
-        <button
-          type="button"
-          onClick={() => setDrawerOpen(true)}
-          title={shortcutLabel('file.newIndex')}
-          className="pressable flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-background hover:bg-accent border border-border text-xs font-medium text-foreground"
-        >
-          <Plus className="w-3.5 h-3.5" /> New Index…
-        </button>
+        {manageable && (
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            title={shortcutLabel('file.newIndex')}
+            className="pressable flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-background hover:bg-accent border border-border text-xs font-medium text-foreground"
+          >
+            <Plus className="w-3.5 h-3.5" /> New Index…
+          </button>
+        )}
       </div>
 
       <div className="flex-1 min-h-0 overflow-auto">
@@ -136,7 +140,7 @@ export function CollectionIndexes({
                     </div>
                   )}
                 </div>
-                {index.name !== ID_INDEX && (
+                {manageable && index.name !== ID_INDEX && (
                   <button
                     type="button"
                     onClick={() => setToDrop(index)}
