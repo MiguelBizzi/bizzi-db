@@ -63,7 +63,7 @@ import {
   connectionsMove,
   connectionsSave,
   collectionCreate,
-collectionDrop,
+  collectionDrop,
   connectionsTest,
   foldersDelete,
   foldersList,
@@ -426,6 +426,9 @@ export default function App() {
   const currentDatabase = currentDbId
     ? databases.find((d) => d.id === currentDbId) || null
     : null;
+  const relationalConnection = currentDatabase
+    ? engineMeta(currentDatabase.dialect)?.paradigm === "relational"
+    : false;
 
   const activePaneId = resolveFocusedPaneId(layout, focusedPaneId);
   const activeTabId = focusedActiveTabId(layout, activePaneId);
@@ -2752,9 +2755,9 @@ export default function App() {
             setIsPendingChangesOpen(false);
             setIsActivityLogOpen(true);
           }}
-          onOpenPendingChanges={openPendingChanges}
+          onOpenPendingChanges={relationalConnection ? openPendingChanges : undefined}
           onOpenNewConnection={openNewConnection}
-          onOpenMetrics={openMetrics}
+          onOpenMetrics={relationalConnection ? openMetrics : undefined}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onOpenWhatsNew={openWhatsNew}
           onBackToConnections={() => {
@@ -2941,17 +2944,17 @@ export default function App() {
           onSelectQuery={(sql, title) =>
             handleOpenNewQueryTab(sql, undefined, title)
           }
-          onOpenErd={openErd}
-          onOpenMetrics={openMetrics}
+          onOpenErd={relationalConnection ? openErd : undefined}
+          onOpenMetrics={relationalConnection ? openMetrics : undefined}
           onOpenActivityLog={() => {
             setIsPendingChangesOpen(false);
             setIsActivityLogOpen(true);
           }}
-          onOpenPendingChanges={openPendingChanges}
+          onOpenPendingChanges={relationalConnection ? openPendingChanges : undefined}
           onOpenNewQuery={() => handleOpenNewQueryTab()}
           onSelectRoutine={(routine) => handleOpenRoutine(routine)}
-          onNewRoutine={openNewRoutineDesigner}
-          onNewView={openNewViewDesigner}
+          onNewRoutine={relationalConnection ? openNewRoutineDesigner : undefined}
+          onNewView={relationalConnection ? openNewViewDesigner : undefined}
           onToggleSidebar={currentDatabase ? toggleSidebar : undefined}
           onSelectDatabase={(dbId) => setCurrentDbId(dbId)}
         />

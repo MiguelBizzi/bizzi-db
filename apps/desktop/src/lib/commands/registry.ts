@@ -27,6 +27,11 @@ const collectionActive = (ctx: CommandContext): boolean => ctx.activeTabType ===
 const queryEditorActive = (ctx: CommandContext): boolean =>
   ctx.activeTabType === 'sql_editor' || ctx.activeTabType === 'document_query';
 const isDocument = (ctx: CommandContext): boolean => ctx.paradigm === 'document';
+// Relational-only features name the paradigm they need, so a third paradigm starts without them.
+const isRelational = (ctx: CommandContext): boolean => ctx.paradigm === 'relational';
+const relationalOpen = (ctx: CommandContext): boolean => ctx.connectionOpen && isRelational(ctx);
+const writableCollectionActive = (ctx: CommandContext): boolean =>
+  collectionActive(ctx) && !ctx.collectionReadOnly;
 const hasPendingChanges = (ctx: CommandContext): boolean => ctx.pendingCount > 0;
 
 /** `view.tab.1`…`view.tab.8` select that tab; `view.tab.9` selects the last (browser convention). */
@@ -54,12 +59,12 @@ export const COMMANDS: readonly Command[] = [
     accelerator: 'CmdOrCtrl+Shift+N',
     enabled: connectionOpen,
   },
-  { id: 'file.newView', label: 'New View…', accelerator: 'CmdOrCtrl+Alt+V', enabled: (ctx) => ctx.connectionOpen && !isDocument(ctx) },
+  { id: 'file.newView', label: 'New View…', accelerator: 'CmdOrCtrl+Alt+V', enabled: relationalOpen },
   {
     id: 'file.newFunction',
     label: 'New Function…',
     accelerator: 'CmdOrCtrl+Alt+F',
-    enabled: (ctx) => ctx.connectionOpen && !isDocument(ctx) && ctx.capabilities.routines,
+    enabled: (ctx) => relationalOpen(ctx) && ctx.capabilities.routines,
   },
   {
     id: 'file.newIndex',
@@ -69,7 +74,7 @@ export const COMMANDS: readonly Command[] = [
       ctx.connectionOpen &&
       (ctx.activeTabType === 'table_data' ||
         ctx.activeTabType === 'schema_designer' ||
-        collectionActive(ctx)),
+        (collectionActive(ctx) && !ctx.collectionIndexesReadOnly)),
   },
   { id: 'file.saveQuery', label: 'Save Query…', accelerator: 'CmdOrCtrl+S', enabled: queryEditorActive },
   {
@@ -109,14 +114,14 @@ export const COMMANDS: readonly Command[] = [
     label: 'Insert Row',
     dynamicLabel: (ctx) => (collectionActive(ctx) ? 'Insert Document…' : 'Insert Row'),
     accelerator: 'CmdOrCtrl+I',
-    enabled: (ctx) => tableDataActive(ctx) || collectionActive(ctx),
+    enabled: (ctx) => tableDataActive(ctx) || writableCollectionActive(ctx),
     typingConflict: true,
   },
   {
     id: 'edit.editDocument',
     label: 'Edit Document…',
     accelerator: 'CmdOrCtrl+Alt+E',
-    enabled: (ctx) => collectionActive(ctx) && ctx.selectedRowCount === 1,
+    enabled: (ctx) => writableCollectionActive(ctx) && ctx.selectedRowCount === 1,
   },
   {
     id: 'edit.deleteRows',
@@ -124,7 +129,7 @@ export const COMMANDS: readonly Command[] = [
     dynamicLabel: (ctx) => (collectionActive(ctx) ? 'Delete Documents' : 'Delete Selected Rows'),
     accelerator: 'CmdOrCtrl+Backspace',
     nonMacAccelerator: 'Delete',
-    enabled: (ctx) => (tableDataActive(ctx) || collectionActive(ctx)) && ctx.selectedRowCount > 0,
+    enabled: (ctx) => (tableDataActive(ctx) || writableCollectionActive(ctx)) && ctx.selectedRowCount > 0,
     typingConflict: true,
   },
   // Its target is a focused foreign key field (Insert Row drawer) or the grid's active cell,
@@ -153,7 +158,7 @@ export const COMMANDS: readonly Command[] = [
     enabled: hasPendingChanges,
   },
   { id: 'query.discard', label: 'Discard Pending Changes', enabled: hasPendingChanges },
-  { id: 'query.review', label: 'Review Pending Changes', accelerator: 'CmdOrCtrl+Shift+P', enabled: connectionOpen },
+  { id: 'query.review', label: 'Review Pending Changes', accelerator: 'CmdOrCtrl+Shift+P', enabled: relationalOpen },
   // Switch and Back stay enabled without a connection; their handlers are no-ops there.
   { id: 'conn.switch', label: 'Switch Connection…', enabled: () => true },
   { id: 'conn.back', label: 'Back to Connections', enabled: () => true },
@@ -185,8 +190,8 @@ export const COMMANDS: readonly Command[] = [
     allowInModal: true,
   },
   { id: 'view.toggleSidebar', label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+B', enabled: connectionOpen },
-  { id: 'view.erd', label: 'Schema Diagram (ERD)', accelerator: 'CmdOrCtrl+Shift+E', enabled: (ctx) => ctx.connectionOpen && !isDocument(ctx) },
-  { id: 'view.metrics', label: 'Database Metrics', accelerator: 'CmdOrCtrl+Shift+M', enabled: connectionOpen },
+  { id: 'view.erd', label: 'Schema Diagram (ERD)', accelerator: 'CmdOrCtrl+Shift+E', enabled: relationalOpen },
+  { id: 'view.metrics', label: 'Database Metrics', accelerator: 'CmdOrCtrl+Shift+M', enabled: relationalOpen },
   { id: 'view.activity', label: 'Activity Log', accelerator: 'CmdOrCtrl+Shift+L', enabled: connectionOpen },
   { id: 'view.nextTab', label: 'Next Tab', accelerator: 'CmdOrCtrl+Shift+]', nonMacAccelerator: 'CmdOrCtrl+Tab', enabled: paneHasTabs(2) },
   { id: 'view.prevTab', label: 'Previous Tab', accelerator: 'CmdOrCtrl+Shift+[', nonMacAccelerator: 'CmdOrCtrl+Shift+Tab', enabled: paneHasTabs(2) },

@@ -51,13 +51,14 @@ Success: users connect to MongoDB, browse collections, inspect and edit document
 | Job | MongoDB |
 |---|---|
 | Connect, TLS modes, SCRAM auth, SRV, replica set seed list, SSH (single host, direct) | Implemented |
-| Browse databases and collections, views, time-series | Implemented (views and time-series read-only) |
+| Browse databases and collections, views, time-series | Implemented. Views and time-series are read-only: no inline edit, insert, clone, edit or delete, and the menu commands are disabled on their tabs, which show a read-only badge. Time-series collections still take secondary indexes; views have none of their own, so New Index and index drops are hidden there |
 | View documents (tree, JSON), filter/projection/sort, paging, field sampling | Implemented |
 | Edit, insert, clone, delete documents | Implemented; whole-document replace guarded by the loaded values |
 | Query editor | Implemented: shell syntax parsed in Rust, not evaluated; `runCommand`/`adminCommand` unrestricted |
 | Indexes: single, compound, text, 2dsphere, hashed, unique, sparse, partial, TTL, hidden | Implemented |
 | Export JSON array, NDJSON, CSV (relaxed or canonical EJSON) | Implemented |
-| Pending Changes review | Excluded: writes apply per document; standalone servers have no multi-document transactions |
+| Pending Changes review | Excluded: writes apply per document; standalone servers have no multi-document transactions. The command, toolbar button and palette action are disabled or hidden on MongoDB |
+| Database metrics | Not available for MongoDB yet: the command, toolbar button and palette action are disabled or hidden |
 | ERD, schema designer, view designer, routines | Excluded: no relational schema; `views` designer deferred |
 | JavaScript functions (`$where`, `$function`, `mapReduce` bodies, shell loops) | Excluded: nothing typed is evaluated |
 | Table (flattened) view of documents | Deferred: list and JSON views cover parity |

@@ -129,6 +129,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const routines = currentDatabase.routines ?? [];
   const meta = engineMeta(currentDatabase.dialect);
   const isDocument = meta?.paradigm === 'document' && collectionHandlers != null;
+  // Tables, schemas, tags, routines, Create and the ERD are relational; another paradigm gets none of them.
+  const isRelational = meta?.paradigm === 'relational';
   const nouns = meta?.nouns;
   const searchRef = useRef<HTMLInputElement>(null);
   const focusSearchOnExpand = useRef(false);
@@ -248,22 +250,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <RefreshCw className={`w-3.5 h-3.5 ${refreshingSchemas ? 'animate-spin' : ''}`} />
             </button>
-{!isDocument && (
-            <button
-              type="button"
-              title="Create…"
-              aria-label="Create a table, view or function"
-              aria-haspopup="menu"
-              aria-expanded={createMenu != null}
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={toggleCreateMenu}
-              className={`p-1 rounded-md hover:bg-accent text-primary border border-sidebar-border transition-colors ${
-                createMenu ? 'bg-accent' : 'bg-muted'
-              }`}
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-)}
+            {isRelational && (
+              <button
+                type="button"
+                title="Create…"
+                aria-label="Create a table, view or function"
+                aria-haspopup="menu"
+                aria-expanded={createMenu != null}
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={toggleCreateMenu}
+                className={`p-1 rounded-md hover:bg-accent text-primary border border-sidebar-border transition-colors ${
+                  createMenu ? 'bg-accent' : 'bg-muted'
+                }`}
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            )}
             {onToggleCollapsed && (
               <button
                 type="button"
@@ -309,7 +311,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           />
         )}
 
-        {!isDocument && allSchemas.length > 1 && (
+        {isRelational && allSchemas.length > 1 && (
           <Select
             size="sm"
             value={selectedSchema}
@@ -322,7 +324,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           />
         )}
 
-        {!isDocument && allTags.length > 0 && (
+        {isRelational && allTags.length > 0 && (
           <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-always">
             <button
               onClick={() => setSelectedTag('ALL')}
@@ -446,7 +448,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {!isDocument && listMode !== 'skeleton' && (routines.length > 0 || onNewRoutine) && (
+        {isRelational && listMode !== 'skeleton' && (routines.length > 0 || onNewRoutine) && (
           <div className="pt-2">
             <div className="px-2 py-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-muted-foreground font-mono">
               <button
@@ -533,17 +535,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-{!isDocument && (
-      <div className="p-2 border-t border-sidebar-border bg-background/50 space-y-1">
-        <button
-          onClick={onOpenErd}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-xs font-medium transition-colors"
-        >
-          <Network className="w-4 h-4" />
-          <span>Interactive Visual ERD</span>
-        </button>
-      </div>
-)}
+      {isRelational && (
+        <div className="p-2 border-t border-sidebar-border bg-background/50 space-y-1">
+          <button
+            onClick={onOpenErd}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-xs font-medium transition-colors"
+          >
+            <Network className="w-4 h-4" />
+            <span>Interactive Visual ERD</span>
+          </button>
+        </div>
+      )}
       </div>
 
       <div
@@ -585,31 +587,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
         >
           <RefreshCw className={`w-4 h-4 ${refreshingSchemas ? 'animate-spin' : ''}`} />
         </button>
-{!isDocument && (
-        <button
-          type="button"
-          title="Create…"
-          aria-label="Create a table, view or function"
-          aria-haspopup="menu"
-          aria-expanded={createMenu != null}
-          onMouseDown={(event) => event.stopPropagation()}
-          onClick={toggleCreateMenu}
-          className={`${RAIL_BUTTON_CLASS} ${createMenu ? 'bg-accent' : ''}`}
-        >
-          <Plus className="w-4 h-4" />
-        </button>
-)}
-{!isDocument && (
-        <button
-          type="button"
-          onClick={onOpenErd}
-          title="Interactive Visual ERD"
-          aria-label="Interactive Visual ERD"
-          className="mt-auto p-2 rounded-md bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-        >
-          <Network className="w-4 h-4" />
-        </button>
-)}
+        {isRelational && (
+          <button
+            type="button"
+            title="Create…"
+            aria-label="Create a table, view or function"
+            aria-haspopup="menu"
+            aria-expanded={createMenu != null}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={toggleCreateMenu}
+            className={`${RAIL_BUTTON_CLASS} ${createMenu ? 'bg-accent' : ''}`}
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        )}
+        {isRelational && (
+          <button
+            type="button"
+            onClick={onOpenErd}
+            title="Interactive Visual ERD"
+            aria-label="Interactive Visual ERD"
+            className="mt-auto p-2 rounded-md bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+          >
+            <Network className="w-4 h-4" />
+          </button>
+        )}
       </div>
       <AnimatePresence>
       {menu && (

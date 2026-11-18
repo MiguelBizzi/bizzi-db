@@ -15,7 +15,9 @@ The engine boundary has a paradigm axis. Pick the side that matches how the data
 
 The rest of this guide describes the relational path. A document engine follows sections 1, 3 (with `assert_document_session`) and 4, implements `DocumentAdapter` and `DocumentSession` in place of the SQL contract, and fills in a `DocumentEngineMeta`. `crates/mongo` and `packages/database/src/mongo.ts` are the reference.
 
-A new paradigm (key-value, graph) adds a trait pair in `db-core`, a `LiveSession` and `EngineKind` variant, an `EngineMeta` subtype, and a tab type. Nothing else in shared UI changes: it reads `EngineMeta.paradigm` and nouns, never an engine name.
+The document UI in `apps/desktop/src/lib/document` and `components/DocumentView` is MongoDB-flavoured: the editable text is Extended JSON, completion follows the Mongo shell (`shellComplete.ts`), and a save conflict is recognised by MongoDB's message (`isConflictError`). A second document engine supplies its own editable-text format, completion and conflict detection rather than reusing those as they are.
+
+A new paradigm (key-value, graph) adds a trait pair in `db-core`, a `LiveSession` and `EngineKind` variant, an `EngineMeta` subtype, a tab type, and its own view. Shared UI reads `EngineMeta.paradigm` and nouns, never an engine name. Relational-only features (Create, routines, the ERD, schema designer, Pending Changes, metrics) are gated on `paradigm === 'relational'` (`isRelational` in `lib/commands/registry.ts`, `isRelational` in `Sidebar.tsx`), so a new paradigm starts without them and gates its own features on its paradigm.
 
 ## 1. Register it in two places
 
