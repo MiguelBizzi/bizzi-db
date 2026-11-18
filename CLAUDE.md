@@ -24,7 +24,7 @@ The marketing site is `apps/web`. It does not talk to databases.
 - `packages/core` — `invoke` wrappers for connections, schema, query, workspace, settings, export.
 - `packages/storage` — `invoke` wrappers for saved queries.
 - `crates/core` — `Adapter`, `Session`, `SqlDialect`, validation, query errors, statement splitting.
-- `crates/postgres`, `crates/mysql` — sessions. Catalog SQL, filters, value decoding, driver errors mapped to `QueryError`.
+- `crates/postgres`, `crates/mysql`, `crates/mssql` — sessions. Catalog SQL, filters, value decoding, driver errors mapped to `QueryError`.
 - `crates/storage` — `workspace.sqlite` and secrets (keychain or `secrets.json`).
 - `apps/desktop/src/lib/document/`, `components/DocumentView/` — everything MongoDB-specific in the UI: the typed document tree, shell-syntax parsing helpers, the document tab. Shared UI never branches on an engine name.
 - `crates/mongo` — `MongoAdapter` and its `DocumentSession`: introspection, find, edit, indexes, export, shell-syntax parser. BSON never leaves this crate; documents cross IPC as a typed ordered tree.
@@ -47,8 +47,11 @@ The native menu reads a derived `CommandContext`, not React state. Focused grids
 component or App.tsx
   → @db/core or @db/storage invoke()
   → Tauri command in src-tauri/src/lib.rs
-  → PostgresAdapter or MysqlAdapter
+  → PostgresAdapter, MysqlAdapter, or MssqlAdapter
   → Session (introspect, execute, query_page, preview, routine_source)
+
+  → MongoAdapter (document commands, via document_session_for)
+  → DocumentSession (introspect, find, edit, indexes, export)
 ```
 
 `adapter_for` returns PostgreSQL, MySQL, or SQL Server; MongoDB is a second paradigm, so its commands go through `document_session_for` to a `DocumentSession` and a relational command refuses a document connection (and the reverse). `sql_dialect_for` picks the splitter used for paging and for editor statement ranges (UTF-16 offsets).
@@ -68,7 +71,7 @@ bun install
 bun run db:up
 bun run dev
 bun run test          # frontend tests and cargo test, excluding the Tauri crate
-bun run test:all      # also the ignored Postgres and MySQL live tests; needs db:up
+bun run test:all      # also the ignored live tests for every engine; needs db:up
 ```
 
 Run `bun run test` before you consider a change done. Run `bun run test:all` when you touch a session, preview, introspection, or a docker seed. CI otherwise follows `.github/scripts/changed-areas.sh`. Docs-only diffs do not build.

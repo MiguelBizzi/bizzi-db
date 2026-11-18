@@ -16,11 +16,6 @@ New entries go under `## [Unreleased]`; the release process moves them under a v
 - Export a MongoDB collection as a JSON array, NDJSON, or CSV, with relaxed or canonical Extended JSON so numbers, dates and ids round-trip.
 - Connect through an SSH tunnel to a single MongoDB host, and use SCRAM-SHA-1 or SCRAM-SHA-256 authentication. Kerberos, LDAP, X.509, AWS IAM and OIDC are not supported yet.
 
-### Better
-
-- MongoDB documents apply per save, so Pending Changes does not review them. Nothing in the query editor is evaluated as JavaScript: `$where`, `$function` and shell loops are not available, and `runCommand` passes your command unchanged.
-- A stored document whose only key is an Extended JSON wrapper such as `{"$oid": …}` can be viewed but not edited as text. Saving is refused when another client changed the document in between, except when only a number's type changed and its value stayed equal.
-
 ## [0.1.29] - 2026-11-14 - Foreign key sheet and What's New
 
 Choose foreign key values from a searchable sheet, and read what changed after each update.

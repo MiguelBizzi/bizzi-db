@@ -22,9 +22,9 @@ apps/desktop/src/App.tsx          composition root: session state and command ha
 apps/desktop/src/components/      UI. TableView, SqlEditor, SchemaView, RoutineView, PendingChanges, Modals
 apps/desktop/src/lib/             testable logic extracted from components
 apps/desktop/src/lib/commands/    menu registry, menu model, keyboard, command bus
-apps/desktop/src/lib/ddl/         SQL the app builds, split by engine (postgres/, mysql/)
+apps/desktop/src/lib/ddl/         SQL the app builds, split by engine (postgres/, mysql/, sqlserver/)
 apps/desktop/src/lib/document/    MongoDB: typed document tree, edit text, shell-syntax helpers
-apps/desktop/src/components/DocumentView/   MongoDB document list, editor, indexes, query tab
+apps/desktop/src/components/DocumentView/  MongoDB document list, editor, indexes, query tab
 apps/desktop/src-tauri/src/lib.rs Tauri commands, adapter selection, session map
 apps/desktop/src-tauri/permissions/app.toml   IPC allowlist
 packages/shared/src/index.ts      TypeScript DTOs (camelCase, mirrors Rust serde)
@@ -34,6 +34,7 @@ packages/storage/src/             saved-query invoke wrappers
 crates/core/src/                  Adapter, Session, SqlDialect, profiles, QueryError, shared SQL
 crates/postgres/src/              Postgres session, catalog, filters, values, errors
 crates/mysql/src/                 MySQL session, catalog, filters, values, DELIMITER splitter
+crates/mssql/src/                 SQL Server session, catalog, filters, values
 crates/mongo/src/                 MongoDB session, introspection, edits, indexes, export, shell parser
 crates/storage/src/               workspace.sqlite and secrets
 docker/                           Postgres 16, MySQL 8.4, SQL Server 2022, and MongoDB 8.0 seeds
@@ -47,7 +48,7 @@ docs/adding-a-database.md         checklist for a new engine
 2. That function `invoke`s a Tauri command. The command name must also appear in `permissions/app.toml` or the webview gets "not allowed".
 3. `apps/desktop/src-tauri/src/lib.rs` loads the profile, opens an SSH tunnel when configured, and stores `Arc<dyn Session>` in `AppState.sessions`.
 4. `adapter_for` returns `PostgresAdapter`, `MysqlAdapter`, or `MssqlAdapter`. Anything else is refused. `sql_dialect_for` returns `PostgresSql`, `MySqlSql`, or `TSqlSql` for splitting and paging.
-4a. MongoDB is a document engine, not a relational one: `EngineKind::Document` holds a `DocumentAdapter`, `LiveSession::Document` holds `Arc<dyn DocumentSession>`, and its commands (`document_*`) call `document_session_for`. Relational commands refuse a document session. Documents cross IPC as a typed ordered tree (numbers as strings); edits travel as text that Rust parses. The query editor parses shell syntax in Rust and never evaluates JavaScript.
+   MongoDB is a document engine, not a relational one: `EngineKind::Document` holds a `DocumentAdapter`, `LiveSession::Document` holds `Arc<dyn DocumentSession>`, and its commands (`document_*`) call `document_session_for`. Relational commands refuse a document session. Documents cross IPC as a typed ordered tree (numbers as strings); edits travel as text that Rust parses. The query editor parses shell syntax in Rust and never evaluates JavaScript.
 5. The session runs catalog SQL or the user's SQL. Constructed SQL (filters, preview, DDL) quotes identifiers and escapes literals in that engine's crate or in `lib/ddl`. SQL the user typed is sent as written.
 
 `query_execute` is intentionally unrestricted. Do not allowlist, rewrite, or block statements there.

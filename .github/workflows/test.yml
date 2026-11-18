@@ -221,7 +221,7 @@ jobs:
         ports:
           - 27018:27017
         options: >-
-          --health-cmd "mongosh --quiet --eval \"db.adminCommand('ping').ok\""
+          --health-cmd "mongosh --quiet --host $(hostname) --eval \"db.adminCommand('ping').ok\""
           --health-interval 5s
           --health-timeout 10s
           --health-retries 30

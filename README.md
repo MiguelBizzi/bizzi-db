@@ -88,7 +88,7 @@ Then, on any platform:
 
 ```sh
 bun install
-bun run db:up   # Postgres on 127.0.0.1:5433 (postgres/postgres) MySQL 8.4 on 127.0.0.1:3307 (root/mysql), SQL Server on 127.0.0.1:1434 (sa/Mssql_dev_1), and MongoDB on 127.0.0.1:27018 (root/mongo)
+bun run db:up   # Postgres on 127.0.0.1:5433 (postgres/postgres), MySQL 8.4 on 127.0.0.1:3307 (root/mysql), SQL Server on 127.0.0.1:1434 (sa/Mssql_dev_1), and MongoDB on 127.0.0.1:27018 (root/mongo)
 bun run dev     # launch the desktop app
 ```
 

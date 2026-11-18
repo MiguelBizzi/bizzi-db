@@ -21,6 +21,8 @@ A new paradigm (key-value, graph) adds a trait pair in `db-core`, a `LiveSession
 
 Rust metadata lives in `crates/core/src/engines.rs` (`EngineSpec`: label, whether a database name is required, default port, `supported`). The desktop process registers the `Adapter` and `SqlDialect` trait objects in `REGISTERED_ENGINES` in `apps/desktop/src-tauri/src/lib.rs`. `db-core` cannot hold the adapters, because the engine crates depend on it. `every_supported_engine_is_registered_once` fails when the two lists disagree.
 
+A document engine registers as `EngineKind::Document { adapter }` in the same `REGISTERED_ENGINES` list, with a `DocumentAdapter` and no `SqlDialect`.
+
 Unknown dialect strings are errors. There is no silent fallback to PostgreSQL.
 
 The TypeScript side is the `DIALECTS` record in `packages/database`. `objectDdlFor`, `tableDdlFor`, and `dialectMeta` read from it. `apps/desktop/src/lib/ddl/registry.ts` registers `TableDdl` and `ObjectDdl`.
