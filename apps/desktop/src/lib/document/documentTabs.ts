@@ -1,4 +1,9 @@
-import type { CollectionSchema, WorkspaceTab } from '../../types';
+import type { Paradigm } from '@db/shared';
+import type { CollectionSchema, TabType, WorkspaceTab } from '../../types';
+
+export function newQueryTabType(paradigm: Paradigm): TabType {
+  return paradigm === 'document' ? 'document_query' : 'sql_editor';
+}
 
 const isCollectionTab = (tab: WorkspaceTab, tableId: string, databaseId: string) =>
   tab.type === 'collection_documents' &&

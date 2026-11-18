@@ -16,6 +16,10 @@ export const UPCOMING: UpcomingEntry | null = {
     {
       "kind": "new",
       "text": "Edit MongoDB documents. Double-click a value (or select it and press Enter) to change it and its type, or right-click a field to add, rename, remove or duplicate it; Save or Discard each changed document from its row. Edit Document… (⌘⌥E or Ctrl+Alt+E), Insert Document… (⌘I or Ctrl+I) and Clone Document… open the whole document as text, where shell syntax such as `ObjectId(\"…\")` and `ISODate(\"…\")` works. Delete Documents (⌘⌫ or Delete) asks first. If someone else changed the document after you loaded it, saving stops and offers to reload it."
+    },
+    {
+      "kind": "new",
+      "text": "Run MongoDB shell commands in a query tab (⌘T on a MongoDB connection). ⌘↵ or Ctrl+Enter runs the statement under the cursor, ⌘⇧↵ or Ctrl+Shift+Enter runs the whole script, and a selection runs exactly the selected text. Pick the database to run against, complete collection names, methods, fields and operators as you type, and export any result as a JSON array. Errors link to the position in the script."
     }
   ]
 };

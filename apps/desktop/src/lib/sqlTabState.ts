@@ -18,10 +18,10 @@ export const emptySqlTabState = (): SqlTabState => ({
 });
 
 /** Drops state belonging to tabs that no longer exist. */
-export function pruneSqlTabState(
-  state: Record<string, SqlTabState>,
+export function pruneSqlTabState<T>(
+  state: Record<string, T>,
   liveTabIds: Iterable<string>
-): Record<string, SqlTabState> {
+): Record<string, T> {
   const live = new Set(liveTabIds);
   const stale = Object.keys(state).filter((id) => !live.has(id));
   if (stale.length === 0) return state;

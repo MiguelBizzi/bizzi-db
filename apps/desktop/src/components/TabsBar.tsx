@@ -120,6 +120,7 @@ export const TabsBar: React.FC<TabsBarProps> = ({
     }
     switch (tab.type) {
       case 'sql_editor':
+      case 'document_query':
         return <Code className={`${cls} text-emerald-400`} />;
       case 'erd_schema':
         return <Network className={`${cls} text-purple-400`} />;

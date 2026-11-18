@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { CollectionSchema, WorkspaceTab } from '../../types';
-import { closableCollectionTabIds, openCollectionTab } from './documentTabs';
+import { closableCollectionTabIds, newQueryTabType, openCollectionTab } from './documentTabs';
 
 const coll = (name: string, database = 'shop'): CollectionSchema => ({
   id: `${database}.${name}`,
@@ -39,6 +39,13 @@ describe('openCollectionTab', () => {
     const second = openCollectionTab(first.tabs, coll('orders'), 'conn1');
     const third = openCollectionTab(second.tabs, coll('users'), 'conn2');
     expect(third.tabs).toHaveLength(3);
+  });
+});
+
+describe('newQueryTabType', () => {
+  test('document connections get a document query tab, others a SQL editor', () => {
+    expect(newQueryTabType('document')).toBe('document_query');
+    expect(newQueryTabType('relational')).toBe('sql_editor');
   });
 });
 

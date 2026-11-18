@@ -108,15 +108,21 @@ import {
 import { tabObjectKind } from "./lib/tabIcon";
 import {
   closableCollectionTabIds,
+  newQueryTabType,
   openCollectionTab,
 } from "./lib/document/documentTabs";
+import {
+  EMPTY_DOCUMENT_QUERY_STATE,
+  type DocumentQueryState,
+} from "./lib/document/documentResults";
 import { DropCollectionModal } from "./components/DocumentView/DropCollectionModal";
 import { CollectionView } from "./components/DocumentView/CollectionView";
+import { DocumentQueryTab } from "./components/DocumentView/DocumentQueryTab";
 import {
   retainTabEdits,
   type DocumentEdits,
 } from "./lib/document/documentEdits";
-import { dialectModule, engineMeta } from "@db/database";
+import { dialectModule, documentEngine, engineMeta } from "@db/database";
 import { objectDdlFor, tableDdlFor } from "./lib/ddl/registry";
 import { planScript } from "./lib/ddl/types";
 import {
@@ -288,6 +294,9 @@ export default function App() {
   const [sqlTabStates, setSqlTabStates] = useState<Record<string, SqlTabState>>(
     {},
   );
+  const [documentQueryStates, setDocumentQueryStates] = useState<
+    Record<string, DocumentQueryState>
+  >({});
   // Bumped per table when its rows change, so open query results can refresh themselves.
   const [dataRevisions, setDataRevisions] = useState<Record<string, number>>(
     {},
@@ -1114,15 +1123,22 @@ export default function App() {
     title?: string,
   ) => {
     if (!currentDatabase) return;
+    const type = newQueryTabType(
+      engineMeta(currentDatabase.dialect)?.paradigm ?? "relational",
+    );
     const existingTitles = tabs
-      .filter((t) => t.type === "sql_editor")
+      .filter((t) => t.type === type)
       .map((t) => t.title);
     openTabInPane(paneId, {
-      id: "tab_sql_" + Date.now(),
-      type: "sql_editor",
+      id: (type === "document_query" ? "tab_doc_" : "tab_sql_") + Date.now(),
+      type,
       title: title?.trim() || nextUntitledQueryTitle(existingTitles),
       databaseId: currentDatabase.id,
-      sqlContent: initialSql || defaultQuerySql(currentDatabase.tables[0], currentDatabase.dialect),
+      sqlContent:
+        initialSql ||
+        (type === "document_query"
+          ? (documentEngine(currentDatabase.dialect)?.emptyEditorText ?? "")
+          : defaultQuerySql(currentDatabase.tables[0], currentDatabase.dialect)),
     });
   };
 
@@ -1414,6 +1430,7 @@ export default function App() {
     const parked = workspaceRef.current?.tabs ?? [];
     const liveIds = [...tabs, ...parked].map((tab) => tab.id);
     setSqlTabStates((prev) => pruneSqlTabState(prev, liveIds));
+    setDocumentQueryStates((prev) => pruneSqlTabState(prev, liveIds));
     pruneTabFormState(liveIds);
   }, [tabs]);
 
@@ -2294,6 +2311,44 @@ export default function App() {
             }}
             onDeleteSavedQuery={handleDeleteSavedQuery}
             onUpdateSavedQueryTags={handleUpdateSavedQueryTags}
+            onLoadSavedQuery={(title) => handleRenameTab(tab.id, title)}
+          />
+        );
+      case "document_query":
+        return (
+          <DocumentQueryTab
+            key={tab.id}
+            connectionId={currentDatabase.id}
+            isFocusedPane={tab.id === activeTabId}
+            initialText={tab.sqlContent ?? ""}
+            onTextChange={(text) => handleSqlChange(tab.id, text)}
+            profileDatabase={
+              profiles.find((p) => p.id === currentDatabase.id)?.database ?? ""
+            }
+            collections={currentDatabase.collections ?? []}
+            savedQueries={savedQueries}
+            state={documentQueryStates[tab.id] ?? EMPTY_DOCUMENT_QUERY_STATE}
+            onStateChange={(next) =>
+              setDocumentQueryStates((prev) => ({ ...prev, [tab.id]: next }))
+            }
+            onExecuted={async () => {
+              await refreshHistory();
+              void enqueueSchemaCheck();
+            }}
+            onBookmarkQuery={async (title, text, description, tags) => {
+              const newSq: SavedQuery = {
+                id: "sq_" + Date.now(),
+                title,
+                description,
+                sql: text,
+                databaseId: currentDatabase.id,
+                tags: tags && tags.length > 0 ? tags : ["Analytics"],
+                createdAt: new Date().toISOString(),
+                isBookmarked: true,
+              };
+              await savedQueriesSave(newSq);
+              setSavedQueries([newSq, ...savedQueries]);
+            }}
             onLoadSavedQuery={(title) => handleRenameTab(tab.id, title)}
           />
         );
