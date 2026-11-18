@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { documentsFind } from '@db/core';
+import type { DocumentCapabilities } from '@db/database';
 import type { CollectionSchema, DocumentPage } from '@db/shared';
 import {
   DEFAULT_DOCUMENT_PAGE_SIZE,
@@ -20,6 +21,7 @@ import { registerScope, type CommandScope } from '../../lib/commands/commandBus'
 import { invokeErrorMessage } from '../../lib/invokeError';
 import { QueryErrorCard } from '../SqlEditor/QueryErrorCard';
 import { Select, type SelectOption } from '../ui/Select';
+import { CollectionIndexes } from './CollectionIndexes';
 import { CollectionToolbar, type DocumentViewMode } from './CollectionToolbar';
 import { DeleteDocumentsModal } from './DeleteDocumentsModal';
 import { DocumentEditorDrawer } from './DocumentEditorDrawer';
@@ -48,6 +50,11 @@ interface CollectionViewProps {
   /** The sidebar's Insert Document… opened this tab; the view opens the insert drawer once. */
   insertRequested?: boolean;
   onInsertRequestHandled?: () => void;
+  capabilities: DocumentCapabilities;
+  indexKeyKinds: { value: string; label: string }[];
+  /** The sidebar's or menu's New Index… opened this tab; the view shows Indexes with the drawer open. */
+  indexRequested?: boolean;
+  onIndexRequestHandled?: () => void;
 }
 
 interface Query {
@@ -67,7 +74,14 @@ export function CollectionView({
   onEditsChange,
   insertRequested,
   onInsertRequestHandled,
+  capabilities,
+  indexKeyKinds,
+  indexRequested,
+  onIndexRequestHandled,
 }: CollectionViewProps) {
+  const [section, setSection] = useState<'documents' | 'indexes'>('documents');
+  const [indexOverlayOpen, setIndexOverlayOpen] = useState(false);
+  const [createIndexPending, setCreateIndexPending] = useState(false);
   const [draft, setDraft] = useState<FindInputs>(EMPTY_INPUTS);
   // Enter can arrive before React re-renders with the last keystroke, so Apply reads the ref.
   const draftRef = useRef(draft);
@@ -155,6 +169,15 @@ export function CollectionView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [insertRequested]);
 
+  useEffect(() => {
+    if (!indexRequested) return;
+    setSection('indexes');
+    setCreateIndexPending(true);
+    onIndexRequestHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [indexRequested]);
+  const clearCreateIndexPending = useCallback(() => setCreateIndexPending(false), []);
+
   const page = loaded?.page ?? null;
   const shownQuery = loaded?.query ?? query;
   const documents = useMemo(() => page?.documents ?? [], [page]);
@@ -184,7 +207,8 @@ export function CollectionView({
   // The editor drawer and delete confirmation count as modals for the menu bar, so its commands
   // do not act on the collection behind them.
   const overlayOpenRef = useRef(docEdits.overlayOpen);
-  overlayOpenRef.current = docEdits.overlayOpen;
+  const overlayOpen = docEdits.overlayOpen || indexOverlayOpen;
+  overlayOpenRef.current = overlayOpen;
 
   useEffect(() => {
     const scope = registerScope('collection:' + scopeId, {
@@ -217,8 +241,8 @@ export function CollectionView({
   }, [selected.length]);
 
   useEffect(() => {
-    scopeRef.current?.setContext({ modalOpen: docEdits.overlayOpen });
-  }, [docEdits.overlayOpen]);
+    scopeRef.current?.setContext({ modalOpen: overlayOpen });
+  }, [overlayOpen]);
 
   const pickPath = (path: string) => {
     const { text, caret } = insertFieldFilter(draftRef.current.filter, path);
@@ -237,6 +261,40 @@ export function CollectionView({
 
   return (
     <div className="flex flex-col h-full min-h-0 min-w-0 bg-background overflow-hidden">
+      <div role="tablist" aria-label="Collection sections" className="flex items-center gap-1 px-3 pt-1.5 border-b border-border shrink-0">
+        {(['documents', 'indexes'] as const).map((id) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={section === id}
+            onClick={() => setSection(id)}
+            className={`px-2.5 py-1 text-xs rounded-t-md border-b-2 -mb-px transition-colors ${
+              section === id
+                ? 'border-primary text-foreground font-medium'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {id === 'documents' ? 'Documents' : `Indexes (${collection.indexes.length})`}
+          </button>
+        ))}
+      </div>
+
+      {section === 'indexes' && (
+        <CollectionIndexes
+          connectionId={connectionId}
+          collection={collection}
+          capabilities={capabilities}
+          keyKinds={indexKeyKinds}
+          onSchemaChanged={onSchemaChanged}
+          createRequested={createIndexPending}
+          onCreateHandled={clearCreateIndexPending}
+          onOverlayChange={setIndexOverlayOpen}
+        />
+      )}
+
+      {section === 'documents' && (
+      <>
       <CollectionToolbar
         draft={draft}
         onDraftChange={changeDraft}
@@ -371,6 +429,9 @@ export function CollectionView({
           </div>
         </div>
       </div>
+
+      </>
+      )}
 
       <DocumentEditorDrawer
         request={docEdits.editor}

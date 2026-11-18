@@ -20,6 +20,10 @@ export const UPCOMING: UpcomingEntry | null = {
     {
       "kind": "new",
       "text": "Run MongoDB shell commands in a query tab (⌘T on a MongoDB connection). ⌘↵ or Ctrl+Enter runs the statement under the cursor, ⌘⇧↵ or Ctrl+Shift+Enter runs the whole script, and a selection runs exactly the selected text. Pick the database to run against, complete collection names, methods, fields and operators as you type, and export any result as a JSON array. Errors link to the position in the script."
+    },
+    {
+      "kind": "new",
+      "text": "Manage MongoDB indexes and collections. The Indexes tab on a collection lists each index with its keys and options (unique, sparse, hidden, TTL, partial filter); New Index… (⌘⇧I or Ctrl+Shift+I) builds one from ascending, descending, text, 2dsphere and hashed keys, and Drop removes it after a confirmation. New Collection… (⌘⇧N or Ctrl+Shift+N) creates a collection in an existing or new database and opens it. The sidebar and the list update right away."
     }
   ]
 };

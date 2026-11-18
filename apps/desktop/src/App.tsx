@@ -62,7 +62,8 @@ import {
   connectionsList,
   connectionsMove,
   connectionsSave,
-  collectionDrop,
+  collectionCreate,
+collectionDrop,
   connectionsTest,
   foldersDelete,
   foldersList,
@@ -116,6 +117,8 @@ import {
   type DocumentQueryState,
 } from "./lib/document/documentResults";
 import { DropCollectionModal } from "./components/DocumentView/DropCollectionModal";
+import { CreateCollectionModal } from "./components/DocumentView/CreateCollectionModal";
+import { collectionDatabases } from "./lib/document/explorer";
 import { CollectionView } from "./components/DocumentView/CollectionView";
 import { savedQueriesFor } from "./lib/savedQueries";
 import { DocumentQueryTab } from "./components/DocumentView/DocumentQueryTab";
@@ -390,6 +393,7 @@ export default function App() {
   const [collectionToDrop, setCollectionToDrop] =
     useState<CollectionSchema | null>(null);
   const [droppingCollection, setDroppingCollection] = useState(false);
+  const [isCreateCollectionOpen, setIsCreateCollectionOpen] = useState(false);
   const [tableActionConfirm, setTableActionConfirm] = useState<{
     table: TableSchema;
     action: "truncate" | "drop";
@@ -965,7 +969,42 @@ export default function App() {
     handleOpenCollection(collection);
     setInsertDocumentForCollectionId(collection.id);
   };
-  const handleNewCollectionIndex = handleOpenCollection;
+  /** The collection whose tab should show Indexes with the new-index drawer open, once. */
+  const [newIndexForCollectionId, setNewIndexForCollectionId] = useState<
+    string | null
+  >(null);
+  const clearNewCollectionIndexRequest = useCallback(
+    () => setNewIndexForCollectionId(null),
+    [],
+  );
+  const handleNewCollectionIndex = (collection: CollectionSchema) => {
+    handleOpenCollection(collection);
+    setNewIndexForCollectionId(collection.id);
+  };
+
+  const handleCreateCollection = async (
+    database: string,
+    name: string,
+  ): Promise<string | null> => {
+    if (!currentDatabase) return "No connection is open.";
+    try {
+      await collectionCreate(currentDatabase.id, { database, collection: name });
+    } catch (error) {
+      return invokeErrorMessage(error, "Could not create the collection");
+    }
+    setIsCreateCollectionOpen(false);
+    toast.success(`Created ${database}.${name}`);
+    try {
+      const schema = await loadSchema(currentDatabase.id);
+      const created = schema.collections?.find(
+        (c) => c.database === database && c.name === name,
+      );
+      if (created) handleOpenCollection(created);
+    } catch (error) {
+      toast.error(invokeErrorMessage(error, "Could not refresh the schema"));
+    }
+    return null;
+  };
 
   const handleConfirmDropCollection = async () => {
     const collection = collectionToDrop;
@@ -2149,7 +2188,8 @@ export default function App() {
     switch (tab.type) {
       case "collection_documents": {
         const collection = findCollection(tab.tableId);
-        if (!collection) {
+        const documentCaps = documentEngine(currentDatabase.dialect);
+        if (!collection || !documentCaps) {
           return (
             <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
               Collection not found in the current schema.
@@ -2167,6 +2207,10 @@ export default function App() {
             onEditsChange={(update) => updateDocumentEdits(tab.id, update)}
             insertRequested={insertDocumentForCollectionId === collection.id}
             onInsertRequestHandled={clearInsertDocumentRequest}
+            capabilities={documentCaps.documentCapabilities}
+            indexKeyKinds={documentCaps.indexKeyKinds}
+            indexRequested={newIndexForCollectionId === collection.id}
+            onIndexRequestHandled={clearNewCollectionIndexRequest}
           />
         );
       }
@@ -2551,6 +2595,7 @@ export default function App() {
           tableActionConfirm: Boolean(tableActionConfirm),
           routineToDrop: Boolean(routineToDrop),
           collectionToDrop: Boolean(collectionToDrop),
+          isCreateCollectionOpen,
         },
       }),
     [
@@ -2570,6 +2615,7 @@ export default function App() {
       tableActionConfirm,
       routineToDrop,
       collectionToDrop,
+      isCreateCollectionOpen,
       currentDatabase?.dialect,
     ],
   );
@@ -2606,10 +2652,23 @@ export default function App() {
       "app.checkUpdates": checkForAppUpdateManually,
       "file.newQuery": () => handleOpenNewQueryTab(),
       "file.newConnection": () => openNewConnection(),
-      "file.newTable": openNewTableDesigner,
+      "file.newTable": () => {
+        if (currentDatabase && engineMeta(currentDatabase.dialect)?.paradigm === "document") {
+          setIsCreateCollectionOpen(true);
+          return;
+        }
+        openNewTableDesigner();
+      },
       "file.newView": openNewViewDesigner,
       "file.newFunction": openNewRoutineDesigner,
       "file.newIndex": () => {
+        const collection = activeTab?.tableId
+          ? findCollection(activeTab.tableId)
+          : undefined;
+        if (collection && activeTab?.type === "collection_documents") {
+          handleNewCollectionIndex(collection);
+          return;
+        }
         const table = activeTab?.tableId
           ? findTable(activeTab.tableId)
           : undefined;
@@ -2913,6 +2972,13 @@ export default function App() {
             onStage={stageSchema}
           />
         )}
+
+        <CreateCollectionModal
+          isOpen={isCreateCollectionOpen}
+          databases={currentDatabase ? collectionDatabases(currentDatabase) : []}
+          onCreate={handleCreateCollection}
+          onClose={() => setIsCreateCollectionOpen(false)}
+        />
 
         <DropCollectionModal
           collection={collectionToDrop}
