@@ -17,6 +17,7 @@ import {
   selectedIndices,
   type FindInputs,
 } from '../../lib/document/collectionView';
+import type { DocumentExportTarget } from '../../lib/dataExport';
 import { registerScope, type CommandScope } from '../../lib/commands/commandBus';
 import { invokeErrorMessage } from '../../lib/invokeError';
 import { QueryErrorCard } from '../SqlEditor/QueryErrorCard';
@@ -187,6 +188,12 @@ export function CollectionView({
   const listKey = JSON.stringify([shownQuery.inputs, shownQuery.skip, shownQuery.pageSize]);
   const selectedRows = useMemo(() => selectedIndices(selected, documents), [selected, documents]);
 
+  const exportTriggerRef = useRef<(() => void) | null>(null);
+  const exportTarget = useMemo<DocumentExportTarget | null>(
+    () => (loaded ? { connectionId, collection, inputs: loaded.query.inputs } : null),
+    [connectionId, collection, loaded],
+  );
+
   const scopeId = useId();
   const scopeRef = useRef<CommandScope | null>(null);
   const menuActionsNow = {
@@ -213,6 +220,7 @@ export function CollectionView({
   useEffect(() => {
     const scope = registerScope('collection:' + scopeId, {
       'conn.refreshTable': () => menuActions.current.refresh(),
+      'file.export': () => exportTriggerRef.current?.(),
       'edit.find': () => menuActions.current.find(),
       'edit.insertRow': () => menuActions.current.insert(),
       'edit.editDocument': () => menuActions.current.editDocument(),
@@ -306,6 +314,8 @@ export function CollectionView({
         onToggleFields={() => setFieldsOpen((open) => !open)}
         onRefresh={refresh}
         loading={loading}
+        exportTarget={exportTarget}
+        exportTriggerRef={exportTriggerRef}
       />
 
       <div className="flex flex-1 min-h-0">

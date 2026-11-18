@@ -801,6 +801,13 @@ describe('paradigm gating', () => {
     expect(on('file.newIndex', doc({ activeTabType: 'document_query' }))).toBe(false);
   });
 
+  test('file.export works on collection tabs and still needs a result on relational editors', () => {
+    expect(on('file.export', doc({ activeTabType: 'collection_documents' }))).toBe(true);
+    expect(on('file.export', doc({ activeTabType: 'collection_documents', modalOpen: true }))).toBe(false);
+    expect(on('file.export', rel({ activeTabType: 'table_data' }))).toBe(true);
+    expect(on('file.export', rel({ activeTabType: 'sql_editor', sqlResultPresent: false }))).toBe(false);
+  });
+
   test('grid commands extend to collection tabs with document labels', () => {
     const c = doc({ activeTabType: 'collection_documents', selectedRowCount: 1 });
     expect(on('edit.insertRow', c)).toBe(true);

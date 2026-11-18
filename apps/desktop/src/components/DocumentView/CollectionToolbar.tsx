@@ -1,7 +1,9 @@
-import type { ReactNode, Ref } from 'react';
+import type { ReactNode, Ref, RefObject } from 'react';
 import { Braces, ListTree, Play, RefreshCw, TableProperties } from 'lucide-react';
 import type { FindInputs } from '../../lib/document/collectionView';
 import { shortcutLabel } from '../../lib/commands/shortcutLabel';
+import { DataExportMenu } from '../DataExport/DataExportMenu';
+import type { DocumentExportTarget } from '../../lib/dataExport';
 import { ShellInput, type ShellInputHandle } from './ShellInput';
 
 export type DocumentViewMode = 'list' | 'json';
@@ -17,6 +19,8 @@ interface CollectionToolbarProps {
   onToggleFields: () => void;
   onRefresh: () => void;
   loading: boolean;
+  exportTarget: DocumentExportTarget | null;
+  exportTriggerRef: RefObject<(() => void) | null>;
 }
 
 const MODES: { id: DocumentViewMode; label: string; Icon: typeof ListTree }[] = [
@@ -53,6 +57,8 @@ export function CollectionToolbar({
   onToggleFields,
   onRefresh,
   loading,
+  exportTarget,
+  exportTriggerRef,
 }: CollectionToolbarProps) {
   return (
     <div className="bg-card border-b border-border p-2.5 flex flex-col gap-2 shrink-0">
@@ -120,6 +126,8 @@ export function CollectionToolbar({
               </button>
             ))}
           </div>
+
+          <DataExportMenu documentTarget={exportTarget} exportTriggerRef={exportTriggerRef} />
 
           <button
             type="button"

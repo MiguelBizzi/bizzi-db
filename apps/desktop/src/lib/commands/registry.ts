@@ -76,7 +76,8 @@ export const COMMANDS: readonly Command[] = [
     id: 'file.export',
     label: 'Export Results…',
     accelerator: 'CmdOrCtrl+E',
-    enabled: (ctx) => tableDataActive(ctx) || (sqlEditorActive(ctx) && ctx.sqlResultPresent),
+    enabled: (ctx) =>
+      tableDataActive(ctx) || collectionActive(ctx) || (sqlEditorActive(ctx) && ctx.sqlResultPresent),
   },
   { id: 'file.closeTab', label: 'Close Tab', accelerator: 'CmdOrCtrl+W', enabled: paneHasTabs(1) },
   { id: 'file.closeOthers', label: 'Close Other Tabs', accelerator: 'CmdOrCtrl+Alt+W', enabled: paneHasTabs(2) },
