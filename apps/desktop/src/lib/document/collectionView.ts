@@ -20,7 +20,8 @@ export function selectDocument(selected: readonly number[], index: number, toggl
 
 /** `total` is `null` when the count did not finish in time. */
 export function pageRangeLabel(skip: number, shown: number, total: number | null): string {
-  if (shown === 0 && skip === 0) return 'No documents';
+  // Without a total, a full last page leaves Next enabled onto an empty one.
+  if (shown === 0) return skip === 0 ? 'No documents' : 'No more documents';
   const of = total == null ? 'many' : total.toLocaleString('en-US');
   return `${(skip + 1).toLocaleString('en-US')}–${(skip + shown).toLocaleString('en-US')} of ${of}`;
 }

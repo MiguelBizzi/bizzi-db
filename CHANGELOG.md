@@ -9,6 +9,7 @@ New entries go under `## [Unreleased]`; the release process moves them under a v
 ### New
 
 - Connect to MongoDB servers. Paste a `mongodb://` or `mongodb+srv://` connection string, or fill in the form with an auth database, replica set, additional hosts, read preference and SRV lookup. Username and password are optional for servers without authentication.
+- Browse a MongoDB collection's documents as an expandable tree with a type badge on every value, or as JSON. Filter, project and sort with shell syntax such as `{ age: { $gt: 30 } }` and press Enter to apply. Open Fields to see which fields a sample of documents has, how often, and with which types; click one to add it to the filter.
 
 ## [0.1.29] - 2026-11-14 - Foreign key sheet and What's New
 

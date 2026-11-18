@@ -45,6 +45,7 @@ describe('page range', () => {
     expect(pageRangeLabel(0, 50, 1234)).toBe('1–50 of 1,234');
     expect(pageRangeLabel(50, 20, null)).toBe('51–70 of many');
     expect(pageRangeLabel(0, 0, 0)).toBe('No documents');
+    expect(pageRangeLabel(50, 0, null)).toBe('No more documents');
   });
 
   test('goes forward while more documents exist', () => {

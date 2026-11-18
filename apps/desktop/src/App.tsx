@@ -111,6 +111,7 @@ import {
   openCollectionTab,
 } from "./lib/document/documentTabs";
 import { DropCollectionModal } from "./components/DocumentView/DropCollectionModal";
+import { CollectionView } from "./components/DocumentView/CollectionView";
 import { dialectModule, engineMeta } from "@db/database";
 import { objectDdlFor, tableDdlFor } from "./lib/ddl/registry";
 import { planScript } from "./lib/ddl/types";
@@ -2101,9 +2102,13 @@ export default function App() {
           );
         }
         return (
-          <div key={tab.id} className="p-4 text-sm font-mono">
-            {collection.id} ({collection.kind})
-          </div>
+          <CollectionView
+            key={tab.id}
+            connectionId={currentDatabase.id}
+            collection={collection}
+            isFocusedPane={tab.id === activeTabId}
+            onSchemaChanged={() => void refreshSchemas()}
+          />
         );
       }
       case "table_data": {
