@@ -1,9 +1,9 @@
 import type { CollectionSchema, WorkspaceTab } from '../../types';
 
-const isCollectionTab = (tab: WorkspaceTab, tableId: string, databaseId?: string) =>
+const isCollectionTab = (tab: WorkspaceTab, tableId: string, databaseId: string) =>
   tab.type === 'collection_documents' &&
   tab.tableId === tableId &&
-  (databaseId === undefined || tab.databaseId === databaseId);
+  tab.databaseId === databaseId;
 
 export function newCollectionTab(c: CollectionSchema, databaseId: string): WorkspaceTab {
   return {
@@ -27,6 +27,10 @@ export function openCollectionTab(
   return { tabs: [...tabs, tab], activeId: tab.id };
 }
 
-export function closableCollectionTabIds(tabs: WorkspaceTab[], collectionId: string): string[] {
-  return tabs.filter((tab) => isCollectionTab(tab, collectionId)).map((tab) => tab.id);
+export function closableCollectionTabIds(
+  tabs: WorkspaceTab[],
+  collectionId: string,
+  databaseId: string,
+): string[] {
+  return tabs.filter((tab) => isCollectionTab(tab, collectionId, databaseId)).map((tab) => tab.id);
 }

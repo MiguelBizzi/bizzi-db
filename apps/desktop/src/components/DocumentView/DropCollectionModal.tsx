@@ -19,11 +19,11 @@ const Body: React.FC<DropCollectionModalProps> = ({ collection, busy, onClose, o
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape' && !busy) onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, busy]);
 
   if (!collection) return null;
   const matched = canConfirmDelete(typed, collection.name) && !busy;

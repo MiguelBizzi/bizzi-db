@@ -45,10 +45,18 @@ describe('openCollectionTab', () => {
 describe('closableCollectionTabIds', () => {
   test('selects collection tabs for the dropped collection only', () => {
     const tabs = [
-      tab({ id: 'a', type: 'collection_documents', tableId: 'shop.users' }),
-      tab({ id: 'b', type: 'collection_documents', tableId: 'shop.orders' }),
-      tab({ id: 'c', type: 'table_data', tableId: 'shop.users' }),
+      tab({ id: 'a', type: 'collection_documents', tableId: 'shop.users', databaseId: 'conn1' }),
+      tab({ id: 'b', type: 'collection_documents', tableId: 'shop.orders', databaseId: 'conn1' }),
+      tab({ id: 'c', type: 'table_data', tableId: 'shop.users', databaseId: 'conn1' }),
     ];
-    expect(closableCollectionTabIds(tabs, 'shop.users')).toEqual(['a']);
+    expect(closableCollectionTabIds(tabs, 'shop.users', 'conn1')).toEqual(['a']);
+  });
+
+  test('leaves same-named collections of other connections open', () => {
+    const tabs = [
+      tab({ id: 'a', type: 'collection_documents', tableId: 'shop.users', databaseId: 'conn1' }),
+      tab({ id: 'b', type: 'collection_documents', tableId: 'shop.users', databaseId: 'conn2' }),
+    ];
+    expect(closableCollectionTabIds(tabs, 'shop.users', 'conn1')).toEqual(['a']);
   });
 });

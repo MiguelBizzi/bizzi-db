@@ -108,7 +108,7 @@ import {
 import { tabObjectKind } from "./lib/tabIcon";
 import {
   closableCollectionTabIds,
-  newCollectionTab,
+  openCollectionTab,
 } from "./lib/document/documentTabs";
 import { DropCollectionModal } from "./components/DocumentView/DropCollectionModal";
 import { dialectModule, engineMeta } from "@db/database";
@@ -901,12 +901,18 @@ export default function App() {
 
   const handleOpenCollection = (collection: CollectionSchema) => {
     if (!currentDatabase) return;
-    revealTabInPane(
-      activePaneId,
-      (tab) =>
-        tab.type === "collection_documents" && tab.tableId === collection.id,
-      () => newCollectionTab(collection, currentDatabase.id),
+    const { tabs: next, activeId } = openCollectionTab(
+      tabs,
+      collection,
+      currentDatabase.id,
     );
+    if (next === tabs) {
+      const paneId = tabPaneId(layout, activeId) ?? activePaneId;
+      setLayout(setPaneActiveTab(layout, paneId, activeId));
+      setFocusedPaneId(paneId);
+    } else {
+      openTabInPane(activePaneId, next[next.length - 1]);
+    }
     void enqueueSchemaCheck();
   };
 
@@ -922,16 +928,19 @@ export default function App() {
         database: collection.database,
         collection: collection.name,
       });
-      const closing = new Set(closableCollectionTabIds(tabs, collection.id));
+      const closing = new Set(
+        closableCollectionTabIds(tabs, collection.id, currentDatabase.id),
+      );
       closeTabsWhere((tab) => closing.has(tab.id));
       setCollectionToDrop(null);
       toast.success(`Dropped ${collection.id}`);
-      await refreshSchemas();
     } catch (error) {
       toast.error(invokeErrorMessage(error, "Could not drop the collection"));
+      return;
     } finally {
       setDroppingCollection(false);
     }
+    await refreshSchemas();
   };
 
   const handleSelectTableSchema = (table: TableSchema) => {
