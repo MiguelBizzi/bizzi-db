@@ -217,3 +217,14 @@ export function documentId(doc: DocValue): DocValue | undefined {
   if (doc.t !== 'object') return undefined;
   return doc.entries.find(([k]) => k === '_id')?.[1];
 }
+
+/** `toggled` with the node at `path` open, read the way `flattenTree` reads it. */
+export function ensureExpanded(toggled: ReadonlySet<string>, docIndex: number, path: TreePath): ReadonlySet<string> {
+  const key = treeKey(docIndex, path);
+  const open = path.length === 0 ? !toggled.has(key) : toggled.has(key);
+  if (open) return toggled;
+  const next = new Set(toggled);
+  if (path.length === 0) next.delete(key);
+  else next.add(key);
+  return next;
+}

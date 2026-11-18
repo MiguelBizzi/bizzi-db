@@ -11,6 +11,7 @@ const HANDLER_FILES = [
   'App.tsx',
   'components/SqlEditor/SqlEditorTab.tsx',
   'components/TableView/TableDataGrid.tsx',
+  'components/DocumentView/CollectionView.tsx',
 ].map((file) => readFileSync(join(SRC, file), 'utf8'));
 
 const isWired = (id: string) =>

@@ -21,10 +21,13 @@ import { invokeErrorMessage } from '../../lib/invokeError';
 import { QueryErrorCard } from '../SqlEditor/QueryErrorCard';
 import { Select, type SelectOption } from '../ui/Select';
 import { CollectionToolbar, type DocumentViewMode } from './CollectionToolbar';
+import { DeleteDocumentsModal } from './DeleteDocumentsModal';
+import { DocumentEditorDrawer } from './DocumentEditorDrawer';
 import { DocumentJsonView } from './DocumentJsonView';
 import { DocumentList } from './DocumentList';
 import { FieldsPanel } from './FieldsPanel';
 import type { ShellInputHandle } from './ShellInput';
+import { useDocumentEdits } from './useDocumentEdits';
 
 const EMPTY_INPUTS: FindInputs = { filter: '', projection: '', sort: '' };
 
@@ -37,8 +40,11 @@ interface CollectionViewProps {
   connectionId: string;
   collection: CollectionSchema;
   isFocusedPane: boolean;
-  /** Called after the view changes the collection's schema (indexes, the collection itself). */
+  /** Called after the view changes the collection's schema or its document count. */
   onSchemaChanged: () => void;
+  /** The sidebar's Insert Document… opened this tab; the view opens the insert drawer once. */
+  insertRequested?: boolean;
+  onInsertRequestHandled?: () => void;
 }
 
 interface Query {
@@ -49,7 +55,14 @@ interface Query {
   revision: number;
 }
 
-export function CollectionView({ connectionId, collection, isFocusedPane }: CollectionViewProps) {
+export function CollectionView({
+  connectionId,
+  collection,
+  isFocusedPane,
+  onSchemaChanged,
+  insertRequested,
+  onInsertRequestHandled,
+}: CollectionViewProps) {
   const [draft, setDraft] = useState<FindInputs>(EMPTY_INPUTS);
   // Enter can arrive before React re-renders with the last keystroke, so Apply reads the ref.
   const draftRef = useRef(draft);
@@ -68,7 +81,10 @@ export function CollectionView({ connectionId, collection, isFocusedPane }: Coll
   const [selected, setSelected] = useState<string[]>([]);
   const filterRef = useRef<ShellInputHandle>(null);
   const requestRef = useRef(0);
-  const ns = { database: collection.database, collection: collection.name };
+  const ns = useMemo(
+    () => ({ database: collection.database, collection: collection.name }),
+    [collection.database, collection.name],
+  );
 
   useEffect(() => {
     const request = ++requestRef.current;
@@ -101,35 +117,79 @@ export function CollectionView({ connectionId, collection, isFocusedPane }: Coll
     setDraft(draftRef.current);
   };
 
-  const apply = useCallback(() => {
-    setQuery((prev) => ({ ...prev, inputs: draftRef.current, skip: 0, revision: prev.revision + 1 }));
-  }, []);
-
-  const refresh = useCallback(() => {
+  const reload = useCallback(() => {
     setQuery((prev) => ({ ...prev, revision: prev.revision + 1 }));
   }, []);
 
-  const goTo = (skip: number) => {
-    setQuery((prev) => ({ ...prev, skip: Math.max(0, skip) }));
-  };
+  const loadedDocuments = loaded && !loaded.page.error ? loaded.page.documents : null;
+  const docEdits = useDocumentEdits({
+    connectionId,
+    ns,
+    documents: loadedDocuments,
+    reload,
+    onCountChanged: onSchemaChanged,
+  });
+  const { guard } = docEdits;
+
+  const apply = () =>
+    guard(() => {
+      setQuery((prev) => ({ ...prev, inputs: draftRef.current, skip: 0, revision: prev.revision + 1 }));
+    });
+
+  const refresh = () => guard(reload);
+
+  const goTo = (skip: number) => guard(() => setQuery((prev) => ({ ...prev, skip: Math.max(0, skip) })));
+
+  useEffect(() => {
+    if (!insertRequested) return;
+    docEdits.openInsert();
+    onInsertRequestHandled?.();
+    // Only a new request matters; the handlers are allowed to change identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [insertRequested]);
+
+  const page = loaded?.page ?? null;
+  const shownQuery = loaded?.query ?? query;
+  const documents = useMemo(() => page?.documents ?? [], [page]);
+  const total = page ? (page.total ?? null) : null;
+  const errorResult = page ? pageErrorResult(page, shownQuery.inputs) : null;
+  const shown = documents.length;
+  const listKey = JSON.stringify([shownQuery.inputs, shownQuery.skip, shownQuery.pageSize]);
+  const selectedRows = useMemo(() => selectedIndices(selected, documents), [selected, documents]);
 
   const scopeId = useId();
   const scopeRef = useRef<CommandScope | null>(null);
-  const menuActions = useRef({ refresh, find: () => filterRef.current?.focus() });
-  menuActions.current = { refresh, find: () => filterRef.current?.focus() };
+  const menuActionsNow = {
+    refresh,
+    find: () => filterRef.current?.focus(),
+    insert: docEdits.openInsert,
+    editDocument: () => {
+      if (selectedRows.length === 1) docEdits.openEdit(selectedRows[0]);
+    },
+    deleteDocuments: () => docEdits.askDelete(selected),
+  };
+  const menuActions = useRef(menuActionsNow);
+  menuActions.current = menuActionsNow;
   const isFocusedPaneRef = useRef(isFocusedPane);
   isFocusedPaneRef.current = isFocusedPane;
   const selectedCountRef = useRef(selected.length);
   selectedCountRef.current = selected.length;
+  // The editor drawer and delete confirmation count as modals for the menu bar, so its commands
+  // do not act on the collection behind them.
+  const overlayOpenRef = useRef(docEdits.overlayOpen);
+  overlayOpenRef.current = docEdits.overlayOpen;
 
   useEffect(() => {
     const scope = registerScope('collection:' + scopeId, {
       'conn.refreshTable': () => menuActions.current.refresh(),
       'edit.find': () => menuActions.current.find(),
+      'edit.insertRow': () => menuActions.current.insert(),
+      'edit.editDocument': () => menuActions.current.editDocument(),
+      'edit.deleteRows': () => menuActions.current.deleteDocuments(),
     });
     // Only the focused pane's view is active, whatever order the panes mount in.
     scope.setActive(isFocusedPaneRef.current);
-    scope.setContext({ selectedRowCount: selectedCountRef.current });
+    scope.setContext({ selectedRowCount: selectedCountRef.current, modalOpen: overlayOpenRef.current });
     if (isFocusedPaneRef.current) scope.claim();
     scopeRef.current = scope;
     return () => {
@@ -149,19 +209,15 @@ export function CollectionView({ connectionId, collection, isFocusedPane }: Coll
     scopeRef.current?.setContext({ selectedRowCount: selected.length });
   }, [selected.length]);
 
+  useEffect(() => {
+    scopeRef.current?.setContext({ modalOpen: docEdits.overlayOpen });
+  }, [docEdits.overlayOpen]);
+
   const pickPath = (path: string) => {
     const { text, caret } = insertFieldFilter(draftRef.current.filter, path);
     filterRef.current?.setText(text, caret);
   };
 
-  const page = loaded?.page ?? null;
-  const shownQuery = loaded?.query ?? query;
-  const documents = useMemo(() => page?.documents ?? [], [page]);
-  const total = page ? (page.total ?? null) : null;
-  const errorResult = page ? pageErrorResult(page, shownQuery.inputs) : null;
-  const shown = documents.length;
-  const listKey = JSON.stringify([shownQuery.inputs, shownQuery.skip, shownQuery.pageSize]);
-  const selectedRows = useMemo(() => selectedIndices(selected, documents), [selected, documents]);
 
   const selectRow = (index: number, toggle: boolean) => {
     // The old page stays on screen while the next one loads; a click there would select a
@@ -215,13 +271,21 @@ export function CollectionView({ connectionId, collection, isFocusedPane }: Coll
           {page && !errorResult && shown > 0 && viewMode === 'list' && (
             <DocumentList
               key={listKey}
-              documents={documents}
+              documents={docEdits.shown}
               selected={selectedRows}
+              dirty={docEdits.dirty}
+              savingIndex={docEdits.savingIndex}
               onSelect={selectRow}
+              onChange={docEdits.change}
+              onSave={(index) => void docEdits.save(index)}
+              onDiscard={docEdits.discard}
+              actions={{ edit: docEdits.openEdit, clone: docEdits.openClone, remove: docEdits.askDeleteAt }}
               aria-label={`Documents in ${collection.name}`}
             />
           )}
-          {page && !errorResult && shown > 0 && viewMode === 'json' && <DocumentJsonView documents={documents} />}
+          {page && !errorResult && shown > 0 && viewMode === 'json' && (
+            <DocumentJsonView documents={docEdits.shown} />
+          )}
         </div>
 
         <AnimatePresence>
@@ -253,7 +317,7 @@ export function CollectionView({ connectionId, collection, isFocusedPane }: Coll
               value={String(query.pageSize)}
               options={PAGE_SIZE_OPTIONS}
               onChange={(value) => {
-                setQuery((prev) => ({ ...prev, pageSize: Number(value), skip: 0 }));
+                guard(() => setQuery((prev) => ({ ...prev, pageSize: Number(value), skip: 0 })));
               }}
               aria-label="Documents per page"
               disabled={loading}
@@ -288,6 +352,21 @@ export function CollectionView({ connectionId, collection, isFocusedPane }: Coll
           </div>
         </div>
       </div>
+
+      <DocumentEditorDrawer
+        request={docEdits.editor}
+        namespace={collection.id}
+        onSave={docEdits.saveEditor}
+        onReload={docEdits.reloadEditor}
+        onClose={docEdits.closeEditor}
+      />
+      <DeleteDocumentsModal
+        count={docEdits.deleteCount}
+        namespace={collection.id}
+        busy={docEdits.deleting}
+        onClose={docEdits.cancelDelete}
+        onConfirm={() => void docEdits.confirmDelete()}
+      />
     </div>
   );
 }

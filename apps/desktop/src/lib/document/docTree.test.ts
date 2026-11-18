@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { DocValue } from '@db/shared';
-import { bsonAliasLabel, documentId, flattenTree, formatEditable, previewText, treeKey, typeLabel } from './docTree';
+import { bsonAliasLabel, documentId, ensureExpanded, flattenTree, formatEditable, previewText, treeKey, typeLabel } from './docTree';
 
 interface FixtureEntry {
   name: string;
@@ -153,4 +153,18 @@ describe('documentId', () => {
     expect(documentId(obj(['name', str('x')]))).toBeUndefined();
     expect(documentId(int32(1))).toBeUndefined();
   });
+});
+
+test('ensureExpanded opens a node without touching others', () => {
+  const doc = obj(['_id', oid], ['a', obj(['b', int32(1)])]);
+  const collapsed = new Set([treeKey(0, [])]);
+  const opened = ensureExpanded(collapsed, 0, ['a']);
+  expect(flattenTree([doc], ensureExpanded(opened, 0, [])).map((r) => r.key)).toEqual([
+    previewText(oid, 60),
+    '_id',
+    'a',
+    'b',
+  ]);
+  expect(collapsed.size).toBe(1);
+  expect(ensureExpanded(opened, 0, ['a'])).toBe(opened);
 });

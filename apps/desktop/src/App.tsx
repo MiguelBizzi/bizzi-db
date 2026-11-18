@@ -917,7 +917,17 @@ export default function App() {
     void enqueueSchemaCheck();
   };
 
-  const handleInsertDocumentInCollection = handleOpenCollection;
+  /** The collection whose tab should open its insert drawer once. */
+  const [insertDocumentForCollectionId, setInsertDocumentForCollectionId] =
+    useState<string | null>(null);
+  const clearInsertDocumentRequest = useCallback(
+    () => setInsertDocumentForCollectionId(null),
+    [],
+  );
+  const handleInsertDocumentInCollection = (collection: CollectionSchema) => {
+    handleOpenCollection(collection);
+    setInsertDocumentForCollectionId(collection.id);
+  };
   const handleNewCollectionIndex = handleOpenCollection;
 
   const handleConfirmDropCollection = async () => {
@@ -2108,6 +2118,8 @@ export default function App() {
             collection={collection}
             isFocusedPane={tab.id === activeTabId}
             onSchemaChanged={() => void refreshSchemas()}
+            insertRequested={insertDocumentForCollectionId === collection.id}
+            onInsertRequestHandled={clearInsertDocumentRequest}
           />
         );
       }
@@ -2523,7 +2535,6 @@ export default function App() {
         }
         handleNewIndex(table);
       },
-      "edit.editDocument": () => {},
       "file.closeWindow": () => getCurrentWindow().close(),
       "app.quit": () => getCurrentWindow().close(),
       "file.closeTab": () => handleCloseTab(activePaneId, activeTabId),

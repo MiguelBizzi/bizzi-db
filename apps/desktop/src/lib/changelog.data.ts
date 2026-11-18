@@ -12,6 +12,10 @@ export const UPCOMING: UpcomingEntry | null = {
     {
       "kind": "new",
       "text": "Browse a MongoDB collection's documents as an expandable tree with a type badge on every value, or as JSON. Filter, project and sort with shell syntax such as `{ age: { $gt: 30 } }` and press Enter to apply. Open Fields to see which fields a sample of documents has, how often, and with which types; click one to add it to the filter."
+    },
+    {
+      "kind": "new",
+      "text": "Edit MongoDB documents. Double-click a value (or select it and press Enter) to change it and its type, or right-click a field to add, rename, remove or duplicate it; Save or Discard each changed document from its row. Edit Document… (⌘⌥E or Ctrl+Alt+E), Insert Document… (⌘I or Ctrl+I) and Clone Document… open the whole document as text, where shell syntax such as `ObjectId(\"…\")` and `ISODate(\"…\")` works. Delete Documents (⌘⌫ or Delete) asks first. If someone else changed the document after you loaded it, saving stops and offers to reload it."
     }
   ]
 };
