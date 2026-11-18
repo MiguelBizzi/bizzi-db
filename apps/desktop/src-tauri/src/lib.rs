@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use db_core::{
     connect_config_from_profile, dialect_label, history_item_from_result,
     new_connection_requires_password, overlay_schema, paradigm_of, profile_from_save_input,
-    resolve_connection_password, schema_cache_is_fresh, ssh_secret_key, ssh_tunnel_from_profile,
+    resolve_connection_password, resolve_stored_password, schema_cache_is_fresh, ssh_secret_key, ssh_tunnel_from_profile,
     ssh_tunnel_from_save, validate_folder_name, validate_save_input, ActivityLogItem, Adapter,
     AppSettings, ConnectionFolder, ConnectionProfile, ConnectionStatus, DatabaseDialect,
     DatabaseSchema, DocumentAdapter, DocumentSession, ExecuteQueryRequest, Paradigm, PostgresSql,
@@ -443,11 +443,11 @@ async fn connections_connect(
         .get_connection(&id)
         .map_err(map_err)?
         .ok_or_else(|| "Connection not found".to_string())?;
-    let password = state
+    let stored = state
         .secrets
         .get(keychain_enabled(&state)?, &id)
-        .map_err(map_err)?
-        .ok_or_else(|| "No password stored for this connection".to_string())?;
+        .map_err(map_err)?;
+    let password = resolve_stored_password(profile.dialect, &profile.user, stored)?;
     let ssh_secret = state
         .secrets
         .get(keychain_enabled(&state)?, &ssh_secret_key(&id))

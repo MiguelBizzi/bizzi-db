@@ -134,8 +134,9 @@ export function connectionFormErrors(
   }
   const databaseOptional = engineMeta(values.dialect)?.databaseOptional === true;
   if (!databaseOptional && !values.databaseName.trim()) next.databaseName = 'Required';
-  if (!values.username.trim()) next.username = 'Required';
-  if (options.passwordRequired && !values.password) next.password = 'Required';
+  const credentials = credentialsRequired(values.dialect);
+  if (credentials && !values.username.trim()) next.username = 'Required';
+  if (credentials && options.passwordRequired && !values.password) next.password = 'Required';
   if (!Number.isFinite(values.poolSize) || values.poolSize < 1 || values.poolSize > 32) {
     next.poolSize = 'Enter a pool size from 1 to 32';
   }
@@ -219,6 +220,11 @@ export function connectionFormToInput(
     sshPassphrase: values.sshPassphrase,
     ...(Object.keys(params).length > 0 ? { params } : {}),
   };
+}
+
+/** A document engine may run without authentication, so username and password are optional. */
+export function credentialsRequired(dialect: DatabaseDialect): boolean {
+  return engineMeta(dialect)?.paradigm !== 'document';
 }
 
 type BaseField = Extract<

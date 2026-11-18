@@ -26,6 +26,7 @@ import {
   applyDialectDefaults,
   defaultConnectionForm,
   firstTabWithErrors,
+  credentialsRequired,
   visibleConnectionFields,
   type ConnectionFormField,
   type ConnectionFormValues,
@@ -144,6 +145,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
   );
   const isValid = Object.keys(errors).length === 0;
   const meta = engineMeta(form.dialect);
+  const credentials = credentialsRequired(form.dialect);
   const showPort = visibleConnectionFields(meta, form).includes("port");
   const patchParam = (key: string, value: string) =>
     setForm((current) => ({
@@ -463,7 +465,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase text-muted-foreground">
                       Username
-                      <RequiredMark />
+                      {credentials && <RequiredMark />}
                     </label>
                     <input
                       type="text"
@@ -487,7 +489,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold uppercase text-muted-foreground">
                     Password
-                    {!isEdit && <RequiredMark />}
+                    {credentials && !isEdit && <RequiredMark />}
                   </label>
                   <input
                     type="password"

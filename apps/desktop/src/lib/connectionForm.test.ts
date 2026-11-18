@@ -11,6 +11,7 @@ import {
   shouldConnectAfterSave,
   visibleConnectionFields,
   applyDialectDefaults,
+  credentialsRequired,
 } from './connectionForm';
 import { engineMeta } from '@db/database';
 
@@ -404,6 +405,19 @@ describe('MongoDB connection form', () => {
     expect(
       connectionFormErrors(form, { passwordRequired: false, keychainEnabled: false }).databaseName,
     ).toBeUndefined();
+  });
+
+  test('username and password are optional for a document engine only', () => {
+    const options = { passwordRequired: true, keychainEnabled: false };
+    const mongoForm = { ...defaultConnectionForm(), dialect: 'MongoDB' as const, username: '', databaseName: '' };
+    const mongoErrors = connectionFormErrors(mongoForm, options);
+    expect(mongoErrors.username).toBeUndefined();
+    expect(mongoErrors.password).toBeUndefined();
+    const pgErrors = connectionFormErrors({ ...defaultConnectionForm(), username: '' }, options);
+    expect(pgErrors.username).toBe('Required');
+    expect(pgErrors.password).toBe('Required');
+    expect(credentialsRequired('MongoDB')).toBe(false);
+    expect(credentialsRequired('PostgreSQL')).toBe(true);
   });
 
   test('copies profile params into the form', () => {
