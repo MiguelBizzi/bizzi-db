@@ -7,8 +7,12 @@ import {
   connectionModalCopy,
   defaultConnectionForm,
   firstTabWithErrors,
+  paramsForInput,
   shouldConnectAfterSave,
+  visibleConnectionFields,
+  applyDialectDefaults,
 } from './connectionForm';
+import { engineMeta } from '@db/database';
 
 function profile(overrides: Partial<ConnectionProfile> = {}): ConnectionProfile {
   return {
@@ -70,6 +74,7 @@ describe('connectionFormFromProfile', () => {
       sshPassword: '',
       sshKeyPath: '',
       sshPassphrase: '',
+      params: {},
     });
   });
 
@@ -133,6 +138,7 @@ describe('connectionFormErrors', () => {
         sshPassword: '',
         sshKeyPath: '',
         sshPassphrase: '',
+        params: {},
       },
       { passwordRequired: true, keychainEnabled: false },
     );
@@ -321,5 +327,89 @@ describe('shouldConnectAfterSave', () => {
   test('connects new profiles and leaves updates on the picker', () => {
     expect(shouldConnectAfterSave({})).toBe(true);
     expect(shouldConnectAfterSave({ id: 'conn_1' })).toBe(false);
+  });
+});
+
+describe('MongoDB connection form', () => {
+  const mongo = engineMeta('MongoDB')!;
+  const postgres = engineMeta('PostgreSQL')!;
+
+  test('port hidden for srv', () => {
+    const form = { ...defaultConnectionForm(), params: { srv: 'true' } };
+    expect(visibleConnectionFields(mongo, form)).not.toContain('port');
+    expect(visibleConnectionFields(mongo, { params: {} })).toContain('port');
+  });
+
+  test('relational engines always show every base field', () => {
+    expect(visibleConnectionFields(postgres, { params: { srv: 'true' } })).toEqual([
+      'host',
+      'port',
+      'databaseName',
+      'username',
+      'password',
+    ]);
+  });
+
+  test('relational form unchanged', () => {
+    expect(defaultConnectionForm()).toEqual({
+      dialect: 'PostgreSQL',
+      name: 'Local PostgreSQL',
+      host: '127.0.0.1',
+      port: 5432,
+      databaseName: 'postgres',
+      username: 'postgres',
+      password: '',
+      sslMode: 'disabled',
+      poolSize: 8,
+      environment: 'development',
+      folderId: '',
+      sshEnabled: false,
+      sshHost: '',
+      sshPort: 22,
+      sshUser: '',
+      sshAuth: 'password',
+      sshPassword: '',
+      sshKeyPath: '',
+      sshPassphrase: '',
+      params: {},
+    });
+    expect(connectionFormToInput(defaultConnectionForm()).params).toBeUndefined();
+  });
+
+  test('sends only non-default allowlisted params', () => {
+    expect(
+      paramsForInput(mongo, {
+        srv: 'true',
+        directConnection: 'false',
+        authSource: '',
+        replicaSet: 'rs0',
+        bogus: 'x',
+      }),
+    ).toEqual({ srv: 'true', replicaSet: 'rs0' });
+    expect(paramsForInput(postgres, { srv: 'true' })).toEqual({});
+  });
+
+  test('switching to MongoDB applies its defaults and clears stale params', () => {
+    const next = applyDialectDefaults(
+      { ...defaultConnectionForm(), params: { x: '1' } },
+      'MongoDB',
+    );
+    expect(next.port).toBe(27017);
+    expect(next.name).toBe('Local MongoDB');
+    expect(next.params).toEqual({});
+  });
+
+  test('the database may stay blank', () => {
+    const form = { ...defaultConnectionForm(), dialect: 'MongoDB' as const, databaseName: '' };
+    expect(
+      connectionFormErrors(form, { passwordRequired: false, keychainEnabled: false }).databaseName,
+    ).toBeUndefined();
+  });
+
+  test('copies profile params into the form', () => {
+    const form = connectionFormFromProfile(
+      profile({ dialect: 'MongoDB', params: { srv: 'true' } }),
+    );
+    expect(form.params).toEqual({ srv: 'true' });
   });
 });

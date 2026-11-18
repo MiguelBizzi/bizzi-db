@@ -47,8 +47,8 @@ describe('engine registry', () => {
     expect(ENGINES.MongoDB.portHiddenBy).toBe('srv');
   });
 
-  test('picker lists only supported engines, relational first', () => {
-    expect(SUPPORTED_ENGINES.map((e) => e.id)).toEqual(['PostgreSQL', 'MySQL', 'SQLServer']);
+  test('picker lists supported engines, relational first', () => {
+    expect(SUPPORTED_ENGINES.map((e) => e.id)).toEqual(['PostgreSQL', 'MySQL', 'SQLServer', 'MongoDB']);
     expect(Object.keys(ENGINES)).toEqual(['PostgreSQL', 'MySQL', 'SQLServer', 'MongoDB']);
   });
 });

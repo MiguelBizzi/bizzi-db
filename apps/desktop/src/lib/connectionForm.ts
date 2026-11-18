@@ -1,4 +1,4 @@
-import { dialectModule } from '@db/database';
+import { engineMeta, type EngineModule } from '@db/database';
 import type {
   ConnectionProfile,
   DatabaseDialect,
@@ -49,6 +49,7 @@ export type ConnectionFormValues = {
   sshPassword: string;
   sshKeyPath: string;
   sshPassphrase: string;
+  params: Record<string, string>;
 };
 
 export type ConnectionFormErrorOptions = {
@@ -90,6 +91,7 @@ export function defaultConnectionForm(): ConnectionFormValues {
     sshPassword: '',
     sshKeyPath: '',
     sshPassphrase: '',
+    params: {},
   };
 }
 
@@ -116,6 +118,7 @@ export function connectionFormFromProfile(
     sshPassword: '',
     sshKeyPath: profile.sshKeyPath ?? '',
     sshPassphrase: '',
+    params: { ...(profile.params ?? {}) },
   };
 }
 
@@ -129,7 +132,7 @@ export function connectionFormErrors(
   if (!Number.isFinite(values.port) || values.port < 1 || values.port > 65535) {
     next.port = 'Enter a port from 1 to 65535';
   }
-  const databaseOptional = dialectModule(values.dialect)?.capabilities.emptyDatabaseAllowed === true;
+  const databaseOptional = engineMeta(values.dialect)?.databaseOptional === true;
   if (!databaseOptional && !values.databaseName.trim()) next.databaseName = 'Required';
   if (!values.username.trim()) next.username = 'Required';
   if (options.passwordRequired && !values.password) next.password = 'Required';
@@ -160,8 +163,8 @@ export function applyDialectDefaults(
   values: ConnectionFormValues,
   dialect: DatabaseDialect,
 ): ConnectionFormValues {
-  const next = dialectModule(dialect);
-  const previous = dialectModule(values.dialect);
+  const next = engineMeta(dialect);
+  const previous = engineMeta(values.dialect);
   if (!next || dialect === values.dialect) return { ...values, dialect };
   const untouched = (current: string, fallback: string | undefined) =>
     fallback !== undefined && current === fallback;
@@ -174,6 +177,7 @@ export function applyDialectDefaults(
       ? next.defaultDatabase
       : values.databaseName,
     name: values.name === `Local ${previous?.label}` ? `Local ${next.label}` : values.name,
+    params: {},
   };
 }
 
@@ -191,6 +195,7 @@ export function connectionFormToInput(
   values: ConnectionFormValues,
   id?: string
 ): SaveConnectionInput {
+  const params = paramsForInput(engineMeta(values.dialect), values.params);
   return {
     ...(id ? { id } : {}),
     name: values.name.trim(),
@@ -212,7 +217,40 @@ export function connectionFormToInput(
     sshKeyPath: values.sshKeyPath.trim() ? values.sshKeyPath.trim() : null,
     sshPassword: values.sshPassword,
     sshPassphrase: values.sshPassphrase,
+    ...(Object.keys(params).length > 0 ? { params } : {}),
   };
+}
+
+type BaseField = Extract<
+  ConnectionFormField,
+  'host' | 'port' | 'databaseName' | 'username' | 'password'
+>;
+
+const BASE_FIELDS: BaseField[] = ['host', 'port', 'databaseName', 'username', 'password'];
+
+/** SRV records carry the port, so the port input would only mislead. */
+export function visibleConnectionFields(
+  meta: EngineModule | undefined,
+  values: Pick<ConnectionFormValues, 'params'>,
+): BaseField[] {
+  const hiddenBy = meta?.portHiddenBy;
+  const hidePort = hiddenBy !== undefined && values.params[hiddenBy] === 'true';
+  return BASE_FIELDS.filter((field) => !(field === 'port' && hidePort));
+}
+
+/** The backend rejects unknown keys, so only allowlisted non-default values are sent. */
+export function paramsForInput(
+  meta: EngineModule | undefined,
+  params: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const spec of meta?.connectionParams ?? []) {
+    const value = params[spec.key];
+    if (value === undefined || value === '') continue;
+    if (spec.kind === 'boolean' && value !== 'true') continue;
+    out[spec.key] = value;
+  }
+  return out;
 }
 
 export function connectionModalCopy(isEdit: boolean) {

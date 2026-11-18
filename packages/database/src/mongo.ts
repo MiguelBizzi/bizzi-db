@@ -4,7 +4,7 @@ export const MONGODB: DocumentEngineMeta = {
   id: 'MongoDB',
   label: 'MongoDB',
   paradigm: 'document',
-  supported: false,
+  supported: true,
   defaultPort: 27017,
   defaultUser: '',
   defaultDatabase: '',
