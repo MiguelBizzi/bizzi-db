@@ -21,6 +21,7 @@ expect "desktop frontend" "$DESKTOP" apps/desktop/src/App.tsx
 expect "desktop Rust shell" "$DESKTOP" apps/desktop/src-tauri/src/lib.rs
 expect "shared TypeScript package" "$DESKTOP" packages/shared/src/index.ts
 expect "Rust crate" "$DESKTOP" crates/postgres/src/lib.rs
+expect "MongoDB crate" "$DESKTOP" crates/mongo/src/lib.rs
 expect "Postgres seed" "$DESKTOP" docker/postgres/init/01.sql
 expect "Cargo.lock also needs the audit" "desktop=true web=false deps=true" Cargo.lock
 expect "cargo audit config" "desktop=true web=false deps=true" .cargo/audit.toml

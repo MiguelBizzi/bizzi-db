@@ -1,6 +1,6 @@
 # Bizzi DB — guide for coding agents
 
-Bizzi DB is a local desktop client for PostgreSQL, MySQL, and SQL Server. There is no application server and no account. The React UI talks to Rust over Tauri IPC. Connections, query history, and saved SQL live in a local SQLite file. Passwords live in the OS keychain or a user-only secrets file, never in SQLite.
+Bizzi DB is a local desktop client for PostgreSQL, MySQL, SQL Server, and MongoDB. There is no application server and no account. The React UI talks to Rust over Tauri IPC. Connections, query history, and saved SQL live in a local SQLite file. Passwords live in the OS keychain or a user-only secrets file, never in SQLite.
 
 Read this file before changing code. The same constraints are enforced by `.claude/rules/` (Claude) and `.cursor/rules/` (Cursor; those files are symlinks of the Claude rules).
 
@@ -8,7 +8,7 @@ Read this file before changing code. The same constraints are enforced by `.clau
 
 - Desktop UI: React 19, TypeScript, Vite, Tailwind 4, CodeMirror 6, Motion. Package `apps/desktop` (`desktop`).
 - Shell: Tauri 2.2 (`apps/desktop/src-tauri`, crate `db-desktop`). Bundle id `com.bizzidb.app` is locked; it is the app-data path, keychain service, and updater identity.
-- Engines: `db-core`, `db-postgres` (tokio-postgres), `db-mysql` (mysql_async).
+- Engines: `db-core`, `db-postgres` (tokio-postgres), `db-mysql` (mysql_async), `db-mssql` (tiberius), `db-mongo` (mongodb driver).
 - Local persistence: `db-storage` (rusqlite + keyring).
 - Shared TS packages: `@db/shared` (DTOs), `@db/database` (dialect modules), `@db/core` (IPC wrappers), `@db/storage` (saved-query IPC).
 - Marketing site: `apps/web`. It is not the product.
@@ -23,6 +23,8 @@ apps/desktop/src/components/      UI. TableView, SqlEditor, SchemaView, RoutineV
 apps/desktop/src/lib/             testable logic extracted from components
 apps/desktop/src/lib/commands/    menu registry, menu model, keyboard, command bus
 apps/desktop/src/lib/ddl/         SQL the app builds, split by engine (postgres/, mysql/)
+apps/desktop/src/lib/document/    MongoDB: typed document tree, edit text, shell-syntax helpers
+apps/desktop/src/components/DocumentView/   MongoDB document list, editor, indexes, query tab
 apps/desktop/src-tauri/src/lib.rs Tauri commands, adapter selection, session map
 apps/desktop/src-tauri/permissions/app.toml   IPC allowlist
 packages/shared/src/index.ts      TypeScript DTOs (camelCase, mirrors Rust serde)
@@ -32,8 +34,9 @@ packages/storage/src/             saved-query invoke wrappers
 crates/core/src/                  Adapter, Session, SqlDialect, profiles, QueryError, shared SQL
 crates/postgres/src/              Postgres session, catalog, filters, values, errors
 crates/mysql/src/                 MySQL session, catalog, filters, values, DELIMITER splitter
+crates/mongo/src/                 MongoDB session, introspection, edits, indexes, export, shell parser
 crates/storage/src/               workspace.sqlite and secrets
-docker/                           Postgres 16, MySQL 8.4, and SQL Server 2022 seeds
+docker/                           Postgres 16, MySQL 8.4, SQL Server 2022, and MongoDB 8.0 seeds
 apps/web/                         landing page
 docs/adding-a-database.md         checklist for a new engine
 ```
@@ -44,6 +47,7 @@ docs/adding-a-database.md         checklist for a new engine
 2. That function `invoke`s a Tauri command. The command name must also appear in `permissions/app.toml` or the webview gets "not allowed".
 3. `apps/desktop/src-tauri/src/lib.rs` loads the profile, opens an SSH tunnel when configured, and stores `Arc<dyn Session>` in `AppState.sessions`.
 4. `adapter_for` returns `PostgresAdapter`, `MysqlAdapter`, or `MssqlAdapter`. Anything else is refused. `sql_dialect_for` returns `PostgresSql`, `MySqlSql`, or `TSqlSql` for splitting and paging.
+4a. MongoDB is a document engine, not a relational one: `EngineKind::Document` holds a `DocumentAdapter`, `LiveSession::Document` holds `Arc<dyn DocumentSession>`, and its commands (`document_*`) call `document_session_for`. Relational commands refuse a document session. Documents cross IPC as a typed ordered tree (numbers as strings); edits travel as text that Rust parses. The query editor parses shell syntax in Rust and never evaluates JavaScript.
 5. The session runs catalog SQL or the user's SQL. Constructed SQL (filters, preview, DDL) quotes identifiers and escapes literals in that engine's crate or in `lib/ddl`. SQL the user typed is sent as written.
 
 `query_execute` is intentionally unrestricted. Do not allowlist, rewrite, or block statements there.
@@ -80,7 +84,7 @@ Autocomplete: `lib/sqlContext.ts` decides what token is legal at the caret. `lib
 
 ## Engines today
 
-PostgreSQL, MySQL, and SQL Server are the registered adapters. `docs/adding-a-database.md` is the checklist: one crate, one `DialectModule` with `lib/ddl/<engine>/`, one registry entry on each side, one seed, and one live test file. The SQL Server parity matrix is `docs/superpowers/specs/2026-11-02-sql-server-design.md`.
+PostgreSQL, MySQL, and SQL Server are the registered relational adapters; MongoDB is the registered document adapter. `docs/adding-a-database.md` starts with choosing a paradigm, then is the checklist: one crate, one `DialectModule` with `lib/ddl/<engine>/`, one registry entry on each side, one seed, and one live test file. The SQL Server parity matrix is `docs/superpowers/specs/2026-11-02-sql-server-design.md`; MongoDB's is `docs/superpowers/specs/2026-11-17-mongodb-multi-paradigm-design.md`.
 
 MySQL treats the database field as an optional default schema and lists every user database. Other engines require a database name. Postgres DDL is transactional. MySQL DDL commits implicitly. SQL Server DDL is transactional when the script sets `XACT_ABORT` and splits batches on `GO`.
 
@@ -120,6 +124,7 @@ bun install
 bun run db:up     # Postgres 127.0.0.1:5433 postgres/postgres
                   # MySQL 8.4 127.0.0.1:3307 root/mysql, database shop
 # SQL Server 2022 127.0.0.1:1434 sa/Mssql_dev_1, database shop
+                  # MongoDB 8.0 127.0.0.1:27018 root/mongo (auth source admin), databases shop, analytics
 bun run dev       # desktop
 bun run dev:web   # landing page
 bun run test      # TS tests + cargo test --workspace --exclude db-desktop

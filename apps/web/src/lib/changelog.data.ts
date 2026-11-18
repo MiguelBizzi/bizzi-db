@@ -24,6 +24,22 @@ export const UPCOMING: UpcomingEntry | null = {
     {
       "kind": "new",
       "text": "Manage MongoDB indexes and collections. The Indexes tab on a collection lists each index with its keys and options (unique, sparse, hidden, TTL, partial filter); New Index… (⌘⇧I or Ctrl+Shift+I) builds one from ascending, descending, text, 2dsphere and hashed keys, and Drop removes it after a confirmation. New Collection… (⌘⇧N or Ctrl+Shift+N) creates a collection in an existing or new database and opens it. The sidebar and the list update right away."
+    },
+    {
+      "kind": "new",
+      "text": "Export a MongoDB collection as a JSON array, NDJSON, or CSV, with relaxed or canonical Extended JSON so numbers, dates and ids round-trip."
+    },
+    {
+      "kind": "new",
+      "text": "Connect through an SSH tunnel to a single MongoDB host, and use SCRAM-SHA-1 or SCRAM-SHA-256 authentication. Kerberos, LDAP, X.509, AWS IAM and OIDC are not supported yet."
+    },
+    {
+      "kind": "better",
+      "text": "MongoDB documents apply per save, so Pending Changes does not review them. Nothing in the query editor is evaluated as JavaScript: `$where`, `$function` and shell loops are not available, and `runCommand` passes your command unchanged."
+    },
+    {
+      "kind": "better",
+      "text": "A stored document whose only key is an Extended JSON wrapper such as `{\"$oid\": …}` can be viewed but not edited as text. Saving is refused when another client changed the document in between, except when only a number's type changed and its value stayed equal."
     }
   ]
 };

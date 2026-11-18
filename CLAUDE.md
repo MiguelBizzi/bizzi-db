@@ -1,6 +1,6 @@
 # Bizzi DB
 
-You are working in the Bizzi DB repository: a local PostgreSQL, MySQL, and SQL Server desktop client. Act as a senior engineer on this codebase. Match the existing architecture. Do not introduce a second state library, a second SQL path, or a second way to register menus.
+You are working in the Bizzi DB repository: a local PostgreSQL, MySQL, SQL Server, and MongoDB desktop client. Act as a senior engineer on this codebase. Match the existing architecture. Do not introduce a second state library, a second SQL path, or a second way to register menus.
 
 `AGENTS.md` is the shared map (structure, call flow, quirks). This file is how to work in Claude. `.claude/rules/` is loaded automatically and overrides a looser reading of either doc. `.cursor/rules/*.mdc` are symlinks of those rules.
 
@@ -26,7 +26,9 @@ The marketing site is `apps/web`. It does not talk to databases.
 - `crates/core` — `Adapter`, `Session`, `SqlDialect`, validation, query errors, statement splitting.
 - `crates/postgres`, `crates/mysql` — sessions. Catalog SQL, filters, value decoding, driver errors mapped to `QueryError`.
 - `crates/storage` — `workspace.sqlite` and secrets (keychain or `secrets.json`).
-- `docker/` — Postgres 16 on 127.0.0.1:5433 (`postgres`/`postgres`), MySQL 8.4 on 127.0.0.1:3307 (`root`/`mysql`), and SQL Server 2022 on 127.0.0.1:1434 (`sa` / `Mssql_dev_1`, database `shop`). The SQL Server image is x86-64 only.
+- `apps/desktop/src/lib/document/`, `components/DocumentView/` — everything MongoDB-specific in the UI: the typed document tree, shell-syntax parsing helpers, the document tab. Shared UI never branches on an engine name.
+- `crates/mongo` — `MongoAdapter` and its `DocumentSession`: introspection, find, edit, indexes, export, shell-syntax parser. BSON never leaves this crate; documents cross IPC as a typed ordered tree.
+- `docker/` — Postgres 16 on 127.0.0.1:5433 (`postgres`/`postgres`), MySQL 8.4 on 127.0.0.1:3307 (`root`/`mysql`), SQL Server 2022 on 127.0.0.1:1434 (`sa` / `Mssql_dev_1`, database `shop`), and MongoDB 8.0 on 127.0.0.1:27018 (`root`/`mongo`, databases `shop` and `analytics`; `reader` and `limited` are least-privilege users). The SQL Server image is x86-64 only.
 - `docs/adding-a-database.md` — the only path for a new engine.
 
 ## State
@@ -49,7 +51,7 @@ component or App.tsx
   → Session (introspect, execute, query_page, preview, routine_source)
 ```
 
-`adapter_for` returns PostgreSQL, MySQL, or SQL Server. `sql_dialect_for` picks the splitter used for paging and for editor statement ranges (UTF-16 offsets).
+`adapter_for` returns PostgreSQL, MySQL, or SQL Server; MongoDB is a second paradigm, so its commands go through `document_session_for` to a `DocumentSession` and a relational command refuses a document connection (and the reverse). `sql_dialect_for` picks the splitter used for paging and for editor statement ranges (UTF-16 offsets).
 
 SQL the user typed is sent unchanged. `query_execute` must stay unrestricted. SQL the app builds (filters, preview, DDL, DML) quotes identifiers and escapes literals for that engine. PostgreSQL uses double quotes. MySQL uses backticks, and its string literals also escape `\`. Postgres filters send untyped literals so the column type coerces them; leave that path alone. New engines should bind parameters.
 

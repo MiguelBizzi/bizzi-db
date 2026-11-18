@@ -13,6 +13,13 @@ New entries go under `## [Unreleased]`; the release process moves them under a v
 - Edit MongoDB documents. Double-click a value (or select it and press Enter) to change it and its type, or right-click a field to add, rename, remove or duplicate it; Save or Discard each changed document from its row. Edit Document… (⌘⌥E or Ctrl+Alt+E), Insert Document… (⌘I or Ctrl+I) and Clone Document… open the whole document as text, where shell syntax such as `ObjectId("…")` and `ISODate("…")` works. Delete Documents (⌘⌫ or Delete) asks first. If someone else changed the document after you loaded it, saving stops and offers to reload it.
 - Run MongoDB shell commands in a query tab (⌘T on a MongoDB connection). ⌘↵ or Ctrl+Enter runs the statement under the cursor, ⌘⇧↵ or Ctrl+Shift+Enter runs the whole script, and a selection runs exactly the selected text. Pick the database to run against, complete collection names, methods, fields and operators as you type, and export any result as a JSON array. Errors link to the position in the script.
 - Manage MongoDB indexes and collections. The Indexes tab on a collection lists each index with its keys and options (unique, sparse, hidden, TTL, partial filter); New Index… (⌘⇧I or Ctrl+Shift+I) builds one from ascending, descending, text, 2dsphere and hashed keys, and Drop removes it after a confirmation. New Collection… (⌘⇧N or Ctrl+Shift+N) creates a collection in an existing or new database and opens it. The sidebar and the list update right away.
+- Export a MongoDB collection as a JSON array, NDJSON, or CSV, with relaxed or canonical Extended JSON so numbers, dates and ids round-trip.
+- Connect through an SSH tunnel to a single MongoDB host, and use SCRAM-SHA-1 or SCRAM-SHA-256 authentication. Kerberos, LDAP, X.509, AWS IAM and OIDC are not supported yet.
+
+### Better
+
+- MongoDB documents apply per save, so Pending Changes does not review them. Nothing in the query editor is evaluated as JavaScript: `$where`, `$function` and shell loops are not available, and `runCommand` passes your command unchanged.
+- A stored document whose only key is an Extended JSON wrapper such as `{"$oid": …}` can be viewed but not edited as text. Saving is refused when another client changed the document in between, except when only a number's type changed and its value stayed equal.
 
 ## [0.1.29] - 2026-11-14 - Foreign key sheet and What's New
 
