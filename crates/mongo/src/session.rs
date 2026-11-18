@@ -8,7 +8,7 @@ use db_core::{
 };
 use futures_util::TryStreamExt;
 use mongodb::bson::{doc, Bson, Document};
-use mongodb::options::{FindOptions, IndexOptions};
+use mongodb::options::{Collation, FindOptions, IndexOptions};
 use mongodb::results::CollectionType;
 use mongodb::{Client, Collection, IndexModel};
 
@@ -322,6 +322,8 @@ impl DocumentSession for MongoSession {
         let result = self
             .collection(ns)
             .replace_one(unchanged_filter(id, original), replacement)
+            // A collection's default collation can make "ada" equal "Ada" in $expr.
+            .collation(Collation::builder().locale("simple").build())
             .await
             .map_err(adapter_error)?;
         if result.matched_count == 0 {

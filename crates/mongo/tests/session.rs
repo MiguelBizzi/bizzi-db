@@ -568,6 +568,46 @@ async fn replace_refuses_when_a_field_was_added() {
 
 #[tokio::test]
 #[ignore = "requires local MongoDB (docker compose up -d --wait mongo)"]
+async fn replace_refuses_a_case_change_under_an_insensitive_collation() {
+    let _scratch = SCRATCH.read().await;
+    let session = connect(&root("")).await;
+    let collection = "replace_collation";
+    drop_scratch(collection).await;
+    let db = raw_client().database(SCRATCH_DB);
+    db.run_command(doc! {
+        "create": collection,
+        "collation": { "locale": "en", "strength": 2 },
+    })
+    .await
+    .unwrap();
+    let coll = db.collection::<Document>(collection);
+    coll.insert_one(doc! { "_id": 1, "name": "ada" })
+        .await
+        .unwrap();
+    let target = ns(SCRATCH_DB, collection);
+    let loaded = load_one(session.as_ref(), &target).await;
+    let original = format_editable(&loaded);
+
+    coll.update_one(doc! { "_id": 1 }, doc! { "$set": { "name": "Ada" } })
+        .await
+        .unwrap();
+
+    let edited = format!(
+        "{},\n  \"extra\": 1\n}}",
+        original.strip_suffix("\n}").expect("pretty object")
+    );
+    let err = session
+        .replace(&target, &original, &edited)
+        .await
+        .expect_err("stale original under a case-insensitive collation");
+    assert!(err.to_string().contains("changed on the server"), "{err}");
+    let stored = coll.find_one(doc! { "_id": 1 }).await.unwrap().unwrap();
+    assert_eq!(stored, doc! { "_id": 1, "name": "Ada" });
+    drop_scratch(collection).await;
+}
+
+#[tokio::test]
+#[ignore = "requires local MongoDB (docker compose up -d --wait mongo)"]
 async fn replace_handles_dotted_and_dollar_keys() {
     let _scratch = SCRATCH.read().await;
     let session = connect(&root("")).await;
@@ -620,7 +660,6 @@ async fn replace_with_a_top_level_dollar_key_reports_the_server_error() {
         .replace(&target, &original, &edited)
         .await
         .expect_err("top-level $y");
-    eprintln!("top-level $ replacement error: {err}");
     assert!(err.to_string().contains("$y"), "{err}");
     assert_eq!(load_one(session.as_ref(), &target).await, loaded);
     drop_scratch(&target.collection).await;
