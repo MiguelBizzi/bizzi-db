@@ -157,3 +157,17 @@ describe("fitColumnWidths", () => {
     expect(fitColumnWidths([], 800)).toEqual([]);
   });
 });
+
+describe("computeGridRange without columns", () => {
+  test("windows rows of a list that has no header", () => {
+    const range = computeGridRange({
+      ...base,
+      scrollTop: 2800,
+      rowHeight: 28,
+      headerHeight: 0,
+      offsets: columnOffsets([]),
+      overscanRows: 10,
+    });
+    expect(range).toEqual({ rowStart: 90, rowEnd: 125, colStart: 0, colEnd: 0 });
+  });
+});
