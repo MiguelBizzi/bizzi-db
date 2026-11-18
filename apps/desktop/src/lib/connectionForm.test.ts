@@ -12,6 +12,7 @@ import {
   visibleConnectionFields,
   applyDialectDefaults,
   credentialsRequired,
+  passwordRequiredFor,
 } from './connectionForm';
 import { engineMeta } from '@db/database';
 
@@ -432,6 +433,22 @@ describe('MongoDB connection form', () => {
     expect(pgErrors.password).toBe('Required');
     expect(credentialsRequired('MongoDB')).toBe(false);
     expect(credentialsRequired('PostgreSQL')).toBe(true);
+  });
+
+  test('a MongoDB username makes the password required, as the Rust save check does', () => {
+    expect(passwordRequiredFor('MongoDB', '')).toBe(false);
+    expect(passwordRequiredFor('MongoDB', '  ')).toBe(false);
+    expect(passwordRequiredFor('MongoDB', 'ann')).toBe(true);
+    expect(passwordRequiredFor('PostgreSQL', '')).toBe(true);
+    expect(passwordRequiredFor('MySQL', 'root')).toBe(true);
+
+    const options = { passwordRequired: true, keychainEnabled: false };
+    const base = { ...defaultConnectionForm(), dialect: 'MongoDB' as const, databaseName: '', password: '' };
+    expect(connectionFormErrors({ ...base, username: 'ann' }, options).password).toBe('Required');
+    expect(connectionFormErrors({ ...base, username: '' }, options).password).toBeUndefined();
+    expect(
+      connectionFormErrors({ ...base, username: 'ann' }, { passwordRequired: false, keychainEnabled: false }).password,
+    ).toBeUndefined();
   });
 
   test('copies profile params into the form', () => {

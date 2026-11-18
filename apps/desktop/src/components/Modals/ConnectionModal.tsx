@@ -27,6 +27,7 @@ import {
   defaultConnectionForm,
   firstTabWithErrors,
   credentialsRequired,
+  passwordRequiredFor,
   visibleConnectionFields,
   type ConnectionFormField,
   type ConnectionFormValues,
@@ -111,6 +112,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
   const [form, setForm] = useState<ConnectionFormValues>(defaultConnectionForm);
   const [connectionString, setConnectionString] = useState("");
   const [parseError, setParseError] = useState<string | null>(null);
+  const [ignoredOptions, setIgnoredOptions] = useState<string[]>([]);
   const [tab, setTab] = useState<ConnectionModalTab>("connection");
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -126,6 +128,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
     setForm(formFromOpenState(editingProfile, defaultFolderId));
     setConnectionString("");
     setParseError(null);
+    setIgnoredOptions([]);
     setTab("connection");
     setTouched({});
     setAttempted(false);
@@ -169,13 +172,16 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
     const result = parseConnectionString(raw);
     if (!result.ok) {
       setParseError(result.error);
+      setIgnoredOptions([]);
       return;
     }
     if (result.empty) {
       setParseError(null);
+      setIgnoredOptions([]);
       return;
     }
     setParseError(null);
+    setIgnoredOptions(result.ignoredOptions ?? []);
     setForm((current) => applyParsedConnection(current, result.value));
   };
 
@@ -299,6 +305,11 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
                   />
                   {parseError && (
                     <p className="field-message text-[10px] text-destructive">{parseError}</p>
+                  )}
+                  {!parseError && ignoredOptions.length > 0 && (
+                    <p className="field-message text-[10px] text-muted-foreground">
+                      Ignored options: {ignoredOptions.join(", ")}
+                    </p>
                   )}
                 </div>
 
@@ -489,7 +500,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold uppercase text-muted-foreground">
                     Password
-                    {credentials && !isEdit && <RequiredMark />}
+                    {passwordRequiredFor(form.dialect, form.username) && !isEdit && <RequiredMark />}
                   </label>
                   <input
                     type="password"

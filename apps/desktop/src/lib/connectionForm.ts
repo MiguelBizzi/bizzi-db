@@ -137,7 +137,9 @@ export function connectionFormErrors(
   if (!databaseOptional && !values.databaseName.trim()) next.databaseName = 'Required';
   const credentials = credentialsRequired(values.dialect);
   if (credentials && !values.username.trim()) next.username = 'Required';
-  if (credentials && options.passwordRequired && !values.password) next.password = 'Required';
+  if (passwordRequiredFor(values.dialect, values.username) && options.passwordRequired && !values.password) {
+    next.password = 'Required';
+  }
   if (!Number.isFinite(values.poolSize) || values.poolSize < 1 || values.poolSize > 32) {
     next.poolSize = 'Enter a pool size from 1 to 32';
   }
@@ -226,6 +228,11 @@ export function connectionFormToInput(
 /** A document engine may run without authentication, so username and password are optional. */
 export function credentialsRequired(dialect: DatabaseDialect): boolean {
   return engineMeta(dialect)?.paradigm !== 'document';
+}
+
+/** Mirrors Rust `password_required`: a document-engine user needs a password once a username is set. */
+export function passwordRequiredFor(dialect: DatabaseDialect, username: string): boolean {
+  return credentialsRequired(dialect) || username.trim() !== '';
 }
 
 type BaseField = Extract<

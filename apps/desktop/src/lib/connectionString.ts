@@ -19,7 +19,8 @@ export type ParsedConnection = {
 
 export type ParseConnectionStringResult =
   | { ok: true; empty: true }
-  | { ok: true; empty: false; value: ParsedConnection }
+  /** `ignoredOptions` lists URI options dropped as given, and is absent when none were. */
+  | { ok: true; empty: false; value: ParsedConnection; ignoredOptions?: string[] }
   | { ok: false; error: string };
 
 const GENERIC_PARSE_ERROR =
@@ -118,7 +119,7 @@ export function applyParsedConnection(
     databaseName: parsed.database,
     sslMode: parsed.sslMode,
     params: parsed.params,
-    name: replaceName ? `${parsed.database} @ ${parsed.host}` : form.name,
+    name: replaceName ? (parsed.database ? `${parsed.database} @ ${parsed.host}` : parsed.host) : form.name,
   };
 }
 
@@ -131,6 +132,12 @@ const BOOLEAN_PARAMS_FALSE = new Set(['false', '0']);
 
 /** Query keys read as SSL settings instead of connection params. */
 const TLS_KEYS = new Set(['tls', 'ssl', 'tlsallowinvalidcertificates']);
+
+/**
+ * Atlas puts these in every "Connect → Drivers" string. Retries and write concern stay at the
+ * driver defaults, and the app names itself, so dropping them changes nothing the user relies on.
+ */
+const IGNORED_KEYS = new Set(['retrywrites', 'retryreads', 'w', 'appname']);
 
 /**
  * `new URL` cannot hold a comma-separated seed list in the authority, so the
@@ -181,10 +188,15 @@ function parseDocumentUri(raw: string, meta: EngineModule): ParseConnectionStrin
       .map((spec) => [spec.key.toLowerCase(), spec] as const),
   );
   const tls = new Map<string, string>();
+  const ignoredOptions: string[] = [];
   for (const [key, value] of query) {
     const lower = key.toLowerCase();
     if (TLS_KEYS.has(lower)) {
       tls.set(lower, value.trim().toLowerCase());
+      continue;
+    }
+    if (IGNORED_KEYS.has(lower)) {
+      ignoredOptions.push(key);
       continue;
     }
     const spec = queryParams.get(lower);
@@ -214,6 +226,7 @@ function parseDocumentUri(raw: string, meta: EngineModule): ParseConnectionStrin
       sslMode: documentSslMode(tls, srv, first.host),
       params,
     },
+    ...(ignoredOptions.length > 0 ? { ignoredOptions } : {}),
   };
 }
 

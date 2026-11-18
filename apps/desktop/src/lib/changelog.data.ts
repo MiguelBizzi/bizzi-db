@@ -7,11 +7,11 @@ export const UPCOMING: UpcomingEntry | null = {
   "changes": [
     {
       "kind": "new",
-      "text": "Connect to MongoDB servers. Paste a `mongodb://` or `mongodb+srv://` connection string, or fill in the form with an auth database, replica set, additional hosts, read preference and SRV lookup. Username and password are optional for servers without authentication."
+      "text": "Connect to MongoDB servers. Paste a `mongodb://` or `mongodb+srv://` connection string, or fill in the form with an auth database, replica set, additional hosts, read preference and SRV lookup. The string from Atlas's Connect → Drivers pastes as it is: `retryWrites`, `retryReads`, `w` and `appName` are ignored and listed under the field. Username and password are optional for servers without authentication; a username needs a password."
     },
     {
       "kind": "new",
-      "text": "Browse a MongoDB collection's documents as an expandable tree with a type badge on every value, or as JSON. Filter, project and sort with shell syntax such as `{ age: { $gt: 30 } }` and press Enter to apply. Open Fields to see which fields a sample of documents has, how often, and with which types; click one to add it to the filter."
+      "text": "Browse a MongoDB collection's documents as an expandable tree with a type badge on every value, or as JSON. Filter, project and sort with shell syntax such as `{ age: { $gt: 30 } }` and press Enter to apply. Open Fields to see which fields a sample of documents has, how often, and with which types; click one to add it to the filter. Views and time-series collections open read-only."
     },
     {
       "kind": "new",

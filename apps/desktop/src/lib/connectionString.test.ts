@@ -286,14 +286,50 @@ describe('applyParsedConnection', () => {
 });
 
 describe('parseConnectionString for MongoDB', () => {
-  test('rejects options outside the allowlist', () => {
+  test('accepts the Atlas "Connect → Drivers" string and reports the options it ignores', () => {
     const result = parseConnectionString(
-      'mongodb+srv://ann:p%40ss@cluster0.x.net/shop?authSource=admin&retryWrites=true',
+      'mongodb+srv://ann:p%40ss@cluster0.abcde.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
+    );
+    expect(result).toEqual({
+      ok: true,
+      empty: false,
+      value: {
+        dialect: 'MongoDB',
+        host: 'cluster0.abcde.mongodb.net',
+        port: 27017,
+        username: 'ann',
+        password: 'p@ss',
+        database: '',
+        sslMode: 'enabled',
+        params: { srv: 'true' },
+      },
+      ignoredOptions: ['retryWrites', 'w', 'appName'],
+    });
+  });
+
+  test('ignores retryReads and any w value, case-insensitively, keeping allowed options', () => {
+    const result = parseConnectionString('mongodb://h/shop?RETRYREADS=false&w=1&authSource=admin');
+    expect(result.ok && !result.empty && result.value.params).toEqual({ authSource: 'admin' });
+    expect(result.ok && !result.empty && result.ignoredOptions).toEqual(['RETRYREADS', 'w']);
+  });
+
+  test('still rejects options that change behaviour', () => {
+    const result = parseConnectionString(
+      'mongodb+srv://ann:p%40ss@cluster0.x.net/shop?retryWrites=true&tlsCAFile=/etc/ca.pem',
     );
     expect(result).toEqual({
       ok: false,
-      error: 'Unsupported option retryWrites. Remove it or set it after connecting.',
+      error: 'Unsupported option tlsCAFile. Remove it or set it after connecting.',
     });
+  });
+
+  test('names a profile without a database after its host alone', () => {
+    const parsed = parseConnectionString('mongodb+srv://ann:x@cluster0.x.net/');
+    if (!parsed.ok || parsed.empty) throw new Error('expected a parse');
+    expect(applyParsedConnection(defaultConnectionForm(), parsed.value).name).toBe('cluster0.x.net');
+    const withDb = parseConnectionString('mongodb://h/shop');
+    if (!withDb.ok || withDb.empty) throw new Error('expected a parse');
+    expect(applyParsedConnection(defaultConnectionForm(), withDb.value).name).toBe('shop @ h');
   });
 
   test('parses mongodb+srv with auth source', () => {

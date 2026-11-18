@@ -41,7 +41,8 @@ Success: users connect to MongoDB, browse collections, inspect and edit document
 ## Behaviour worth knowing
 
 - Documents cross IPC as a typed ordered tree with numbers as strings, so `Int64`, `Decimal128` and doubles survive. Edits travel as text and are parsed in Rust.
-- Profiles may omit username and password for servers without authentication.
+- Profiles may omit username and password for servers without authentication. Once a username is set, the password is required, in the form and in Rust (`password_required`).
+- A pasted URI may carry `retryWrites`, `retryReads`, `w` and `appName`, which Atlas puts in every "Connect → Drivers" string. They are ignored (the driver defaults apply and the app sets its own name), and the form lists them under the connection string. Any other option outside the connection params is rejected.
 - Saving a whole-document replace is guarded by `{ _id, $expr: { $eq: ["$$ROOT", { $literal: original }] } }` with simple collation. Field order, added fields, odd keys and case-insensitive collations are all handled, and a concurrent change stops the save and offers a reload.
 - A user without `listDatabases`, `collStats` or `listIndexes` still gets a working sidebar, with unknown counts.
 - The query editor parses shell syntax in Rust and never evaluates JavaScript. `runCommand` and `adminCommand` pass the command unchanged.
