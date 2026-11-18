@@ -67,7 +67,7 @@ Success: users connect to MongoDB, browse collections, inspect and edit document
 
 | Limit | Reason |
 |---|---|
-| A stored document with a single key that is an Extended-JSON wrapper (such as `{"$oid": …}` as data) displays but cannot be edited as text | Extended JSON is ambiguous there: the text would read back as the wrapped value, not the document. |
+| A stored document with a single key that is an Extended-JSON wrapper (such as `{"$oid": …}` as data) displays but cannot be edited as text; saving it says "This document cannot be saved from its text form … Edit it with a query instead." rather than offering a reload | Extended JSON is ambiguous there: the text would read back as the wrapped value, not the document. When a guarded replace matches nothing, the document is read again by `_id`; if it still prints as the loaded text, nobody changed it, so a reload would fail the same way. |
 | The save guard compares by MongoDB value equality, so a concurrent change of only a numeric type with an equal value (Int64 5 to Double 5.0) is not detected | `$eq` treats equal numbers of different types as equal. |
 | A very large collection export is built in memory before the save dialog writes it | The export is returned as one text and the save dialog writes it; the app grants no Tauri fs plugin to stream to a file. |
 | Authentication is SCRAM only (`authMechanism` allows `""`, `SCRAM-SHA-1`, `SCRAM-SHA-256`) | The other mechanisms need Kerberos, LDAP, certificate or cloud-identity plumbing this client does not have. |

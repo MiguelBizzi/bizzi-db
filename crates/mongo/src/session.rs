@@ -19,12 +19,13 @@ use crate::objects;
 use crate::run::{self, MAX_DOCUMENTS};
 use crate::sample;
 use crate::shell::parse_value;
-use crate::values::{parse_editable, parse_editable_value, to_doc_value};
+use crate::values::{format_editable, parse_editable, parse_editable_value, to_doc_value};
 
 const COUNT_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_SAMPLE: u32 = 1000;
 const CHANGED_ON_SERVER: &str =
     "The document changed on the server after it was loaded. Reload it and apply your edit again.";
+const UNREPRESENTABLE: &str = "This document cannot be saved from its text form: it contains a value that Extended JSON cannot express exactly (for example a sub-document whose only key is \"$oid\"). Edit it with a query instead.";
 const ID_CHANGED: &str = "_id cannot be changed. Insert a copy and delete the original instead.";
 
 pub struct MongoAdapter;
@@ -185,6 +186,17 @@ fn replacement_with_id(id: &Bson, replacement: Document) -> Result<Document, Ada
     }
 }
 
+/// Why a guarded replace matched nothing. When the stored document still
+/// prints as the loaded text, nobody changed it: the text just does not read
+/// back as the stored BSON (a wrapper-shaped sub-document, regex options in
+/// another order), so "reload" would only fail the same way again.
+fn unmatched_replace_error(stored: Option<Document>, original_text: &str) -> &'static str {
+    match stored.map(Bson::Document) {
+        Some(stored) if format_editable(&to_doc_value(&stored)) == original_text => UNREPRESENTABLE,
+        _ => CHANGED_ON_SERVER,
+    }
+}
+
 impl MongoSession {
     fn collection(&self, ns: &Namespace) -> Collection<Document> {
         self.client
@@ -311,6 +323,7 @@ impl DocumentSession for MongoSession {
         original: &str,
         replacement: &str,
     ) -> Result<(), AdapterError> {
+        let original_text = original;
         let original = parse_editable(original).map_err(AdapterError::msg)?;
         let replacement = parse_editable(replacement).map_err(AdapterError::msg)?;
         let Some(id) = original.get("_id").cloned() else {
@@ -321,13 +334,21 @@ impl DocumentSession for MongoSession {
         let replacement = replacement_with_id(&id, replacement)?;
         let result = self
             .collection(ns)
-            .replace_one(unchanged_filter(id, original), replacement)
+            .replace_one(unchanged_filter(id.clone(), original), replacement)
             // A collection's default collation can make "ada" equal "Ada" in $expr.
             .collation(Collation::builder().locale("simple").build())
             .await
             .map_err(adapter_error)?;
         if result.matched_count == 0 {
-            return Err(AdapterError::msg(CHANGED_ON_SERVER));
+            let stored = self
+                .collection(ns)
+                .find_one(doc! { "_id": id })
+                .await
+                .map_err(adapter_error)?;
+            return Err(AdapterError::msg(unmatched_replace_error(
+                stored,
+                original_text,
+            )));
         }
         Ok(())
     }
@@ -416,6 +437,22 @@ mod tests {
                 "$expr": { "$eq": ["$$ROOT", { "$literal": original }] },
             }
         );
+    }
+
+    #[test]
+    fn unmatched_replace_tells_a_conflict_from_text_that_cannot_round_trip() {
+        let stored = doc! { "_id": 1, "v": { "$oid": "65a0000000000000000000aa" } };
+        let text = format_editable(&to_doc_value(&Bson::Document(stored.clone())));
+        assert_eq!(
+            unmatched_replace_error(Some(stored), &text),
+            UNREPRESENTABLE
+        );
+        let edited_elsewhere = doc! { "_id": 1, "v": 2 };
+        assert_eq!(
+            unmatched_replace_error(Some(edited_elsewhere), &text),
+            CHANGED_ON_SERVER
+        );
+        assert_eq!(unmatched_replace_error(None, &text), CHANGED_ON_SERVER);
     }
 
     #[test]

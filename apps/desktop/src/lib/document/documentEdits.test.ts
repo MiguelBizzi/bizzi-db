@@ -67,6 +67,12 @@ describe('document edits', () => {
       isConflictError('The document changed on the server after it was loaded. Reload it and apply your edit again.'),
     ).toBe(true);
     expect(isConflictError('_id cannot be changed. Insert a copy and delete the original instead.')).toBe(false);
+    // Reloading would fail the same way, so this one offers no Reload.
+    expect(
+      isConflictError(
+        'This document cannot be saved from its text form: it contains a value that Extended JSON cannot express exactly (for example a sub-document whose only key is "$oid"). Edit it with a query instead.',
+      ),
+    ).toBe(false);
   });
 
   test('idFilter and cloneText', () => {

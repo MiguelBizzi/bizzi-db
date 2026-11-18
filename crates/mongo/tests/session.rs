@@ -255,8 +255,8 @@ async fn introspect_survives_refused_stats_and_indexes() {
 }
 
 /// Tests that create or drop scratch collections hold this shared; a test
-/// that introspects every database holds it exclusively, because a collection
-/// dropped between listCollections and listIndexes fails introspection.
+/// that introspects every database holds it exclusively, so scratch
+/// collections appearing or vanishing meanwhile do not change what it lists.
 static SCRATCH: tokio::sync::RwLock<()> = tokio::sync::RwLock::const_new(());
 
 const SCRATCH_DB: &str = "t9_scratch";
@@ -564,6 +564,45 @@ async fn replace_refuses_when_the_document_changed() {
 #[ignore = "requires local MongoDB (docker compose up -d --wait mongo)"]
 async fn replace_refuses_when_a_field_was_added() {
     assert_stale_replace_refused("replace_added", "{ $set: { extra: 1 } }").await;
+}
+
+const UNREPRESENTABLE: &str = "This document cannot be saved from its text form: it contains a value that Extended JSON cannot express exactly (for example a sub-document whose only key is \"$oid\"). Edit it with a query instead.";
+
+#[tokio::test]
+#[ignore = "requires local MongoDB (docker compose up -d --wait mongo)"]
+async fn replace_explains_a_document_its_text_cannot_express() {
+    let _scratch = SCRATCH.read().await;
+    let session = connect(&root("")).await;
+    let collection = "replace_wrapper_shaped";
+    drop_scratch(collection).await;
+    let coll = raw_client()
+        .database(SCRATCH_DB)
+        .collection::<Document>(collection);
+    // Stored as a sub-document holding a string; its text reads back as an ObjectId.
+    coll.insert_one(doc! { "_id": 1, "v": { "$oid": "65a0000000000000000000aa" } })
+        .await
+        .unwrap();
+    let target = ns(SCRATCH_DB, collection);
+    let loaded = load_one(session.as_ref(), &target).await;
+    let original = format_editable(&loaded);
+    let edited = format!(
+        "{},\n  \"extra\": 1\n}}",
+        original.strip_suffix("\n}").expect("pretty object")
+    );
+    let err = session
+        .replace(&target, &original, &edited)
+        .await
+        .expect_err("text that cannot express the stored document");
+    assert_eq!(err.to_string(), UNREPRESENTABLE, "{original}");
+    // The driver's typed read already shows `v` as an ObjectId, so ask the server.
+    let untouched = coll
+        .count_documents(
+            doc! { "_id": 1, "v": { "$type": "object" }, "extra": { "$exists": false } },
+        )
+        .await
+        .unwrap();
+    assert_eq!(untouched, 1);
+    drop_scratch(collection).await;
 }
 
 #[tokio::test]
