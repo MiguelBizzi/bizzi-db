@@ -1,11 +1,19 @@
 import { AlertCircle } from 'lucide-react';
 import { categoryLabel, errorExcerpt, errorFacts, queryErrorCopyText } from '../../lib/queryError';
 import { queryErrorText } from '../../lib/sqlQuery';
-import type { QueryExecutionResult } from '../../types';
+import type { QueryErrorPosition, QueryExecutionResult } from '../../types';
 import { CopyButton } from '../ui/CopyButton';
 
+interface QueryErrorCardProps {
+  result: QueryExecutionResult;
+  /** Makes the line and column a button that moves the editor caret there. */
+  onJump?: (position: QueryErrorPosition) => void;
+  /** Heading when the error has no structured category. */
+  fallbackHeading?: string;
+}
+
 /** What the database said went wrong with a query, and where. */
-export function QueryErrorCard({ result }: { result: QueryExecutionResult }) {
+export function QueryErrorCard({ result, onJump, fallbackHeading = 'SQL Execution Error' }: QueryErrorCardProps) {
   const info = result.errorInfo;
   const excerpt = info ? errorExcerpt(result.query, info.position) : null;
   const facts = info ? errorFacts(info) : [];
@@ -14,7 +22,7 @@ export function QueryErrorCard({ result }: { result: QueryExecutionResult }) {
     <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/40 text-red-400 space-y-3 font-mono text-xs shadow-lg select-text">
       <div className="flex items-center gap-2 font-bold text-red-400">
         <AlertCircle className="w-5 h-5 shrink-0" />
-        <span>{info ? categoryLabel(info.category) : 'SQL Execution Error'}</span>
+        <span>{info ? categoryLabel(info.category) : fallbackHeading}</span>
         <span className="ml-auto flex items-center gap-1.5">
           {(info?.code || info?.vendorCode != null) && (
             <span className="text-[11px] font-normal text-red-400/80">
@@ -33,10 +41,22 @@ export function QueryErrorCard({ result }: { result: QueryExecutionResult }) {
 
       {info?.position && excerpt && (
         <div className="space-y-1.5">
-          <div className="text-[11px] text-muted-foreground">
-            Line {info.position.line}
-            {info.position.column != null ? `, column ${info.position.column}` : ''}
-          </div>
+          {(() => {
+            const position = info.position;
+            const label = `Line ${position.line}${position.column != null ? `, column ${position.column}` : ''}`;
+            return onJump ? (
+              <button
+                type="button"
+                onClick={() => onJump(position)}
+                title="Go to this position in the editor"
+                className="text-[11px] text-muted-foreground underline decoration-dotted hover:text-foreground"
+              >
+                {label}
+              </button>
+            ) : (
+              <div className="text-[11px] text-muted-foreground">{label}</div>
+            );
+          })()}
           <pre className="bg-background p-3 rounded-lg border border-red-500/30 overflow-x-auto leading-relaxed">
             <span className="text-muted-foreground select-none">{excerpt.lineNumber} │ </span>
             {excerpt.text}

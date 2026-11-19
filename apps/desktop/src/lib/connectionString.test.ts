@@ -26,6 +26,7 @@ describe('parseConnectionString', () => {
         password: 'p@ss',
         database: 'app',
         sslMode: 'require',
+        params: {},
       },
     });
   });
@@ -43,6 +44,7 @@ describe('parseConnectionString', () => {
         password: '',
         database: 'shop',
         sslMode: 'disabled',
+        params: {},
       },
     });
   });
@@ -62,6 +64,7 @@ describe('parseConnectionString', () => {
         password: 'secret',
         database: 'app',
         sslMode: 'disabled',
+        params: {},
       },
     });
   });
@@ -81,6 +84,7 @@ describe('parseConnectionString', () => {
         password: 's3cret',
         database: 'app',
         sslMode: 'enabled',
+        params: {},
       },
     });
   });
@@ -153,6 +157,7 @@ describe('parseConnectionString', () => {
         password: '',
         database: 'mydb',
         sslMode: 'require',
+        params: {},
       },
     });
   });
@@ -170,6 +175,7 @@ describe('parseConnectionString', () => {
         password: 'mysql',
         database: 'shop',
         sslMode: 'disabled',
+        params: {},
       },
     });
     expect(parseConnectionString('mysql://root@localhost').ok).toBe(true);
@@ -191,8 +197,6 @@ describe('parseConnectionString', () => {
     const cases = [
       ['mariadb://root@localhost/app', 'MariaDB'],
       ['sqlite:///tmp/app.db', 'SQLite'],
-      ['mongodb://localhost:27017/app', 'MongoDB'],
-      ['mongodb+srv://cluster.example.com/app', 'MongoDB'],
       ['clickhouse://localhost/app', 'ClickHouse'],
       ['duckdb:///tmp/app.duckdb', 'DuckDB'],
     ] as const;
@@ -266,6 +270,7 @@ describe('applyParsedConnection', () => {
       password: 's3cret',
       database: 'app',
       sslMode: 'enabled',
+      params: {},
     });
     expect(next.name).toBe('Prod replica');
     expect(next.folderId).toBe('folder_9');
@@ -277,5 +282,123 @@ describe('applyParsedConnection', () => {
     expect(next.sshUser).toBe('jump');
     expect(next.sshAuth).toBe('privateKey');
     expect(next.sshKeyPath).toBe('/tmp/id_ed25519');
+  });
+});
+
+describe('parseConnectionString for MongoDB', () => {
+  test('accepts the Atlas "Connect → Drivers" string and reports the options it ignores', () => {
+    const result = parseConnectionString(
+      'mongodb+srv://ann:p%40ss@cluster0.abcde.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
+    );
+    expect(result).toEqual({
+      ok: true,
+      empty: false,
+      value: {
+        dialect: 'MongoDB',
+        host: 'cluster0.abcde.mongodb.net',
+        port: 27017,
+        username: 'ann',
+        password: 'p@ss',
+        database: '',
+        sslMode: 'enabled',
+        params: { srv: 'true' },
+      },
+      ignoredOptions: ['retryWrites', 'w', 'appName'],
+    });
+  });
+
+  test('ignores retryReads and any w value, case-insensitively, keeping allowed options', () => {
+    const result = parseConnectionString('mongodb://h/shop?RETRYREADS=false&w=1&authSource=admin');
+    expect(result.ok && !result.empty && result.value.params).toEqual({ authSource: 'admin' });
+    expect(result.ok && !result.empty && result.ignoredOptions).toEqual(['RETRYREADS', 'w']);
+  });
+
+  test('still rejects options that change behaviour', () => {
+    const result = parseConnectionString(
+      'mongodb+srv://ann:p%40ss@cluster0.x.net/shop?retryWrites=true&tlsCAFile=/etc/ca.pem',
+    );
+    expect(result).toEqual({
+      ok: false,
+      error: 'Unsupported option tlsCAFile. Remove it or set it after connecting.',
+    });
+  });
+
+  test('names a profile without a database after its host alone', () => {
+    const parsed = parseConnectionString('mongodb+srv://ann:x@cluster0.x.net/');
+    if (!parsed.ok || parsed.empty) throw new Error('expected a parse');
+    expect(applyParsedConnection(defaultConnectionForm(), parsed.value).name).toBe('cluster0.x.net');
+    const withDb = parseConnectionString('mongodb://h/shop');
+    if (!withDb.ok || withDb.empty) throw new Error('expected a parse');
+    expect(applyParsedConnection(defaultConnectionForm(), withDb.value).name).toBe('shop @ h');
+  });
+
+  test('parses mongodb+srv with auth source', () => {
+    const result = parseConnectionString(
+      'mongodb+srv://ann:p%40ss@cluster0.x.net/shop?authSource=admin',
+    );
+    expect(result).toEqual({
+      ok: true,
+      empty: false,
+      value: {
+        dialect: 'MongoDB',
+        host: 'cluster0.x.net',
+        port: 27017,
+        username: 'ann',
+        password: 'p@ss',
+        database: 'shop',
+        sslMode: 'enabled',
+        params: { srv: 'true', authSource: 'admin' },
+      },
+    });
+  });
+
+  test('an SRV URI can turn TLS off explicitly', () => {
+    const result = parseConnectionString('mongodb+srv://ann:x@c.example.net/?tls=false');
+    expect(result.ok && !result.empty && result.value.sslMode).toBe('disabled');
+  });
+
+  test('rejects a port on an SRV host', () => {
+    const result = parseConnectionString('mongodb+srv://ann:x@c.example.net:27017/shop');
+    expect(result.ok).toBe(false);
+  });
+
+  test('parses a replica set seed list', () => {
+    const result = parseConnectionString('mongodb://a:1,b:2,c:3/?replicaSet=rs0');
+    expect(result).toEqual({
+      ok: true,
+      empty: false,
+      value: {
+        dialect: 'MongoDB',
+        host: 'a',
+        port: 1,
+        username: '',
+        password: '',
+        database: '',
+        sslMode: 'require',
+        params: { replicaSet: 'rs0', hosts: 'b:2,c:3' },
+      },
+    });
+  });
+
+  test('keeps brackets around IPv6 seed hosts', () => {
+    const result = parseConnectionString('mongodb://a,[::1]:27018/');
+    expect(result.ok && !result.empty && result.value.params.hosts).toBe('[::1]:27018');
+  });
+
+  test('maps tls options to the SSL mode and drops default booleans', () => {
+    const insecure = parseConnectionString(
+      'mongodb://localhost/?tls=true&tlsAllowInvalidCertificates=true&directConnection=false',
+    );
+    expect(insecure.ok && !insecure.empty && insecure.value.sslMode).toBe('require');
+    expect(insecure.ok && !insecure.empty && insecure.value.params).toEqual({});
+    const secure = parseConnectionString('mongodb://localhost:27018/?ssl=true&directConnection=true');
+    expect(secure.ok && !secure.empty && secure.value.sslMode).toBe('enabled');
+    expect(secure.ok && !secure.empty && secure.value.port).toBe(27018);
+    expect(secure.ok && !secure.empty && secure.value.params).toEqual({ directConnection: 'true' });
+  });
+
+  test('keeps relational URIs free of params', () => {
+    const result = parseConnectionString('postgres://alice@localhost/shop');
+    expect(result.ok && !result.empty && result.value.params).toEqual({});
   });
 });

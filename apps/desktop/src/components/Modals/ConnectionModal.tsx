@@ -9,9 +9,10 @@ import {
   SshAuthMethod,
   SslMode,
 } from "../../types";
-import { dialectModule, SUPPORTED_DIALECTS } from "@db/database";
+import { engineMeta, SUPPORTED_ENGINES } from "@db/database";
 import { ShieldCheck, X, AlertCircle, AlertTriangle, FolderOpen } from "lucide-react";
 import { Select, SelectOption } from "../ui/Select";
+import { Switch } from "../ui/Switch";
 import { EngineLogo } from "../icons/EngineLogo";
 import {
   defaultSslForHost,
@@ -25,6 +26,9 @@ import {
   applyDialectDefaults,
   defaultConnectionForm,
   firstTabWithErrors,
+  credentialsRequired,
+  passwordRequiredFor,
+  visibleConnectionFields,
   type ConnectionFormField,
   type ConnectionFormValues,
   type ConnectionModalTab,
@@ -108,6 +112,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
   const [form, setForm] = useState<ConnectionFormValues>(defaultConnectionForm);
   const [connectionString, setConnectionString] = useState("");
   const [parseError, setParseError] = useState<string | null>(null);
+  const [ignoredOptions, setIgnoredOptions] = useState<string[]>([]);
   const [tab, setTab] = useState<ConnectionModalTab>("connection");
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -123,6 +128,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
     setForm(formFromOpenState(editingProfile, defaultFolderId));
     setConnectionString("");
     setParseError(null);
+    setIgnoredOptions([]);
     setTab("connection");
     setTouched({});
     setAttempted(false);
@@ -141,6 +147,14 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
     [form, isEdit, keychainEnabled],
   );
   const isValid = Object.keys(errors).length === 0;
+  const meta = engineMeta(form.dialect);
+  const credentials = credentialsRequired(form.dialect);
+  const showPort = visibleConnectionFields(meta, form).includes("port");
+  const patchParam = (key: string, value: string) =>
+    setForm((current) => ({
+      ...current,
+      params: { ...current.params, [key]: value },
+    }));
   const sslWarning = warnInsecureConnection(
     form.host,
     form.sslMode,
@@ -158,13 +172,16 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
     const result = parseConnectionString(raw);
     if (!result.ok) {
       setParseError(result.error);
+      setIgnoredOptions([]);
       return;
     }
     if (result.empty) {
       setParseError(null);
+      setIgnoredOptions([]);
       return;
     }
     setParseError(null);
+    setIgnoredOptions(result.ignoredOptions ?? []);
     setForm((current) => applyParsedConnection(current, result.value));
   };
 
@@ -289,6 +306,11 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
                   {parseError && (
                     <p className="field-message text-[10px] text-destructive">{parseError}</p>
                   )}
+                  {!parseError && ignoredOptions.length > 0 && (
+                    <p className="field-message text-[10px] text-muted-foreground">
+                      Ignored options: {ignoredOptions.join(", ")}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -304,7 +326,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
                     Database Engine
                   </label>
                   <div className="grid grid-cols-2 gap-2">
-                    {SUPPORTED_DIALECTS.map((d) => {
+                    {SUPPORTED_ENGINES.map((d) => {
                       const selected = form.dialect === d.id;
                       return (
                         <button
@@ -369,7 +391,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
                 </div>
 
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="col-span-2 space-y-1.5">
+                  <div className={`${showPort ? "col-span-2" : "col-span-3"} space-y-1.5`}>
                     <label className="text-[10px] font-bold uppercase text-muted-foreground">
                       Host / Endpoint
                       <RequiredMark />
@@ -393,38 +415,40 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
                       <p className="text-[10px] text-destructive">{errors.host}</p>
                     )}
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase text-muted-foreground">
-                      Port
-                      <RequiredMark />
-                    </label>
-                    <input
-                      type="number"
-                      value={Number.isFinite(form.port) ? form.port : ""}
-                      onChange={(e) => {
-                        patchForm({
-                          port:
-                            e.target.value === ""
-                              ? Number.NaN
-                              : Number(e.target.value),
-                        });
-                        markTouched("port");
-                      }}
-                      onBlur={() => markTouched("port")}
-                      aria-invalid={Boolean(showError("port"))}
-                      className={fieldErrorClass("port")}
-                    />
-                    {showError("port") && (
-                      <p className="text-[10px] text-destructive">{errors.port}</p>
-                    )}
-                  </div>
+                  {showPort && (
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                        Port
+                        <RequiredMark />
+                      </label>
+                      <input
+                        type="number"
+                        value={Number.isFinite(form.port) ? form.port : ""}
+                        onChange={(e) => {
+                          patchForm({
+                            port:
+                              e.target.value === ""
+                                ? Number.NaN
+                                : Number(e.target.value),
+                          });
+                          markTouched("port");
+                        }}
+                        onBlur={() => markTouched("port")}
+                        aria-invalid={Boolean(showError("port"))}
+                        className={fieldErrorClass("port")}
+                      />
+                      {showError("port") && (
+                        <p className="text-[10px] text-destructive">{errors.port}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase text-muted-foreground">
                       Database Name
-                      {dialectModule(form.dialect)?.capabilities.emptyDatabaseAllowed ? (
+                      {meta?.databaseOptional ? (
                         <span className="ml-1 font-normal normal-case tracking-normal text-muted-foreground">
                           optional, sets the default schema
                         </span>
@@ -452,7 +476,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase text-muted-foreground">
                       Username
-                      <RequiredMark />
+                      {credentials && <RequiredMark />}
                     </label>
                     <input
                       type="text"
@@ -476,7 +500,7 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold uppercase text-muted-foreground">
                     Password
-                    {!isEdit && <RequiredMark />}
+                    {passwordRequiredFor(form.dialect, form.username) && !isEdit && <RequiredMark />}
                   </label>
                   <input
                     type="password"
@@ -501,6 +525,63 @@ const ConnectionModalBody: React.FC<ConnectionModalProps> = ({
                     </p>
                   )}
                 </div>
+
+                {meta && meta.connectionParams.length > 0 && (
+                  <div className="space-y-3">
+                    {meta.connectionParams.map((spec) => {
+                      const value = form.params[spec.key] ?? "";
+                      const label = (
+                        <label
+                          htmlFor={`param-${spec.key}`}
+                          className="text-[10px] font-bold uppercase text-muted-foreground"
+                        >
+                          {spec.label}
+                        </label>
+                      );
+                      if (spec.kind === "boolean") {
+                        return (
+                          <div
+                            key={spec.key}
+                            className="flex items-center justify-between gap-3"
+                          >
+                            {label}
+                            <Switch
+                              id={`param-${spec.key}`}
+                              checked={value === "true"}
+                              onCheckedChange={(checked) =>
+                                patchParam(spec.key, checked ? "true" : "false")
+                              }
+                            />
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={spec.key} className="space-y-1.5">
+                          {label}
+                          {spec.kind === "select" ? (
+                            <Select
+                              id={`param-${spec.key}`}
+                              value={value || spec.options?.[0]?.value || ""}
+                              options={spec.options ?? []}
+                              onChange={(next) => patchParam(spec.key, next)}
+                              placement="top"
+                              aria-label={spec.label}
+                            />
+                          ) : (
+                            <input
+                              id={`param-${spec.key}`}
+                              type="text"
+                              value={value}
+                              placeholder={spec.placeholder}
+                              onChange={(e) => patchParam(spec.key, e.target.value)}
+                              className={fieldClass}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5 min-w-0">

@@ -15,11 +15,15 @@ import {
   DATA_EXPORT_FORMATS,
   DataExportFormat,
   DataExportInput,
+  DOCUMENT_EXPORT_FORMATS,
+  documentExportRequest,
+  type DocumentExportTarget,
   saveExport,
   formatExport,
   writeClipboard,
 } from '../../lib/dataExport';
-import { exportReveal } from '@db/core';
+import { documentsExport, exportReveal } from '@db/core';
+import type { DocumentExportFormat, ExtJsonMode } from '@db/shared';
 import type { DatabaseDialect } from '../../types';
 import { invokeErrorMessage } from '../../lib/invokeError';
 import { dismissToast, toast } from '../../lib/toast';
@@ -34,7 +38,7 @@ export const FORMAT_ICONS: Record<
   sql: { icon: Code, className: 'text-amber-400' },
 };
 
-interface DataExportMenuProps {
+interface RowExportMenuProps {
   columns: string[];
   rows: Record<string, unknown>[];
   tableName?: string;
@@ -64,7 +68,19 @@ class LoadRowsError extends Error {
   }
 }
 
-export function DataExportMenu({
+interface DocumentExportMenuProps {
+  /** `null` while no query has produced documents yet. */
+  documentTarget: DocumentExportTarget | null;
+  exportTriggerRef?: RefObject<(() => void) | null>;
+}
+
+/** A row export menu, or, given `documentTarget`, a menu that exports a collection query; the export is built in memory, then saved. */
+export function DataExportMenu(props: RowExportMenuProps | DocumentExportMenuProps) {
+  if ('documentTarget' in props) return <DocumentExportMenu {...props} />;
+  return <RowExportMenu {...props} />;
+}
+
+function RowExportMenu({
   columns,
   rows,
   tableName,
@@ -75,7 +91,7 @@ export function DataExportMenu({
   disabledReason,
   loadAllRows,
   exportTriggerRef,
-}: DataExportMenuProps) {
+}: RowExportMenuProps) {
   const [open, setOpen] = useState<OpenMenu>(null);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState<'copy' | 'export' | null>(null);
@@ -230,6 +246,142 @@ export function DataExportMenu({
         onToggle={() => setOpen(open === 'export' ? null : 'export')}
         onSelect={handleExport}
       />
+    </div>
+  );
+}
+
+const DOCUMENT_FORMAT_ICONS: Record<DocumentExportFormat, keyof typeof FORMAT_ICONS> = {
+  jsonArray: 'json',
+  ndjson: 'json',
+  csv: 'csv',
+};
+
+const EXT_JSON_MODES: { id: ExtJsonMode; label: string; title: string }[] = [
+  { id: 'relaxed', label: 'Relaxed', title: 'Plain numbers and ISO dates where lossless' },
+  { id: 'canonical', label: 'Canonical', title: 'Every number and date carries its BSON type' },
+];
+
+function DocumentExportMenu({ documentTarget, exportTriggerRef }: DocumentExportMenuProps) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [format, setFormat] = useState<DocumentExportFormat>('jsonArray');
+  const [mode, setMode] = useState<ExtJsonMode>('relaxed');
+  const rootRef = useRef<HTMLDivElement>(null);
+  const busyRef = useRef(false);
+  const targetRef = useRef(documentTarget);
+  targetRef.current = documentTarget;
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  const formatRef = useRef(format);
+  formatRef.current = format;
+  const idle = documentTarget === null;
+
+  useEffect(() => {
+    if (idle) setOpen(false);
+  }, [idle]);
+
+  const runExport = async (chosen: DocumentExportFormat) => {
+    const target = targetRef.current;
+    if (!target || busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setOpen(false);
+    setFormat(chosen);
+    try {
+      const savedPath = await documentsExport(documentExportRequest(target, chosen, modeRef.current));
+      if (savedPath) {
+        toast.success(`Saved ${target.collection.name} to ${savedPath}`, 8000, {
+          label: 'Show in folder',
+          run: () => {
+            exportReveal(savedPath).catch((error: unknown) =>
+              toast.error(`Could not open the folder: ${invokeErrorMessage(error, 'unknown error')}`)
+            );
+          },
+        });
+      }
+    } catch (error) {
+      toast.error(`Could not export the collection: ${invokeErrorMessage(error, 'unknown error')}`);
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!exportTriggerRef) return;
+    const trigger = () => void runExport(formatRef.current);
+    exportTriggerRef.current = trigger;
+    return () => {
+      if (exportTriggerRef.current === trigger) exportTriggerRef.current = null;
+    };
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        disabled={idle || busy}
+        title={idle ? 'Unavailable while documents are loading' : 'Export the documents matching the applied query'}
+        onClick={() => setOpen((value) => !value)}
+        className="pressable flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-background border border-border hover:bg-accent text-foreground text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-background"
+      >
+        <Download className="w-3.5 h-3.5" />
+        <span>{busy ? 'Exporting…' : 'Export'}</span>
+        <ChevronDown className="w-3 h-3 text-muted-foreground" />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <Popover origin="top" className="absolute right-0 mt-1 min-w-40 bg-popover border border-border rounded-xl shadow-2xl p-1.5 z-40 text-xs text-popover-foreground">
+            <div role="radiogroup" aria-label="Extended JSON mode" className="flex items-center p-0.5 mb-1 rounded-lg bg-background border border-border">
+              {EXT_JSON_MODES.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={mode === item.id}
+                  title={item.title}
+                  onClick={() => setMode(item.id)}
+                  className={`flex-1 px-2 py-0.5 rounded-md font-medium transition-colors ${
+                    mode === item.id ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            {DOCUMENT_EXPORT_FORMATS.map((item) => {
+              const { icon: FormatIcon, className } = FORMAT_ICONS[DOCUMENT_FORMAT_ICONS[item.id]];
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => void runExport(item.id)}
+                  className="w-full flex items-center justify-start gap-2 px-2.5 py-1.5 rounded-lg hover:bg-accent text-foreground font-mono text-left"
+                >
+                  <FormatIcon className={`w-3.5 h-3.5 shrink-0 ${className}`} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </Popover>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

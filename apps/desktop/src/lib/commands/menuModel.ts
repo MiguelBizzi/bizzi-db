@@ -87,6 +87,7 @@ export function buildMenuModel(): MenuNode[] {
         separator(),
         item('edit.find'),
         item('edit.insertRow'),
+        item('edit.editDocument'),
         item('edit.deleteRows'),
         item('edit.chooseReferencedRow'),
         separator(),

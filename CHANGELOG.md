@@ -4,6 +4,18 @@ All notable changes to Bizzi DB are recorded here. The format follows [Keep a Ch
 
 New entries go under `## [Unreleased]`; the release process moves them under a version heading. Write for people who use the app, not for people who read commits. See [RELEASING.md](RELEASING.md).
 
+## [Unreleased] - MongoDB connections
+
+### New
+
+- Connect to MongoDB servers. Paste a `mongodb://` or `mongodb+srv://` connection string, or fill in the form with an auth database, replica set, additional hosts, read preference and SRV lookup. The string from Atlas's Connect → Drivers pastes as it is: `retryWrites`, `retryReads`, `w` and `appName` are ignored and listed under the field. Username and password are optional for servers without authentication; a username needs a password.
+- Browse a MongoDB collection's documents as an expandable tree with a type badge on every value, or as JSON. Filter, project and sort with shell syntax such as `{ age: { $gt: 30 } }` and press Enter to apply. Open Fields to see which fields a sample of documents has, how often, and with which types; click one to add it to the filter. Views and time-series collections open read-only.
+- Edit MongoDB documents. Double-click a value (or select it and press Enter) to change it and its type, or right-click a field to add, rename, remove or duplicate it; Save or Discard each changed document from its row. Edit Document… (⌘⌥E or Ctrl+Alt+E), Insert Document… (⌘I or Ctrl+I) and Clone Document… open the whole document as text, where shell syntax such as `ObjectId("…")` and `ISODate("…")` works. Delete Documents (⌘⌫ or Delete) asks first. If someone else changed the document after you loaded it, saving stops and offers to reload it.
+- Run MongoDB shell commands in a query tab (⌘T on a MongoDB connection). ⌘↵ or Ctrl+Enter runs the statement under the cursor, ⌘⇧↵ or Ctrl+Shift+Enter runs the whole script, and a selection runs exactly the selected text. Pick the database to run against, complete collection names, methods, fields and operators as you type, and export any result as a JSON array. Errors link to the position in the script.
+- Manage MongoDB indexes and collections. The Indexes tab on a collection lists each index with its keys and options (unique, sparse, hidden, TTL, partial filter); New Index… (⌘⇧I or Ctrl+Shift+I) builds one from ascending, descending, text, 2dsphere and hashed keys, and Drop removes it after a confirmation. New Collection… (⌘⇧N or Ctrl+Shift+N) creates a collection in an existing or new database and opens it. The sidebar and the list update right away.
+- Export a MongoDB collection as a JSON array, NDJSON, or CSV, with relaxed or canonical Extended JSON so numbers, dates and ids round-trip.
+- Connect through an SSH tunnel to a single MongoDB host, and use SCRAM-SHA-1 or SCRAM-SHA-256 authentication. Kerberos, LDAP, X.509, AWS IAM and OIDC are not supported yet.
+
 ## [0.1.29] - 2026-11-14 - Foreign key sheet and What's New
 
 Choose foreign key values from a searchable sheet, and read what changed after each update.

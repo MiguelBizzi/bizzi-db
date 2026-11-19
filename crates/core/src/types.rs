@@ -1,6 +1,10 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::document::CollectionSchema;
+use crate::engines::Paradigm;
 use crate::query_error::QueryError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -11,6 +15,7 @@ pub enum DatabaseDialect {
     SQLite,
     ClickHouse,
     DuckDB,
+    MongoDB,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -339,6 +344,10 @@ pub struct DatabaseSchema {
     pub total_size_mb: f64,
     pub active_connections: i64,
     pub queries_per_second: f64,
+    #[serde(default)]
+    pub paradigm: Paradigm,
+    #[serde(default)]
+    pub collections: Vec<CollectionSchema>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -352,6 +361,8 @@ pub enum TabType {
     SchemaDesigner,
     FunctionDesigner,
     ViewDesigner,
+    CollectionDocuments,
+    DocumentQuery,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -511,6 +522,8 @@ pub struct ConnectionProfile {
     pub ssh_auth: SshAuthMethod,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ssh_key_path: Option<String>,
+    #[serde(default)]
+    pub params: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -547,6 +560,8 @@ pub struct SaveConnectionInput {
     pub ssh_password: String,
     #[serde(default)]
     pub ssh_passphrase: String,
+    #[serde(default)]
+    pub params: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

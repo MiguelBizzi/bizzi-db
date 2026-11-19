@@ -1,3 +1,4 @@
+import type { Paradigm } from '@db/shared';
 import type { TabType } from '../../types';
 
 export interface CommandCapabilities {
@@ -12,6 +13,8 @@ export interface CommandContext {
   selectedRowCount: number;
   pendingCount: number;
   connectionOpen: boolean;
+  /** Paradigm of the connected engine; `null` when no connection is open. */
+  paradigm: Paradigm | null;
   modalOpen: boolean;
   textInputFocused: boolean;
   /** A foreign key field or grid cell is focused and can open the referenced-row sheet. */
@@ -19,6 +22,10 @@ export interface CommandContext {
   sqlSelectionPresent: boolean;
   sqlResultPresent: boolean;
   closedTabCount: number;
+  /** Set by a collection tab whose documents cannot be written here (a view or time-series). */
+  collectionReadOnly: boolean;
+  /** Set by a collection tab that cannot take indexes (a view). */
+  collectionIndexesReadOnly: boolean;
   capabilities: CommandCapabilities;
 }
 
@@ -29,12 +36,15 @@ export const EMPTY_CONTEXT: CommandContext = {
   selectedRowCount: 0,
   pendingCount: 0,
   connectionOpen: false,
+  paradigm: null,
   modalOpen: false,
   textInputFocused: false,
   foreignKeyTarget: false,
   sqlSelectionPresent: false,
   sqlResultPresent: false,
   closedTabCount: 0,
+  collectionReadOnly: false,
+  collectionIndexesReadOnly: false,
   capabilities: { routines: true },
 };
 

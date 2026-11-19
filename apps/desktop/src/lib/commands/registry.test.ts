@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import type { Paradigm } from '@db/shared';
 import { formatAccelerator, normalizeAccelerator, parseAccelerator, type Platform } from './accelerator';
 import { EMPTY_CONTEXT, type CommandContext } from './context';
 import { reservedAccelerators } from './reserved';
@@ -137,6 +138,7 @@ describe('COMMANDS registry invariants', () => {
         'edit.toggleComment',
         'edit.find',
         'edit.insertRow',
+        'edit.editDocument',
         'edit.deleteRows',
         'edit.chooseReferencedRow',
         'file.closeTab',
@@ -299,12 +301,12 @@ describe('isCommandEnabled', () => {
     ['conn.refreshTable', { activeTabType: 'table_data' }, true],
     ['conn.refreshTable', { activeTabType: 'sql_editor' }, false],
     ['conn.refreshTable', {}, false],
-    ['file.newFunction', { connectionOpen: true }, true],
+    ['file.newFunction', { connectionOpen: true, paradigm: 'relational' }, true],
     ['file.newFunction', { connectionOpen: true, capabilities: { routines: false } }, false],
     ['file.newFunction', { connectionOpen: false, capabilities: { routines: true } }, false],
     ['file.newQuery', { connectionOpen: true }, true],
     ['file.newQuery', {}, false],
-    ['view.erd', { connectionOpen: true }, true],
+    ['view.erd', { connectionOpen: true, paradigm: 'relational' }, true],
     ['view.erd', {}, false],
     ['view.toggleSidebar', { connectionOpen: true }, true],
     ['view.toggleSidebar', {}, false],
@@ -415,9 +417,9 @@ describe('isCommandEnabled', () => {
     ['file.newConnection', { modalOpen: true }, false],
     ['file.newTable', { connectionOpen: true }, true],
     ['file.newTable', {}, false],
-    ['file.newFunction', { connectionOpen: true }, true],
+    ['file.newFunction', { connectionOpen: true, paradigm: 'relational' }, true],
     ['file.newFunction', { connectionOpen: true, modalOpen: true }, false],
-    ['file.newView', { connectionOpen: true }, true],
+    ['file.newView', { connectionOpen: true, paradigm: 'relational' }, true],
     ['file.newView', {}, false],
     ['file.newIndex', { connectionOpen: true, activeTabType: 'table_data' }, true],
     ['file.newIndex', { connectionOpen: true, activeTabType: 'schema_designer' }, true],
@@ -500,7 +502,7 @@ describe('menuState', () => {
   });
 
   test('enabled map reflects the context', () => {
-    const state = menuState(ctx({ connectionOpen: true, activeTabType: 'table_data' }));
+    const state = menuState(ctx({ connectionOpen: true, paradigm: 'relational', activeTabType: 'table_data' }));
     expect(state.enabled['conn.refreshTable']).toBe(true);
     expect(state.enabled['view.erd']).toBe(true);
     expect(menuState(ctx()).enabled['view.erd']).toBe(false);
@@ -555,6 +557,7 @@ describe('menuState for realistic app contexts', () => {
   const sqlTabOpen = ctx({
     activeTabType: 'sql_editor',
     connectionOpen: true,
+    paradigm: 'relational',
     tabCount: 1,
     paneTabCount: 1,
     pendingCount: 0,
@@ -757,5 +760,114 @@ describe('currentPlatform', () => {
       if (original) Object.defineProperty(globalThis, 'navigator', original);
       else delete g.navigator;
     }
+  });
+});
+
+describe('paradigm gating', () => {
+  const doc = (over: Partial<CommandContext> = {}) =>
+    ctx({ connectionOpen: true, paradigm: 'document', ...over });
+  const rel = (over: Partial<CommandContext> = {}) =>
+    ctx({ connectionOpen: true, paradigm: 'relational', ...over });
+  const on = (id: string, c: CommandContext) => isCommandEnabled(commandById(id), c);
+  const label = (id: string, c: CommandContext) => {
+    const cmd = commandById(id);
+    return cmd.dynamicLabel ? cmd.dynamicLabel(c) : cmd.label;
+  };
+
+  test('edit.editDocument needs one selected document in a collection tab', () => {
+    const cmd = commandById('edit.editDocument');
+    expect(cmd.label).toBe('Edit Document…');
+    expect(cmd.accelerator).toBe('CmdOrCtrl+Alt+E');
+    expect(on('edit.editDocument', doc({ activeTabType: 'collection_documents', selectedRowCount: 1 }))).toBe(true);
+    expect(on('edit.editDocument', doc({ activeTabType: 'collection_documents', selectedRowCount: 2 }))).toBe(false);
+    expect(on('edit.editDocument', doc({ activeTabType: 'collection_documents', selectedRowCount: 0 }))).toBe(false);
+    expect(on('edit.editDocument', rel({ activeTabType: 'table_data', selectedRowCount: 1 }))).toBe(false);
+  });
+
+  test('New Table becomes New Collection for document engines', () => {
+    expect(label('file.newTable', doc())).toBe('New Collection…');
+    expect(label('file.newTable', rel())).toBe('New Table…');
+    expect(label('file.newTable', ctx())).toBe('New Table…');
+  });
+
+  const RELATIONAL_ONLY = ['file.newView', 'file.newFunction', 'view.erd', 'view.metrics', 'query.review'];
+
+  test('views, functions, the ERD, metrics and Pending Changes are disabled for document engines', () => {
+    for (const id of RELATIONAL_ONLY) {
+      expect(on(id, doc())).toBe(false);
+      expect(on(id, rel())).toBe(true);
+    }
+  });
+
+  test('relational-only commands are disabled for any other paradigm, not only document', () => {
+    const other = ctx({ connectionOpen: true, paradigm: 'keyvalue' as Paradigm });
+    for (const id of RELATIONAL_ONLY) expect(on(id, other)).toBe(false);
+    for (const id of RELATIONAL_ONLY) expect(on(id, ctx({ connectionOpen: false, paradigm: 'relational' }))).toBe(false);
+  });
+
+  test('New Index works on collection tabs', () => {
+    expect(on('file.newIndex', doc({ activeTabType: 'collection_documents' }))).toBe(true);
+    expect(on('file.newIndex', rel({ activeTabType: 'table_data' }))).toBe(true);
+    expect(on('file.newIndex', doc({ activeTabType: 'document_query' }))).toBe(false);
+  });
+
+  test('a read-only collection tab (view or time-series) disables document writes', () => {
+    const tab = (over: Partial<CommandContext>) =>
+      doc({ activeTabType: 'collection_documents', selectedRowCount: 1, ...over });
+    for (const id of ['edit.insertRow', 'edit.editDocument', 'edit.deleteRows']) {
+      expect(on(id, tab({}))).toBe(true);
+      expect(on(id, tab({ collectionReadOnly: true }))).toBe(false);
+    }
+    expect(on('edit.find', tab({ collectionReadOnly: true }))).toBe(true);
+    expect(on('conn.refreshTable', tab({ collectionReadOnly: true }))).toBe(true);
+    expect(on('file.export', tab({ collectionReadOnly: true }))).toBe(true);
+  });
+
+  test('New Index is disabled on a collection tab whose indexes cannot be managed (a view)', () => {
+    const tab = (over: Partial<CommandContext>) => doc({ activeTabType: 'collection_documents', ...over });
+    expect(on('file.newIndex', tab({ collectionIndexesReadOnly: true }))).toBe(false);
+    // Time-series take secondary indexes though their documents are read-only here.
+    expect(on('file.newIndex', tab({ collectionReadOnly: true }))).toBe(true);
+  });
+
+  test('collection flags never touch relational tabs', () => {
+    const t = rel({ activeTabType: 'table_data', selectedRowCount: 1, collectionReadOnly: true, collectionIndexesReadOnly: true });
+    for (const id of ['edit.insertRow', 'edit.deleteRows', 'file.newIndex']) expect(on(id, t)).toBe(true);
+  });
+
+  test('file.export works on collection tabs and still needs a result on relational editors', () => {
+    expect(on('file.export', doc({ activeTabType: 'collection_documents' }))).toBe(true);
+    expect(on('file.export', doc({ activeTabType: 'collection_documents', modalOpen: true }))).toBe(false);
+    expect(on('file.export', rel({ activeTabType: 'table_data' }))).toBe(true);
+    expect(on('file.export', rel({ activeTabType: 'sql_editor', sqlResultPresent: false }))).toBe(false);
+  });
+
+  test('grid commands extend to collection tabs with document labels', () => {
+    const c = doc({ activeTabType: 'collection_documents', selectedRowCount: 1 });
+    expect(on('edit.insertRow', c)).toBe(true);
+    expect(on('edit.find', c)).toBe(true);
+    expect(on('edit.deleteRows', c)).toBe(true);
+    expect(on('edit.deleteRows', doc({ activeTabType: 'collection_documents' }))).toBe(false);
+    expect(on('conn.refreshTable', c)).toBe(true);
+    expect(label('edit.insertRow', c)).toBe('Insert Document…');
+    expect(label('edit.deleteRows', c)).toBe('Delete Documents');
+    expect(label('edit.find', c)).toBe('Filter Documents…');
+    expect(label('conn.refreshTable', c)).toBe('Refresh Collection');
+    const t = rel({ activeTabType: 'table_data' });
+    expect(label('edit.insertRow', t)).toBe('Insert Row');
+    expect(label('edit.deleteRows', t)).toBe('Delete Selected Rows');
+    expect(label('edit.find', t)).toBe('Find in Table…');
+    expect(label('conn.refreshTable', t)).toBe('Refresh Table');
+  });
+
+  test('query commands also run on document query tabs', () => {
+    const q = doc({ activeTabType: 'document_query' });
+    for (const id of ['query.run', 'query.runAll', 'file.saveQuery', 'edit.toggleComment']) {
+      expect(on(id, q)).toBe(true);
+    }
+    for (const id of ['edit.formatSql', 'query.commit', 'query.review']) {
+      expect(on(id, doc({ activeTabType: 'document_query' }))).toBe(false);
+    }
+    expect(on('edit.find', q)).toBe(false);
   });
 });

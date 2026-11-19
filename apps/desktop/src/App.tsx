@@ -40,6 +40,7 @@ import { Toaster } from "./components/ui/Toaster";
 import {
   DatabaseSchema,
   RoutineDefinition,
+  CollectionSchema,
   TableSchema,
   WorkspaceTab,
   SavedQuery,
@@ -61,6 +62,8 @@ import {
   connectionsList,
   connectionsMove,
   connectionsSave,
+  collectionCreate,
+  collectionDrop,
   connectionsTest,
   foldersDelete,
   foldersList,
@@ -104,7 +107,26 @@ import {
   type RoutineTarget,
 } from "./lib/routineTabs";
 import { tabObjectKind } from "./lib/tabIcon";
-import { dialectModule } from "@db/database";
+import {
+  closableCollectionTabIds,
+  newQueryTabType,
+  openCollectionTab,
+} from "./lib/document/documentTabs";
+import {
+  EMPTY_DOCUMENT_QUERY_STATE,
+  type DocumentQueryState,
+} from "./lib/document/documentResults";
+import { DropCollectionModal } from "./components/DocumentView/DropCollectionModal";
+import { CreateCollectionModal } from "./components/DocumentView/CreateCollectionModal";
+import { collectionDatabases } from "./lib/document/explorer";
+import { CollectionView } from "./components/DocumentView/CollectionView";
+import { savedQueriesFor } from "./lib/savedQueries";
+import { DocumentQueryTab } from "./components/DocumentView/DocumentQueryTab";
+import {
+  retainTabEdits,
+  type DocumentEdits,
+} from "./lib/document/documentEdits";
+import { dialectModule, documentEngine, engineMeta } from "@db/database";
 import { objectDdlFor, tableDdlFor } from "./lib/ddl/registry";
 import { planScript } from "./lib/ddl/types";
 import {
@@ -222,6 +244,8 @@ const ROOT_PANE_ID = "pane_root";
 // Lets the workspace paint before the drawer slides in after an update.
 const WHATS_NEW_DELAY_MS = 700;
 
+const NO_DOCUMENT_EDITS: DocumentEdits = {};
+
 // Loaded on demand so launch does not parse every release's notes.
 async function loadChangelog(): Promise<ChangelogEntry[]> {
   return (await import("./lib/changelog.data")).CHANGELOG;
@@ -265,11 +289,18 @@ export default function App() {
   const [pendingByTable, setPendingByTable] = useState<
     Record<string, PendingModifications>
   >({});
+  /** Unsaved document tree edits per collection tab; dropped when the tab closes. */
+  const [documentEditsByTab, setDocumentEditsByTab] = useState<
+    Readonly<Record<string, DocumentEdits>>
+  >({});
   /** Staged schema edits and deletes, for every connection; see currentSchemaChanges. */
   const [schemaQueue, setSchemaQueue] = useState<StagedSchemaChange[]>([]);
   const [sqlTabStates, setSqlTabStates] = useState<Record<string, SqlTabState>>(
     {},
   );
+  const [documentQueryStates, setDocumentQueryStates] = useState<
+    Record<string, DocumentQueryState>
+  >({});
   // Bumped per table when its rows change, so open query results can refresh themselves.
   const [dataRevisions, setDataRevisions] = useState<Record<string, number>>(
     {},
@@ -359,6 +390,10 @@ export default function App() {
   const [routineToDrop, setRoutineToDrop] = useState<RoutineDefinition | null>(
     null,
   );
+  const [collectionToDrop, setCollectionToDrop] =
+    useState<CollectionSchema | null>(null);
+  const [droppingCollection, setDroppingCollection] = useState(false);
+  const [isCreateCollectionOpen, setIsCreateCollectionOpen] = useState(false);
   const [tableActionConfirm, setTableActionConfirm] = useState<{
     table: TableSchema;
     action: "truncate" | "drop";
@@ -391,6 +426,9 @@ export default function App() {
   const currentDatabase = currentDbId
     ? databases.find((d) => d.id === currentDbId) || null
     : null;
+  const relationalConnection = currentDatabase
+    ? engineMeta(currentDatabase.dialect)?.paradigm === "relational"
+    : false;
 
   const activePaneId = resolveFocusedPaneId(layout, focusedPaneId);
   const activeTabId = focusedActiveTabId(layout, activePaneId);
@@ -884,6 +922,117 @@ export default function App() {
     void enqueueSchemaCheck();
   };
 
+  const findCollection = (collectionId?: string): CollectionSchema | undefined =>
+    collectionId
+      ? currentDatabase?.collections?.find((c) => c.id === collectionId)
+      : undefined;
+
+  const handleOpenCollection = (collection: CollectionSchema) => {
+    if (!currentDatabase) return;
+    const { tabs: next, activeId } = openCollectionTab(
+      tabs,
+      collection,
+      currentDatabase.id,
+    );
+    if (next === tabs) {
+      const paneId = tabPaneId(layout, activeId) ?? activePaneId;
+      setLayout(setPaneActiveTab(layout, paneId, activeId));
+      setFocusedPaneId(paneId);
+    } else {
+      openTabInPane(activePaneId, next[next.length - 1]);
+    }
+    void enqueueSchemaCheck();
+  };
+
+  /** The collection whose tab should open its insert drawer once. */
+  const [insertDocumentForCollectionId, setInsertDocumentForCollectionId] =
+    useState<string | null>(null);
+  const clearInsertDocumentRequest = useCallback(
+    () => setInsertDocumentForCollectionId(null),
+    [],
+  );
+  useEffect(() => {
+    setDocumentEditsByTab((prev) =>
+      retainTabEdits(
+        prev,
+        tabs.map((tab) => tab.id),
+      ),
+    );
+  }, [tabs]);
+  const updateDocumentEdits = useCallback(
+    (tabId: string, update: (prev: DocumentEdits) => DocumentEdits) =>
+      setDocumentEditsByTab((prev) => ({
+        ...prev,
+        [tabId]: update(prev[tabId] ?? NO_DOCUMENT_EDITS),
+      })),
+    [],
+  );
+
+  const handleInsertDocumentInCollection = (collection: CollectionSchema) => {
+    handleOpenCollection(collection);
+    setInsertDocumentForCollectionId(collection.id);
+  };
+  /** The collection whose tab should show Indexes with the new-index drawer open, once. */
+  const [newIndexForCollectionId, setNewIndexForCollectionId] = useState<
+    string | null
+  >(null);
+  const clearNewCollectionIndexRequest = useCallback(
+    () => setNewIndexForCollectionId(null),
+    [],
+  );
+  const handleNewCollectionIndex = (collection: CollectionSchema) => {
+    handleOpenCollection(collection);
+    setNewIndexForCollectionId(collection.id);
+  };
+
+  const handleCreateCollection = async (
+    database: string,
+    name: string,
+  ): Promise<string | null> => {
+    if (!currentDatabase) return "No connection is open.";
+    try {
+      await collectionCreate(currentDatabase.id, { database, collection: name });
+    } catch (error) {
+      return invokeErrorMessage(error, "Could not create the collection");
+    }
+    setIsCreateCollectionOpen(false);
+    toast.success(`Created ${database}.${name}`);
+    try {
+      const schema = await loadSchema(currentDatabase.id);
+      const created = schema.collections?.find(
+        (c) => c.database === database && c.name === name,
+      );
+      if (created) handleOpenCollection(created);
+    } catch (error) {
+      toast.error(invokeErrorMessage(error, "Could not refresh the schema"));
+    }
+    return null;
+  };
+
+  const handleConfirmDropCollection = async () => {
+    const collection = collectionToDrop;
+    if (!collection || !currentDatabase || droppingCollection) return;
+    setDroppingCollection(true);
+    try {
+      await collectionDrop(currentDatabase.id, {
+        database: collection.database,
+        collection: collection.name,
+      });
+      const closing = new Set(
+        closableCollectionTabIds(tabs, collection.id, currentDatabase.id),
+      );
+      closeTabsWhere((tab) => closing.has(tab.id));
+      setCollectionToDrop(null);
+      toast.success(`Dropped ${collection.id}`);
+    } catch (error) {
+      toast.error(invokeErrorMessage(error, "Could not drop the collection"));
+      return;
+    } finally {
+      setDroppingCollection(false);
+    }
+    await refreshSchemas();
+  };
+
   const handleSelectTableSchema = (table: TableSchema) => {
     revealTabInPane(
       activePaneId,
@@ -1017,15 +1166,22 @@ export default function App() {
     title?: string,
   ) => {
     if (!currentDatabase) return;
+    const type = newQueryTabType(
+      engineMeta(currentDatabase.dialect)?.paradigm ?? "relational",
+    );
     const existingTitles = tabs
-      .filter((t) => t.type === "sql_editor")
+      .filter((t) => t.type === type)
       .map((t) => t.title);
     openTabInPane(paneId, {
-      id: "tab_sql_" + Date.now(),
-      type: "sql_editor",
+      id: (type === "document_query" ? "tab_doc_" : "tab_sql_") + Date.now(),
+      type,
       title: title?.trim() || nextUntitledQueryTitle(existingTitles),
       databaseId: currentDatabase.id,
-      sqlContent: initialSql || defaultQuerySql(currentDatabase.tables[0], currentDatabase.dialect),
+      sqlContent:
+        initialSql ||
+        (type === "document_query"
+          ? (documentEngine(currentDatabase.dialect)?.emptyEditorText ?? "")
+          : defaultQuerySql(currentDatabase.tables[0], currentDatabase.dialect)),
     });
   };
 
@@ -1240,6 +1396,12 @@ export default function App() {
       if (tab.type === "view_designer" && tab.tableId) {
         return tableIds.has(tab.tableId);
       }
+      if (tab.type === "collection_documents") {
+        return Boolean(
+          tab.tableId &&
+            currentDatabase.collections?.some((c) => c.id === tab.tableId),
+        );
+      }
       if (tab.type === "function_designer" && tab.routineId) {
         return Boolean(
           currentDatabase.routines?.some((r) => r.id === tab.routineId),
@@ -1311,6 +1473,7 @@ export default function App() {
     const parked = workspaceRef.current?.tabs ?? [];
     const liveIds = [...tabs, ...parked].map((tab) => tab.id);
     setSqlTabStates((prev) => pruneSqlTabState(prev, liveIds));
+    setDocumentQueryStates((prev) => pruneSqlTabState(prev, liveIds));
     pruneTabFormState(liveIds);
   }, [tabs]);
 
@@ -2026,6 +2189,34 @@ export default function App() {
     }
 
     switch (tab.type) {
+      case "collection_documents": {
+        const collection = findCollection(tab.tableId);
+        const documentCaps = documentEngine(currentDatabase.dialect);
+        if (!collection || !documentCaps) {
+          return (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+              Collection not found in the current schema.
+            </div>
+          );
+        }
+        return (
+          <CollectionView
+            key={tab.id}
+            connectionId={currentDatabase.id}
+            collection={collection}
+            isFocusedPane={tab.id === activeTabId}
+            onSchemaChanged={() => void refreshSchemas()}
+            edits={documentEditsByTab[tab.id] ?? NO_DOCUMENT_EDITS}
+            onEditsChange={(update) => updateDocumentEdits(tab.id, update)}
+            insertRequested={insertDocumentForCollectionId === collection.id}
+            onInsertRequestHandled={clearInsertDocumentRequest}
+            capabilities={documentCaps.documentCapabilities}
+            indexKeyKinds={documentCaps.indexKeyKinds}
+            indexRequested={newIndexForCollectionId === collection.id}
+            onIndexRequestHandled={clearNewCollectionIndexRequest}
+          />
+        );
+      }
       case "table_data": {
         const table = findTable(tab.tableId, tab.title);
         if (!table) {
@@ -2126,7 +2317,7 @@ export default function App() {
               onOpenTable: handleSelectTableData,
             }}
             currentDatabase={currentDatabase}
-            savedQueries={savedQueries}
+            savedQueries={savedQueriesFor(savedQueries, profiles, currentDatabase.id)}
             onExecuteQuery={async (sql, options) => {
               const res = await queryExecute({
                 connectionId: currentDatabase.id,
@@ -2168,6 +2359,44 @@ export default function App() {
             }}
             onDeleteSavedQuery={handleDeleteSavedQuery}
             onUpdateSavedQueryTags={handleUpdateSavedQueryTags}
+            onLoadSavedQuery={(title) => handleRenameTab(tab.id, title)}
+          />
+        );
+      case "document_query":
+        return (
+          <DocumentQueryTab
+            key={tab.id}
+            connectionId={currentDatabase.id}
+            isFocusedPane={tab.id === activeTabId}
+            initialText={tab.sqlContent ?? ""}
+            onTextChange={(text) => handleSqlChange(tab.id, text)}
+            profileDatabase={
+              profiles.find((p) => p.id === currentDatabase.id)?.database ?? ""
+            }
+            collections={currentDatabase.collections ?? []}
+            savedQueries={savedQueriesFor(savedQueries, profiles, currentDatabase.id)}
+            state={documentQueryStates[tab.id] ?? EMPTY_DOCUMENT_QUERY_STATE}
+            onStateChange={(next) =>
+              setDocumentQueryStates((prev) => ({ ...prev, [tab.id]: next }))
+            }
+            onExecuted={async () => {
+              await refreshHistory();
+              void enqueueSchemaCheck();
+            }}
+            onBookmarkQuery={async (title, text, description, tags) => {
+              const newSq: SavedQuery = {
+                id: "sq_" + Date.now(),
+                title,
+                description,
+                sql: text,
+                databaseId: currentDatabase.id,
+                tags: tags && tags.length > 0 ? tags : ["Analytics"],
+                createdAt: new Date().toISOString(),
+                isBookmarked: true,
+              };
+              await savedQueriesSave(newSq);
+              setSavedQueries([newSq, ...savedQueries]);
+            }}
             onLoadSavedQuery={(title) => handleRenameTab(tab.id, title)}
           />
         );
@@ -2355,6 +2584,9 @@ export default function App() {
         closedTabCount: closedTabs.length,
         routines: dialectModule(currentDatabase?.dialect ?? "PostgreSQL")
           ?.capabilities.routines,
+        paradigm: currentDatabase
+          ? engineMeta(currentDatabase.dialect)?.paradigm
+          : undefined,
         modals: {
           isCommandPaletteOpen,
           isSettingsOpen,
@@ -2365,6 +2597,8 @@ export default function App() {
           isActivityLogOpen,
           tableActionConfirm: Boolean(tableActionConfirm),
           routineToDrop: Boolean(routineToDrop),
+          collectionToDrop: Boolean(collectionToDrop),
+          isCreateCollectionOpen,
         },
       }),
     [
@@ -2383,6 +2617,8 @@ export default function App() {
       isActivityLogOpen,
       tableActionConfirm,
       routineToDrop,
+      collectionToDrop,
+      isCreateCollectionOpen,
       currentDatabase?.dialect,
     ],
   );
@@ -2419,10 +2655,23 @@ export default function App() {
       "app.checkUpdates": checkForAppUpdateManually,
       "file.newQuery": () => handleOpenNewQueryTab(),
       "file.newConnection": () => openNewConnection(),
-      "file.newTable": openNewTableDesigner,
+      "file.newTable": () => {
+        if (currentDatabase && engineMeta(currentDatabase.dialect)?.paradigm === "document") {
+          setIsCreateCollectionOpen(true);
+          return;
+        }
+        openNewTableDesigner();
+      },
       "file.newView": openNewViewDesigner,
       "file.newFunction": openNewRoutineDesigner,
       "file.newIndex": () => {
+        const collection = activeTab?.tableId
+          ? findCollection(activeTab.tableId)
+          : undefined;
+        if (collection && activeTab?.type === "collection_documents") {
+          handleNewCollectionIndex(collection);
+          return;
+        }
         const table = activeTab?.tableId
           ? findTable(activeTab.tableId)
           : undefined;
@@ -2506,9 +2755,9 @@ export default function App() {
             setIsPendingChangesOpen(false);
             setIsActivityLogOpen(true);
           }}
-          onOpenPendingChanges={openPendingChanges}
+          onOpenPendingChanges={relationalConnection ? openPendingChanges : undefined}
           onOpenNewConnection={openNewConnection}
-          onOpenMetrics={openMetrics}
+          onOpenMetrics={relationalConnection ? openMetrics : undefined}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onOpenWhatsNew={openWhatsNew}
           onBackToConnections={() => {
@@ -2563,7 +2812,8 @@ export default function App() {
                   onToggleCollapsed={toggleSidebar}
                   currentDatabase={currentDatabase}
                   activeTableId={
-                    activeTab?.type === "table_data"
+                    activeTab?.type === "table_data" ||
+                    activeTab?.type === "collection_documents"
                       ? activeTab.tableId
                       : undefined
                   }
@@ -2581,6 +2831,12 @@ export default function App() {
                     onOpenSql: handleOpenRoutineSql,
                     onCopyName: handleCopyRoutineSignature,
                     onDrop: setRoutineToDrop,
+                  }}
+                  collectionHandlers={{
+                    onOpen: handleOpenCollection,
+                    onInsertDocument: handleInsertDocumentInCollection,
+                    onNewIndex: handleNewCollectionIndex,
+                    onDrop: setCollectionToDrop,
                   }}
                   onOpenTableSql={handleOpenTableSql}
                   onCopyTableSchema={handleCopyTableSchema}
@@ -2683,22 +2939,22 @@ export default function App() {
           onClose={() => setIsCommandPaletteOpen(false)}
           databases={databases}
           currentDatabase={currentDatabase}
-          savedQueries={savedQueries}
+          savedQueries={savedQueriesFor(savedQueries, profiles, currentDatabase?.id)}
           onSelectTable={handleSelectTableData}
           onSelectQuery={(sql, title) =>
             handleOpenNewQueryTab(sql, undefined, title)
           }
-          onOpenErd={openErd}
-          onOpenMetrics={openMetrics}
+          onOpenErd={relationalConnection ? openErd : undefined}
+          onOpenMetrics={relationalConnection ? openMetrics : undefined}
           onOpenActivityLog={() => {
             setIsPendingChangesOpen(false);
             setIsActivityLogOpen(true);
           }}
-          onOpenPendingChanges={openPendingChanges}
+          onOpenPendingChanges={relationalConnection ? openPendingChanges : undefined}
           onOpenNewQuery={() => handleOpenNewQueryTab()}
           onSelectRoutine={(routine) => handleOpenRoutine(routine)}
-          onNewRoutine={openNewRoutineDesigner}
-          onNewView={openNewViewDesigner}
+          onNewRoutine={relationalConnection ? openNewRoutineDesigner : undefined}
+          onNewView={relationalConnection ? openNewViewDesigner : undefined}
           onToggleSidebar={currentDatabase ? toggleSidebar : undefined}
           onSelectDatabase={(dbId) => setCurrentDbId(dbId)}
         />
@@ -2719,6 +2975,20 @@ export default function App() {
             onStage={stageSchema}
           />
         )}
+
+        <CreateCollectionModal
+          isOpen={isCreateCollectionOpen}
+          databases={currentDatabase ? collectionDatabases(currentDatabase) : []}
+          onCreate={handleCreateCollection}
+          onClose={() => setIsCreateCollectionOpen(false)}
+        />
+
+        <DropCollectionModal
+          collection={collectionToDrop}
+          busy={droppingCollection}
+          onClose={() => setCollectionToDrop(null)}
+          onConfirm={() => void handleConfirmDropCollection()}
+        />
 
         <ConfirmTableActionModal
           table={tableActionConfirm?.table ?? null}

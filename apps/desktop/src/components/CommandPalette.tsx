@@ -32,10 +32,11 @@ interface CommandPaletteProps {
   savedQueries: SavedQuery[];
   onSelectTable: (table: TableSchema) => void;
   onSelectQuery: (sql: string, title?: string) => void;
-  onOpenErd: () => void;
-  onOpenMetrics: () => void;
+  /** The relational-only actions are omitted for other paradigms, which hides them. */
+  onOpenErd?: () => void;
+  onOpenMetrics?: () => void;
   onOpenActivityLog: () => void;
-  onOpenPendingChanges: () => void;
+  onOpenPendingChanges?: () => void;
   onOpenNewQuery: () => void;
   onSelectRoutine?: (routine: RoutineDefinition) => void;
   onNewRoutine?: () => void;
@@ -136,36 +137,48 @@ const CommandPaletteBody: React.FC<CommandPaletteProps> = ({
               },
             ]
           : []),
-        {
-          id: 'action-erd',
-          label: 'Open Interactive Visual Schema ERD',
-          icon: Network,
-          iconClass: 'text-primary',
-          run: () => {
-            onOpenErd();
-            onClose();
-          },
-        },
-        {
-          id: 'action-metrics',
-          label: 'Database Health & Slow Query Analytics',
-          icon: Activity,
-          iconClass: 'text-emerald-400',
-          run: () => {
-            onOpenMetrics();
-            onClose();
-          },
-        },
-        {
-          id: 'action-pending',
-          label: 'Review Pending Changes',
-          icon: ListChecks,
-          iconClass: 'text-amber-400',
-          run: () => {
-            onOpenPendingChanges();
-            onClose();
-          },
-        },
+        ...(onOpenErd
+          ? [
+              {
+                id: 'action-erd',
+                label: 'Open Interactive Visual Schema ERD',
+                icon: Network,
+                iconClass: 'text-primary',
+                run: () => {
+                  onOpenErd();
+                  onClose();
+                },
+              },
+            ]
+          : []),
+        ...(onOpenMetrics
+          ? [
+              {
+                id: 'action-metrics',
+                label: 'Database Health & Slow Query Analytics',
+                icon: Activity,
+                iconClass: 'text-emerald-400',
+                run: () => {
+                  onOpenMetrics();
+                  onClose();
+                },
+              },
+            ]
+          : []),
+        ...(onOpenPendingChanges
+          ? [
+              {
+                id: 'action-pending',
+                label: 'Review Pending Changes',
+                icon: ListChecks,
+                iconClass: 'text-amber-400',
+                run: () => {
+                  onOpenPendingChanges();
+                  onClose();
+                },
+              },
+            ]
+          : []),
         {
           id: 'action-activity',
           label: 'Open Real-Time Activity Audit Stream',

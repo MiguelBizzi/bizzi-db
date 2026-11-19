@@ -39,9 +39,14 @@ export function resolveRunTarget(input: {
   if (ranges === null) return { kind: 'all', sql: doc };
   if (ranges.length === 0) return null;
 
-  // A statement owns everything up to the next one, so a caret in the gap after a
-  // statement (its `;`, blank lines) still runs it.
-  const caret = selection.from;
-  const owner = [...ranges].reverse().find((range) => range.start <= caret) ?? ranges[0];
+  const owner = statementAt(ranges, selection.from);
   return { kind: 'statement', sql: doc.slice(owner.start, owner.end) };
+}
+
+/**
+ * A statement owns everything up to the next one, so a caret in the gap after a
+ * statement (its `;`, blank lines) still belongs to it. `ranges` must not be empty.
+ */
+export function statementAt(ranges: SqlRange[], caret: number): SqlRange {
+  return [...ranges].reverse().find((range) => range.start <= caret) ?? ranges[0];
 }

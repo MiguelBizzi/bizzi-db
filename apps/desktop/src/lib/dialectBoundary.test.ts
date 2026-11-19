@@ -23,7 +23,7 @@ function stripComments(text: string): string {
 }
 
 const ENGINE_COMPARE =
-  /(?:===|!==)\s*['"](?:PostgreSQL|MySQL|SQLServer)['"]|['"](?:PostgreSQL|MySQL|SQLServer)['"]\s*(?:===|!==)/;
+  /(?:===|!==)\s*['"](?:PostgreSQL|MySQL|SQLServer|MongoDB)['"]|['"](?:PostgreSQL|MySQL|SQLServer|MongoDB)['"]\s*(?:===|!==)/;
 
 describe('dialect boundary', () => {
   test('shared UI does not import the PostgreSQL module', () => {

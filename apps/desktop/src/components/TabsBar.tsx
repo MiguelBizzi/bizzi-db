@@ -20,6 +20,8 @@ import {
   SquareFunction,
   Workflow,
   Eye,
+  Layers,
+  Clock,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useMotionPreference } from '../lib/motionPreference';
@@ -111,9 +113,14 @@ export const TabsBar: React.FC<TabsBarProps> = ({
         return <Workflow className={`${cls} text-sky-400`} />;
       case 'table':
         return <TableIcon className={`${cls} text-primary`} />;
+      case 'collection':
+        return <Layers className={`${cls} text-primary`} />;
+      case 'timeseries':
+        return <Clock className={`${cls} text-sky-400`} />;
     }
     switch (tab.type) {
       case 'sql_editor':
+      case 'document_query':
         return <Code className={`${cls} text-emerald-400`} />;
       case 'erd_schema':
         return <Network className={`${cls} text-purple-400`} />;

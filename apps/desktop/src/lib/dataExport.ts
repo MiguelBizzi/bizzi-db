@@ -1,4 +1,11 @@
 import { exportSaveFile, type ExportFile } from '@db/core';
+import type {
+  CollectionSchema,
+  DocumentExportFormat,
+  DocumentExportRequest,
+  ExtJsonMode,
+} from '@db/shared';
+import type { FindInputs } from './document/collectionView';
 import type { DatabaseDialect } from '../types';
 import { formatAccelerator, type Platform } from './commands/accelerator';
 import { currentPlatform } from './commands/shortcutLabel';
@@ -29,6 +36,46 @@ export const DATA_EXPORT_FORMATS: {
   { id: 'markdown', label: 'Markdown', extension: 'md' },
   { id: 'sql', label: 'SQL', extension: 'sql' },
 ];
+
+export const DOCUMENT_EXPORT_FORMATS: {
+  id: DocumentExportFormat;
+  label: string;
+  extension: string;
+}[] = [
+  { id: 'jsonArray', label: 'JSON array', extension: 'json' },
+  { id: 'ndjson', label: 'NDJSON', extension: 'ndjson' },
+  { id: 'csv', label: 'CSV', extension: 'csv' },
+];
+
+export function documentExportFileName(collection: CollectionSchema, format: DocumentExportFormat): string {
+  const ext = DOCUMENT_EXPORT_FORMATS.find((item) => item.id === format)?.extension ?? format;
+  return `${sanitizeFileName(collection.name)}_export.${ext}`;
+}
+
+export interface DocumentExportTarget {
+  connectionId: string;
+  collection: CollectionSchema;
+  /** The query that produced the documents on screen, not the text in the inputs. */
+  inputs: FindInputs;
+}
+
+export function documentExportRequest(
+  target: DocumentExportTarget,
+  format: DocumentExportFormat,
+  mode: ExtJsonMode,
+): DocumentExportRequest {
+  const { collection, inputs } = target;
+  return {
+    connectionId: target.connectionId,
+    ns: { database: collection.database, collection: collection.name },
+    filter: inputs.filter,
+    projection: inputs.projection,
+    sort: inputs.sort,
+    format,
+    mode,
+    fileName: documentExportFileName(collection, format),
+  };
+}
 
 export function inferQualifiedTable(sql?: string): { schema: string; table: string } {
   if (!sql) return { schema: '', table: 'query_result' };

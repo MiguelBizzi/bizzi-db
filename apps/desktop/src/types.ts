@@ -1,6 +1,8 @@
 export type {
   ActivityLogItem,
   AppSettings,
+  CollectionKind,
+  CollectionSchema,
   ColumnDefinition,
   ConnectionFolder,
   ConnectionProfile,

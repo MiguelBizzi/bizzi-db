@@ -56,12 +56,15 @@ describe('EMPTY_CONTEXT', () => {
       selectedRowCount: 0,
       pendingCount: 0,
       connectionOpen: false,
+      paradigm: null,
       modalOpen: false,
       textInputFocused: false,
       foreignKeyTarget: false,
       sqlSelectionPresent: false,
       sqlResultPresent: false,
       closedTabCount: 0,
+      collectionReadOnly: false,
+      collectionIndexesReadOnly: false,
       capabilities: { routines: true },
     });
   });

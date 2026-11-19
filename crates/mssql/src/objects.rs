@@ -110,6 +110,8 @@ pub async fn introspect(
         total_size_mb: total_size,
         active_connections,
         queries_per_second: 0.0,
+        paradigm: db_core::Paradigm::Relational,
+        collections: vec![],
     })
 }
 

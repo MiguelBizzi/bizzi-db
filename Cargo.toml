@@ -6,6 +6,7 @@ members = [
   "crates/postgres",
   "crates/mysql",
   "crates/mssql",
+  "crates/mongo",
   "crates/storage",
 ]
 
@@ -31,6 +32,8 @@ thiserror = "=1.0.64"
 tokio = { version = "=1.53.3", features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util"] }
 tokio-util = { version = "=0.7.16", features = ["compat"] }
 futures-util = "=0.3.34"
+mongodb = "=3.10.1"
+sha2 = "=0.10.8"
 tiberius = { version = "=0.12.3", default-features = false, features = ["tds73", "native-tls", "chrono"] }
 tokio-postgres = { version = "=0.7.18", features = ["with-chrono-0_4", "with-serde_json-1", "with-uuid-1"] }
 uuid = { version = "=1.28.0", features = ["v4", "serde"] }

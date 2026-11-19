@@ -85,6 +85,7 @@ describe('buildMenuModel', () => {
       { kind: 'separator' },
       { kind: 'item', commandId: 'edit.find' },
       { kind: 'item', commandId: 'edit.insertRow' },
+      { kind: 'item', commandId: 'edit.editDocument' },
       { kind: 'item', commandId: 'edit.deleteRows' },
       { kind: 'item', commandId: 'edit.chooseReferencedRow' },
       { kind: 'separator' },

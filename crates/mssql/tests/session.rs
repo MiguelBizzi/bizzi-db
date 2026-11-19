@@ -25,6 +25,7 @@ fn config(database: Option<&str>) -> ConnectConfig {
         password: std::env::var("TEST_MSSQL_PASSWORD").unwrap_or_else(|_| "Mssql_dev_1".into()),
         ssl_mode: SslMode::Disabled,
         pool_size: 2,
+        params: Default::default(),
     }
 }
 

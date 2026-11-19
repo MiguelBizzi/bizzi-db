@@ -1,4 +1,4 @@
-import { dialectModule } from '@db/database';
+import { engineMeta, type EngineModule } from '@db/database';
 import type {
   ConnectionProfile,
   DatabaseDialect,
@@ -49,6 +49,7 @@ export type ConnectionFormValues = {
   sshPassword: string;
   sshKeyPath: string;
   sshPassphrase: string;
+  params: Record<string, string>;
 };
 
 export type ConnectionFormErrorOptions = {
@@ -90,6 +91,7 @@ export function defaultConnectionForm(): ConnectionFormValues {
     sshPassword: '',
     sshKeyPath: '',
     sshPassphrase: '',
+    params: {},
   };
 }
 
@@ -116,6 +118,7 @@ export function connectionFormFromProfile(
     sshPassword: '',
     sshKeyPath: profile.sshKeyPath ?? '',
     sshPassphrase: '',
+    params: { ...(profile.params ?? {}) },
   };
 }
 
@@ -126,13 +129,17 @@ export function connectionFormErrors(
   const next: Partial<Record<ConnectionFormField, string>> = {};
   if (!values.name.trim()) next.name = 'Required';
   if (!values.host.trim()) next.host = 'Required';
-  if (!Number.isFinite(values.port) || values.port < 1 || values.port > 65535) {
+  const portVisible = visibleConnectionFields(engineMeta(values.dialect), values).includes('port');
+  if (portVisible && (!Number.isFinite(values.port) || values.port < 1 || values.port > 65535)) {
     next.port = 'Enter a port from 1 to 65535';
   }
-  const databaseOptional = dialectModule(values.dialect)?.capabilities.emptyDatabaseAllowed === true;
+  const databaseOptional = engineMeta(values.dialect)?.databaseOptional === true;
   if (!databaseOptional && !values.databaseName.trim()) next.databaseName = 'Required';
-  if (!values.username.trim()) next.username = 'Required';
-  if (options.passwordRequired && !values.password) next.password = 'Required';
+  const credentials = credentialsRequired(values.dialect);
+  if (credentials && !values.username.trim()) next.username = 'Required';
+  if (passwordRequiredFor(values.dialect, values.username) && options.passwordRequired && !values.password) {
+    next.password = 'Required';
+  }
   if (!Number.isFinite(values.poolSize) || values.poolSize < 1 || values.poolSize > 32) {
     next.poolSize = 'Enter a pool size from 1 to 32';
   }
@@ -160,8 +167,8 @@ export function applyDialectDefaults(
   values: ConnectionFormValues,
   dialect: DatabaseDialect,
 ): ConnectionFormValues {
-  const next = dialectModule(dialect);
-  const previous = dialectModule(values.dialect);
+  const next = engineMeta(dialect);
+  const previous = engineMeta(values.dialect);
   if (!next || dialect === values.dialect) return { ...values, dialect };
   const untouched = (current: string, fallback: string | undefined) =>
     fallback !== undefined && current === fallback;
@@ -174,6 +181,7 @@ export function applyDialectDefaults(
       ? next.defaultDatabase
       : values.databaseName,
     name: values.name === `Local ${previous?.label}` ? `Local ${next.label}` : values.name,
+    params: {},
   };
 }
 
@@ -191,12 +199,13 @@ export function connectionFormToInput(
   values: ConnectionFormValues,
   id?: string
 ): SaveConnectionInput {
+  const params = paramsForInput(engineMeta(values.dialect), values.params);
   return {
     ...(id ? { id } : {}),
     name: values.name.trim(),
     dialect: values.dialect,
     host: values.host.trim(),
-    port: values.port,
+    port: Number.isFinite(values.port) ? values.port : (engineMeta(values.dialect)?.defaultPort ?? 0),
     database: values.databaseName.trim(),
     user: values.username.trim(),
     password: values.password,
@@ -212,7 +221,50 @@ export function connectionFormToInput(
     sshKeyPath: values.sshKeyPath.trim() ? values.sshKeyPath.trim() : null,
     sshPassword: values.sshPassword,
     sshPassphrase: values.sshPassphrase,
+    ...(Object.keys(params).length > 0 ? { params } : {}),
   };
+}
+
+/** A document engine may run without authentication, so username and password are optional. */
+export function credentialsRequired(dialect: DatabaseDialect): boolean {
+  return engineMeta(dialect)?.paradigm !== 'document';
+}
+
+/** Mirrors Rust `password_required`: a document-engine user needs a password once a username is set. */
+export function passwordRequiredFor(dialect: DatabaseDialect, username: string): boolean {
+  return credentialsRequired(dialect) || username.trim() !== '';
+}
+
+type BaseField = Extract<
+  ConnectionFormField,
+  'host' | 'port' | 'databaseName' | 'username' | 'password'
+>;
+
+const BASE_FIELDS: BaseField[] = ['host', 'port', 'databaseName', 'username', 'password'];
+
+/** SRV records carry the port, so the port input would only mislead. */
+export function visibleConnectionFields(
+  meta: EngineModule | undefined,
+  values: Pick<ConnectionFormValues, 'params'>,
+): BaseField[] {
+  const hiddenBy = meta?.portHiddenBy;
+  const hidePort = hiddenBy !== undefined && values.params[hiddenBy] === 'true';
+  return BASE_FIELDS.filter((field) => !(field === 'port' && hidePort));
+}
+
+/** The backend rejects unknown keys, so only allowlisted non-default values are sent. */
+export function paramsForInput(
+  meta: EngineModule | undefined,
+  params: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const spec of meta?.connectionParams ?? []) {
+    const value = params[spec.key];
+    if (value === undefined || value === '') continue;
+    if (spec.kind === 'boolean' && value !== 'true') continue;
+    out[spec.key] = value;
+  }
+  return out;
 }
 
 export function connectionModalCopy(isEdit: boolean) {

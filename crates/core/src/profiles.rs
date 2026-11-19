@@ -6,6 +6,7 @@ use crate::types::{
 };
 
 pub use crate::engines::{database_required, dialect_is_supported, dialect_label};
+use crate::engines::{paradigm_of, validate_params, Paradigm};
 
 pub const MIN_POOL_SIZE: u32 = 1;
 pub const MAX_POOL_SIZE: u32 = 32;
@@ -41,9 +42,10 @@ pub fn validate_save_input(
     if database_required(input.dialect) && input.database.trim().is_empty() {
         return Err("Database is required".into());
     }
-    if input.user.trim().is_empty() {
+    if input.user.trim().is_empty() && paradigm_of(input.dialect) != Paradigm::Document {
         return Err("Username is required".into());
     }
+    validate_params(input.dialect, &input.params, input.ssh_enabled)?;
     validate_ssh_save_input(input, keychain_enabled)?;
     Ok(())
 }
@@ -186,6 +188,12 @@ pub fn connect_config_from_profile(
     password: String,
     tunnel_port: Option<u16>,
 ) -> ConnectConfig {
+    let mut params = profile.params.clone();
+    // A tunnel reaches one host; replica-set discovery would hand the driver
+    // member addresses that only resolve inside the remote network.
+    if tunnel_port.is_some() && paradigm_of(profile.dialect) == Paradigm::Document {
+        params.insert("directConnection".into(), "true".into());
+    }
     ConnectConfig {
         dialect: profile.dialect,
         host: if tunnel_port.is_some() {
@@ -199,11 +207,30 @@ pub fn connect_config_from_profile(
         password,
         ssl_mode: profile.ssl_mode,
         pool_size: profile.pool_size,
+        params,
     }
 }
 
+/// A document-engine server without a username is unauthenticated, so there is no password to hold.
+pub fn password_required(dialect: DatabaseDialect, user: &str) -> bool {
+    paradigm_of(dialect) != Paradigm::Document || !user.trim().is_empty()
+}
+
 pub fn new_connection_requires_password(input: &SaveConnectionInput) -> bool {
-    input.password.is_empty() && input.id.is_none()
+    input.password.is_empty() && input.id.is_none() && password_required(input.dialect, &input.user)
+}
+
+/// The password for a saved profile; a missing secret is only an error when one is required.
+pub fn resolve_stored_password(
+    dialect: DatabaseDialect,
+    user: &str,
+    stored: Option<String>,
+) -> Result<String, String> {
+    match stored {
+        Some(password) => Ok(password),
+        None if !password_required(dialect, user) => Ok(String::new()),
+        None => Err("No password stored for this connection".into()),
+    }
 }
 
 pub fn resolve_connection_password(
@@ -214,9 +241,12 @@ pub fn resolve_connection_password(
         return Ok(input.password.clone());
     }
     if input.id.is_some() {
-        return stored.ok_or_else(|| "No password stored for this connection".into());
+        return resolve_stored_password(input.dialect, &input.user, stored);
     }
-    Err("Password is required".into())
+    if password_required(input.dialect, &input.user) {
+        return Err("Password is required".into());
+    }
+    Ok(String::new())
 }
 
 pub fn profile_from_save_input(input: SaveConnectionInput, id: String) -> ConnectionProfile {
@@ -258,6 +288,7 @@ pub fn profile_from_save_input(input: SaveConnectionInput, id: String) -> Connec
                 Some(trimmed)
             }
         }),
+        params: input.params,
     }
 }
 
@@ -322,6 +353,7 @@ mod tests {
             ssh_key_path: None,
             ssh_password: String::new(),
             ssh_passphrase: String::new(),
+            params: Default::default(),
         }
     }
 
@@ -384,6 +416,36 @@ mod tests {
             validate_folder_name("   ").unwrap_err(),
             "Folder name is required"
         );
+    }
+
+    #[test]
+    fn document_profile_may_omit_user() {
+        let mut mongo = save_input("", None, 8);
+        mongo.dialect = DatabaseDialect::MongoDB;
+        mongo.user = String::new();
+        mongo.database = String::new();
+        assert!(validate_save_input(&mongo, false).is_ok());
+        assert!(!new_connection_requires_password(&mongo));
+        assert_eq!(resolve_connection_password(&mongo, None).unwrap(), "");
+        assert_eq!(
+            resolve_stored_password(DatabaseDialect::MongoDB, "", None).unwrap(),
+            ""
+        );
+
+        mongo.user = "ann".into();
+        assert!(new_connection_requires_password(&mongo));
+        assert_eq!(
+            resolve_stored_password(DatabaseDialect::MongoDB, "ann", None).unwrap_err(),
+            "No password stored for this connection"
+        );
+
+        let mut pg = save_input("", None, 8);
+        pg.user = String::new();
+        assert_eq!(
+            validate_save_input(&pg, false).unwrap_err(),
+            "Username is required"
+        );
+        assert!(resolve_stored_password(DatabaseDialect::PostgreSQL, "", None).is_err());
     }
 
     #[test]
@@ -537,6 +599,19 @@ mod tests {
     }
 
     #[test]
+    fn tunnelled_document_profile_forces_direct_connection() {
+        let mut mongo = profile();
+        mongo.dialect = DatabaseDialect::MongoDB;
+        let direct = connect_config_from_profile(&mongo, "s".into(), None);
+        assert!(!direct.params.contains_key("directConnection"));
+        let tunnelled = connect_config_from_profile(&mongo, "s".into(), Some(61_001));
+        assert_eq!(tunnelled.params["directConnection"], "true");
+
+        let relational = connect_config_from_profile(&profile(), "s".into(), Some(61_001));
+        assert!(relational.params.is_empty());
+    }
+
+    #[test]
     fn overlay_schema_copies_connection_identity() {
         let schema = overlay_schema(
             DatabaseSchema {
@@ -555,6 +630,8 @@ mod tests {
                 total_size_mb: 0.0,
                 active_connections: 0,
                 queries_per_second: 0.0,
+                paradigm: crate::Paradigm::Relational,
+                collections: vec![],
             },
             &profile(),
         );

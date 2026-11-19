@@ -6,3 +6,4 @@ export * from './schema';
 export * from './history';
 export * from './tabs';
 export * from './export';
+export * from './documents';

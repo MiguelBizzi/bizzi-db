@@ -9,13 +9,15 @@ import {
   Network,
   FolderTree,
   ChevronRight,
-  EllipsisVertical,
   SquareFunction,
   Workflow,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
-import { DatabaseSchema, RoutineDefinition, TableSchema } from '../types';
+import { CollectionSchema, DatabaseSchema, RoutineDefinition, TableSchema } from '../types';
+import { engineMeta } from '@db/database';
+import { CollectionList } from './DocumentView/CollectionList';
+import { collectionDatabases, filterCollections } from '../lib/document/explorer';
 import { filterRoutines } from '../lib/routineTabs';
 import { routineMenuItems, type RoutineMenuHandlers } from './routineMenu';
 import { createMenuItems } from './createMenu';
@@ -24,8 +26,10 @@ import { explorerListMode } from '../lib/explorerList';
 import { Select } from './ui/Select';
 import { ContextMenu } from './ui/ContextMenu';
 import { EngineLogo } from './icons/EngineLogo';
+import { RowMenuButton } from './ui/RowMenuButton';
 import {
   tableManagementMenuItems,
+  type CollectionMenuHandlers,
   type TableManagementHandlers,
 } from './tableManagementMenu';
 import { tableMatchesSearch } from '../lib/tableSearch';
@@ -79,6 +83,7 @@ interface SidebarProps {
   onCopyTableSchema: (table: TableSchema) => void;
   onEmptyTable: (table: TableSchema) => void;
   onDeleteTable: (table: TableSchema) => void;
+  collectionHandlers?: CollectionMenuHandlers;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -103,6 +108,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCopyTableSchema,
   onEmptyTable,
   onDeleteTable,
+  collectionHandlers,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [refreshingSchemas, setRefreshingSchemas] = useState(false);
@@ -121,6 +127,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [routinesOpen, setRoutinesOpen] = useState(true);
   const [createMenu, setCreateMenu] = useState<{ x: number; y: number } | null>(null);
   const routines = currentDatabase.routines ?? [];
+  const meta = engineMeta(currentDatabase.dialect);
+  const isDocument = meta?.paradigm === 'document' && collectionHandlers != null;
+  // Tables, schemas, tags, routines, Create and the ERD are relational; another paradigm gets none of them.
+  const isRelational = meta?.paradigm === 'relational';
+  const nouns = meta?.nouns;
   const searchRef = useRef<HTMLInputElement>(null);
   const focusSearchOnExpand = useRef(false);
 
@@ -167,7 +178,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       selectedSchema === 'ALL' || table.schema === selectedSchema;
     return matchesSearch && matchesTag && matchesSchema;
   });
-  const listMode = explorerListMode(refreshingSchemas, filteredTables.length);
+  const filteredCollections = isDocument
+    ? filterCollections(currentDatabase.collections ?? [], {
+        search: searchTerm,
+        database: selectedSchema,
+      })
+    : [];
+  const documentDatabases = isDocument ? collectionDatabases(currentDatabase) : [];
+  const listMode = explorerListMode(
+    refreshingSchemas,
+    isDocument ? filteredCollections.length : filteredTables.length,
+  );
   const filteredRoutines = filterRoutines(routines, { search: searchTerm, schema: selectedSchema });
 
   const handleAddTagSubmit = (e: React.FormEvent, tableName: string) => {
@@ -229,20 +250,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <RefreshCw className={`w-3.5 h-3.5 ${refreshingSchemas ? 'animate-spin' : ''}`} />
             </button>
-            <button
-              type="button"
-              title="Create…"
-              aria-label="Create a table, view or function"
-              aria-haspopup="menu"
-              aria-expanded={createMenu != null}
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={toggleCreateMenu}
-              className={`p-1 rounded-md hover:bg-accent text-primary border border-sidebar-border transition-colors ${
-                createMenu ? 'bg-accent' : 'bg-muted'
-              }`}
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
+            {isRelational && (
+              <button
+                type="button"
+                title="Create…"
+                aria-label="Create a table, view or function"
+                aria-haspopup="menu"
+                aria-expanded={createMenu != null}
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={toggleCreateMenu}
+                className={`p-1 rounded-md hover:bg-accent text-primary border border-sidebar-border transition-colors ${
+                  createMenu ? 'bg-accent' : 'bg-muted'
+                }`}
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            )}
             {onToggleCollapsed && (
               <button
                 type="button"
@@ -262,14 +285,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <input
             ref={searchRef}
             type="text"
-            placeholder={routines.length > 0 ? 'Filter tables & functions...' : 'Filter tables...'}
+            placeholder={
+              isDocument && nouns
+                ? `Filter ${nouns.containers.toLowerCase()}...`
+                : routines.length > 0
+                  ? 'Filter tables & functions...'
+                  : 'Filter tables...'
+            }
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-8 pr-3 py-1.5 bg-background border border-sidebar-border rounded-lg text-xs text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary font-mono transition-all"
           />
         </div>
 
-        {allSchemas.length > 1 && (
+        {isDocument && nouns && documentDatabases.length > 1 && (
+          <Select
+            size="sm"
+            value={selectedSchema}
+            onChange={setSelectedSchema}
+            aria-label={nouns.namespace}
+            options={[
+              { value: 'ALL', label: `All ${nouns.namespace.toLowerCase()}s` },
+              ...documentDatabases.map((name) => ({ value: name, label: name })),
+            ]}
+          />
+        )}
+
+        {isRelational && allSchemas.length > 1 && (
           <Select
             size="sm"
             value={selectedSchema}
@@ -282,7 +324,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           />
         )}
 
-        {allTags.length > 0 && (
+        {isRelational && allTags.length > 0 && (
           <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-always">
             <button
               onClick={() => setSelectedTag('ALL')}
@@ -318,11 +360,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       >
         <div className="px-2 py-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-muted-foreground font-mono">
           <span className="flex items-center gap-1.5">
-            Tables & Views
+            {isDocument && nouns ? nouns.containers : 'Tables & Views'}
             {listMode === 'skeleton' ? (
               <span className="table-skeleton-bar inline-block h-2.5 w-5" />
             ) : (
-              <span>({filteredTables.length})</span>
+              <span>({isDocument ? filteredCollections.length : filteredTables.length})</span>
             )}
           </span>
           <EngineLogo dialect={currentDatabase.dialect} className="w-3.5 h-3.5" />
@@ -330,6 +372,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {listMode === 'skeleton' ? (
           <ExplorerListSkeleton />
+        ) : isDocument && collectionHandlers ? (
+          <CollectionList
+            collections={filteredCollections}
+            activeId={activeTableId}
+            showDatabase={selectedSchema === 'ALL' && documentDatabases.length > 1}
+            disabled={currentDatabase.status !== 'connected'}
+            handlers={collectionHandlers}
+          />
         ) : (
           filteredTables.map((table) => {
             const isActive = table.id === activeTableId;
@@ -390,11 +440,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {listMode === 'empty' && (
           <div className="text-center py-8 px-4 text-xs text-muted-foreground">
-            No tables matching "{searchTerm}"
+            {isDocument && nouns
+              ? searchTerm
+                ? `No ${nouns.containers.toLowerCase()} matching "${searchTerm}"`
+                : `No ${nouns.containers.toLowerCase()}`
+              : `No tables matching "${searchTerm}"`}
           </div>
         )}
 
-        {listMode !== 'skeleton' && (routines.length > 0 || onNewRoutine) && (
+        {isRelational && listMode !== 'skeleton' && (routines.length > 0 || onNewRoutine) && (
           <div className="pt-2">
             <div className="px-2 py-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-muted-foreground font-mono">
               <button
@@ -481,15 +535,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      <div className="p-2 border-t border-sidebar-border bg-background/50 space-y-1">
-        <button
-          onClick={onOpenErd}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-xs font-medium transition-colors"
-        >
-          <Network className="w-4 h-4" />
-          <span>Interactive Visual ERD</span>
-        </button>
-      </div>
+      {isRelational && (
+        <div className="p-2 border-t border-sidebar-border bg-background/50 space-y-1">
+          <button
+            onClick={onOpenErd}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-xs font-medium transition-colors"
+          >
+            <Network className="w-4 h-4" />
+            <span>Interactive Visual ERD</span>
+          </button>
+        </div>
+      )}
       </div>
 
       <div
@@ -531,27 +587,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
         >
           <RefreshCw className={`w-4 h-4 ${refreshingSchemas ? 'animate-spin' : ''}`} />
         </button>
-        <button
-          type="button"
-          title="Create…"
-          aria-label="Create a table, view or function"
-          aria-haspopup="menu"
-          aria-expanded={createMenu != null}
-          onMouseDown={(event) => event.stopPropagation()}
-          onClick={toggleCreateMenu}
-          className={`${RAIL_BUTTON_CLASS} ${createMenu ? 'bg-accent' : ''}`}
-        >
-          <Plus className="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          onClick={onOpenErd}
-          title="Interactive Visual ERD"
-          aria-label="Interactive Visual ERD"
-          className="mt-auto p-2 rounded-md bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-        >
-          <Network className="w-4 h-4" />
-        </button>
+        {isRelational && (
+          <button
+            type="button"
+            title="Create…"
+            aria-label="Create a table, view or function"
+            aria-haspopup="menu"
+            aria-expanded={createMenu != null}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={toggleCreateMenu}
+            className={`${RAIL_BUTTON_CLASS} ${createMenu ? 'bg-accent' : ''}`}
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        )}
+        {isRelational && (
+          <button
+            type="button"
+            onClick={onOpenErd}
+            title="Interactive Visual ERD"
+            aria-label="Interactive Visual ERD"
+            className="mt-auto p-2 rounded-md bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+          >
+            <Network className="w-4 h-4" />
+          </button>
+        )}
       </div>
       <AnimatePresence>
       {menu && (
@@ -595,45 +655,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </aside>
   );
 };
-
-function RowMenuButton({
-  label,
-  open,
-  onOpen,
-  onClose,
-}: {
-  label: string;
-  open: boolean;
-  onOpen: (x: number, y: number) => void;
-  onClose: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-haspopup="menu"
-      aria-expanded={open}
-      title="More actions"
-      // The menu closes on any outside mousedown; keep this one from closing
-      // it first so a second click toggles it shut instead of reopening it.
-      onMouseDown={(event) => event.stopPropagation()}
-      onClick={(event) => {
-        event.stopPropagation();
-        if (open) {
-          onClose();
-          return;
-        }
-        const rect = event.currentTarget.getBoundingClientRect();
-        onOpen(rect.left, rect.bottom + 4);
-      }}
-      className={`absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 transition-opacity ${
-        open ? 'opacity-100 bg-accent text-foreground' : 'opacity-60 group-hover:opacity-100'
-      }`}
-    >
-      <EllipsisVertical className="w-3.5 h-3.5" />
-    </button>
-  );
-}
 
 function ExplorerListSkeleton() {
   return (

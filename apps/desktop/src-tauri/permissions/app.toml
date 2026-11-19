@@ -34,5 +34,17 @@ commands.allow = [
   "export_save_file",
   "export_save_bytes",
   "export_reveal",
+  "documents_find",
+  "documents_sample_fields",
+  "documents_run",
+  "documents_insert",
+  "documents_replace",
+  "documents_delete",
+  "documents_export",
+  "document_statement_ranges",
+  "collection_create",
+  "collection_drop",
+  "collection_index_create",
+  "collection_index_drop",
   "log_client_error"
 ]

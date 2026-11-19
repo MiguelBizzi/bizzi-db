@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { EditorState } from '@codemirror/state';
 import { sql, PostgreSQL } from '@codemirror/lang-sql';
+import { javascript } from '@codemirror/lang-javascript';
 import { autocompletion } from '@codemirror/autocomplete';
 import { linter, lintGutter } from '@codemirror/lint';
 import { keymap } from '@codemirror/view';
@@ -51,6 +52,13 @@ describe('CodeMirror packages', () => {
   test('the SQL parser and the app highlight style share tags', () => {
     const doc = "SELECT name FROM users WHERE id = 1 AND note = 'x';";
     const tree = sql({ dialect: PostgreSQL }).language.parser.parse(doc);
+    const classes: string[] = [];
+    highlightTree(tree, sqlHighlightStyle, (_from, _to, cls) => classes.push(cls));
+    expect(classes.length).toBeGreaterThan(0);
+  });
+
+  test('the shell filter parser and the app highlight style share tags', () => {
+    const tree = javascript().language.parser.parse('{ age: { $gt: 30 }, name: "x" }');
     const classes: string[] = [];
     highlightTree(tree, sqlHighlightStyle, (_from, _to, cls) => classes.push(cls));
     expect(classes.length).toBeGreaterThan(0);

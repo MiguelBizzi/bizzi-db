@@ -2,6 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import {
   buildExportFile,
   copyCsvShortcut,
+  DOCUMENT_EXPORT_FORMATS,
+  documentExportFileName,
+  documentExportRequest,
   exportFileName,
   formatExport,
   inferQualifiedTable,
@@ -142,5 +145,48 @@ describe('buildExportFile', () => {
     const file = buildExportFile(sample, 'json');
     expect(file.content).toBe(formatExport(sample, 'json'));
     expect(file.extension).toBe('json');
+  });
+});
+
+describe('document export', () => {
+  const coll = (name: string) => ({
+    id: `shop.${name}`,
+    database: 'shop',
+    name,
+    kind: 'collection' as const,
+    capped: false,
+    indexes: [],
+  });
+
+  test('lists JSON array, NDJSON and CSV', () => {
+    expect(DOCUMENT_EXPORT_FORMATS).toEqual([
+      { id: 'jsonArray', label: 'JSON array', extension: 'json' },
+      { id: 'ndjson', label: 'NDJSON', extension: 'ndjson' },
+      { id: 'csv', label: 'CSV', extension: 'csv' },
+    ]);
+  });
+
+  test('names the file after the sanitized collection', () => {
+    expect(documentExportFileName(coll('order items'), 'ndjson')).toBe('order_items_export.ndjson');
+    expect(documentExportFileName(coll('users'), 'jsonArray')).toBe('users_export.json');
+    expect(documentExportFileName(coll('///'), 'csv')).toBe('export_export.csv');
+  });
+
+  test('builds the request from the applied query', () => {
+    const target = {
+      connectionId: 'c1',
+      collection: coll('users'),
+      inputs: { filter: '{ a: 1 }', projection: '{ a: 1 }', sort: '{ a: -1 }' },
+    };
+    expect(documentExportRequest(target, 'csv', 'canonical')).toEqual({
+      connectionId: 'c1',
+      ns: { database: 'shop', collection: 'users' },
+      filter: '{ a: 1 }',
+      projection: '{ a: 1 }',
+      sort: '{ a: -1 }',
+      format: 'csv',
+      mode: 'canonical',
+      fileName: 'users_export.csv',
+    });
   });
 });

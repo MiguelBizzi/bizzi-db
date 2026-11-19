@@ -31,6 +31,8 @@ interface UseGridWindowOptions {
   rowCount: number;
   offsets: number[];
   leadingWidth: number;
+  rowHeight?: number;
+  headerHeight?: number;
 }
 
 /**
@@ -44,11 +46,13 @@ export function useGridWindow({
   rowCount,
   offsets,
   leadingWidth,
+  rowHeight = GRID_ROW_HEIGHT,
+  headerHeight = GRID_HEADER_HEIGHT,
 }: UseGridWindowOptions): GridRange {
   const [range, setRange] = useState<GridRange>(INITIAL_RANGE);
   const rangeRef = useRef(range);
-  const geometry = useRef({ rowCount, offsets, leadingWidth });
-  geometry.current = { rowCount, offsets, leadingWidth };
+  const geometry = useRef({ rowCount, offsets, leadingWidth, rowHeight, headerHeight });
+  geometry.current = { rowCount, offsets, leadingWidth, rowHeight, headerHeight };
 
   const update = useCallback(
     (sync: boolean) => {
@@ -59,8 +63,6 @@ export function useGridWindow({
         scrollLeft: port.scrollLeft,
         viewportWidth: port.clientWidth,
         viewportHeight: port.clientHeight,
-        rowHeight: GRID_ROW_HEIGHT,
-        headerHeight: GRID_HEADER_HEIGHT,
         overscanRows: GRID_OVERSCAN_ROWS,
         overscanPx: GRID_OVERSCAN_PX,
         rowQuantum: GRID_ROW_QUANTUM,
@@ -79,7 +81,7 @@ export function useGridWindow({
   // Geometry changed (new rows, new column widths): re-window before paint.
   useLayoutEffect(() => {
     update(false);
-  }, [update, rowCount, offsets, leadingWidth]);
+  }, [update, rowCount, offsets, leadingWidth, rowHeight, headerHeight]);
 
   useEffect(() => {
     const port = portRef.current;
